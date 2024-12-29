@@ -2,26 +2,31 @@
 
 // units: masses in solar masses, time in Myr, length in kpc
 
-// run with PDG values:
-// ./WL 0.315 0.0493 3402.0 0.811 0.674 2.7255 0.965
-
 int main (int argc, char *argv[]) {
+    cout << setprecision(15) << fixed;
     
     // timing
     clock_t time_req = clock();
-    cout << setprecision(15) << fixed;
-    
-    // initialize the cosmological parameters
-    cosmology C;
     
     // input parameters
-    C.OmegaM = atof(argv[1]);
-    C.OmegaB = atof(argv[2]);
-    C.zeq = atof(argv[3]);
-    C.sigma8 = atof(argv[4]);
-    C.h = atof(argv[5]);
-    C.T0 = atof(argv[6]);
-    C.ns = atof(argv[7]);
+    cosmology C;
+    if (argc > 1) {
+        C.OmegaM = atof(argv[1]);
+        C.OmegaB = atof(argv[2]);
+        C.zeq = atof(argv[3]);
+        C.sigma8 = atof(argv[4]);
+        C.h = atof(argv[5]);
+        C.T0 = atof(argv[6]);
+        C.ns = atof(argv[7]);
+    } else { // run with PDG values:
+        C.OmegaM = 0.315;
+        C.OmegaB = 0.0493;
+        C.zeq = 3402.0;
+        C.sigma8 = 0.811;
+        C.h = 0.674;
+        C.T0 = 2.7255;
+        C.ns = 0.965;
+    }
     
     // derived parameters
     C.OmegaR = C.OmegaM/(1+C.zeq);
@@ -41,11 +46,11 @@ int main (int argc, char *argv[]) {
     // fix deltaH to match the input sigma8
     double deltaH = C.sigma8/C.sigma(8000.0/C.h, 1.0, Nk);
     
-    // compute the variance of matter fluctuations, sigma(M)
+    // compute the variance of matter fluctuations, {M,sigma(M),sigma'(M)}
     double dlogM = (log(Mmax)-log(Mmin))/(1.0*NM);
     vector<vector<double> > sigma(NM, vector<double> (3,0.0));
     double RM, M = Mmin;
-    double sigman = 0.0, sigmanp;
+    double sigman = 0.0, sigmanp = sigman;
     for (int jM = 0; jM < NM; jM++) {
         RM = pow(3.0*M/(4.0*PI*C.rhoM0),1.0/3.0);
         
@@ -91,7 +96,7 @@ int main (int argc, char *argv[]) {
             z = dndlnM[jz][jM][0];
             M = dndlnM[jz][jM][1];
             hmf = dndlnM[jz][jM][2];
-            if (hmf < 1e-32) {
+            if (hmf < 1e-64) {
                 hmf = 0.0;
             }
             outfile << z << "   " << M << "   " << hmf << endl;
