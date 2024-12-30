@@ -82,11 +82,11 @@ class cosmology {
     
     // variance of the matter fluctuations
     double sigma(double RM, double deltaH, int Nk);
+    
+    // variance of matter fluctuations, {M,sigma(M),sigma'(M)}
+    vector<vector<double> > sigmalist(int Nk, int NM, double Mmin, double Mmax);
+    
+    // Seth-Tormen HMF, {z,M,dndlnM}
+    vector<vector<vector<double> > > hmflist(vector<vector<double> > &sigma3, int Nz, double zmin, double zmax);
 };
-
-// variance of matter fluctuations, {M,sigma(M),sigma'(M)}
-vector<vector<double> > sigmalist(cosmology C, int Nk, int NM, double Mmin, double Mmax);
-
-// Seth-Tormen HMF, {z,M,dndlnM}
-vector<vector<vector<double> > > hmflist(cosmology C, vector<vector<double> > &sigma, int Nz, double zmin, double zmax);
 
