@@ -149,3 +149,60 @@ double cosmology::sigma(double RM, double deltaH, int Nk) {
     
     return sqrt(sigma2);
 }
+
+
+// variance of matter fluctuations, {M,sigma(M),sigma'(M)}
+vector<vector<double> > sigmalist(cosmology C, int Nk, int NM, double Mmin, double Mmax) {
+    
+    // fix deltaH to match the input sigma8
+    double deltaH = C.sigma8/C.sigma(8000.0/C.h, 1.0, Nk);
+    
+    double dlogM = (log(Mmax)-log(Mmin))/(1.0*NM);
+    vector<vector<double> > sigma(NM, vector<double> (3,0.0));
+    double RM, M = Mmin;
+    double sigman = 0.0, sigmanp = sigman;
+    for (int jM = 0; jM < NM; jM++) {
+        RM = pow(3.0*M/(4.0*PI*C.rhoM0),1.0/3.0);
+        
+        sigmanp = sigman;
+        sigman = C.sigma(RM, deltaH, Nk);
+        
+        sigma[jM][0] = M;
+        sigma[jM][1] = sigman;
+        sigma[jM][2] = (sigman-sigmanp)/(exp(log(M)+dlogM)-M);
+
+        M = exp(log(M)+dlogM);
+    }
+    sigma[0][2] = sigma[1][2];
+    
+    return sigma;
+}
+
+
+// Seth-Tormen HMF, {z,M,dndlnM}
+vector<vector<vector<double> > > hmflist(cosmology C, vector<vector<double> > &sigma, int Nz, double zmin, double zmax) {
+    function<double(double)> nuf = [&](double nu) {
+        double p = 0.3;
+        double q = 0.75;
+        double A = 1.0/(1+(pow(2.0,-p)*tgammaf(0.5-p)/sqrt(PI)));
+        return A*(1+pow(q*nu,-p))*sqrt(q*nu/(2.0*PI))*exp(-q*nu/2.0);
+    };
+    
+    int NM = sigma.size();
+    
+    double dlogz = (log(zmax)-log(zmin))/(1.0*Nz);
+    vector<vector<vector<double> > > dndlnM(NM, vector<vector<double> > (Nz, vector<double> (3,0.0)));
+    double z = zmin, M;
+    for (int jz = 0; jz < Nz; jz++) {
+        for (int jM = 0; jM < NM; jM++) {
+            M = sigma[jM][0];
+            
+            dndlnM[jz][jM][0] = z;
+            dndlnM[jz][jM][1] = M;
+            dndlnM[jz][jM][2] = -C.rhoM0*nuf(pow(C.deltac(z)/sigma[jM][1],2.0))*2.0*sigma[jM][2]/sigma[jM][1];
+        }
+        z = exp(log(z) + dlogz);
+    }
+    
+    return dndlnM;
+}
