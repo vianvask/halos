@@ -1,4 +1,4 @@
-#include "functions.h"
+#include "cosmology.h"
 
 // units: masses in solar masses, time in Myr, length in kpc
 
@@ -18,7 +18,7 @@ int main (int argc, char *argv[]) {
         C.h = atof(argv[5]);
         C.T0 = atof(argv[6]);
         C.ns = atof(argv[7]);
-    } else { // run with PDG values:
+    } else { // run with PDG values
         C.OmegaM = 0.315;
         C.OmegaB = 0.0493;
         C.zeq = 3402.0;
@@ -68,7 +68,7 @@ int main (int argc, char *argv[]) {
         }
     }
     outfile.close();
-            
+    
     // random number generator
     rgen mt(time(NULL));
     
