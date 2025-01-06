@@ -3,7 +3,7 @@
 // returns vector of {z,dc,dc',Vc',t}
 vector<vector<double> > comovingdistance(function<double(double)> Hz, const int Nz, double zmin, double zmax) {
     
-    double dlogz = (log(zmax)-log(zmin))/(1.0*Nz);
+    double dlogz = (log(zmax)-log(zmin))/(1.0*(Nz-1));
     double z1 = zmin, z2 = exp(log(z1)+dlogz);
     double ddc = 0.0, dt = 0.0;
     vector<double> dc = {0.0, 0.0, 0.0, 0.0, 0.0};
@@ -86,7 +86,7 @@ double cosmology::sigma(double RM, double deltaH, int Nk) {
     
     double kmin = 0.001/RM;
     double kmax = 1000.0/RM;
-    double dlogk = (log(kmax)-log(kmin))/(1.0*Nk);
+    double dlogk = (log(kmax)-log(kmin))/(1.0*(Nk-1));
     
     double sigma2 = 0.0;
     double k1, k2 = kmin;
@@ -106,7 +106,7 @@ vector<vector<double> > cosmology::sigmalist(int Nk, int NM, double Mmin, double
     // fix deltaH to match the input sigma8
     double deltaH = sigma8/sigma(8000.0/h, 1.0, Nk);
     
-    double dlogM = (log(Mmax)-log(Mmin))/(1.0*NM);
+    double dlogM = (log(Mmax)-log(Mmin))/(1.0*(NM-1));
     vector<vector<double> > sigma3(NM, vector<double> (3,0.0));
     double RM, M = Mmin;
     double sigman = 0.0, sigmanp = sigman;
@@ -139,7 +139,7 @@ vector<vector<vector<double> > > cosmology::hmflist(vector<vector<double> > &sig
     
     int NM = sigma3.size();
     
-    double dlogz = (log(zmax)-log(zmin))/(1.0*Nz);
+    double dlogz = (log(zmax)-log(zmin))/(1.0*(Nz-1));
     vector<vector<vector<double> > > dndlnM(NM, vector<vector<double> > (Nz, vector<double> (3,0.0)));
     double z = zmin, M;
     for (int jz = 0; jz < Nz; jz++) {
