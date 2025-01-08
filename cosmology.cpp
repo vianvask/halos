@@ -1,38 +1,5 @@
 #include "cosmology.h"
 
-// returns vector of {z,dc,dc',Vc',t}
-vector<vector<double> > comovingdistance(function<double(double)> Hz, const int Nz, double zmin, double zmax) {
-    
-    double dlogz = (log(zmax)-log(zmin))/(1.0*(Nz-1));
-    double z1 = zmin, z2 = exp(log(z1)+dlogz);
-    double ddc = 0.0, dt = 0.0;
-    vector<double> dc = {0.0, 0.0, 0.0, 0.0, 0.0};
-    vector<vector<double> > Dc(Nz, vector<double> (5));
-    
-    for (int jz = 0; jz < Nz; jz++) {
-        dc[0] = z1;
-        dc[1] += ddc;
-        dc[2] = ddc;
-        dc[3] = 4.0*PI*pow(dc[1],2.0)*dc[2];
-        dc[4] += dt;
-        Dc[jz] = dc;
-        
-        ddc = 0.000306535*exp((log(1.0/Hz(z2))+log(1.0/Hz(z1)))/2.0)*(z2-z1);
-        dt = exp((log(1.0/((1+z2)*Hz(z2)))+log(1.0/((1+z1)*Hz(z1))))/2.0)*(z2-z1);
-
-        z1 = z2;
-        z2 = exp(log(z2)+dlogz);
-    }
-    
-    // compute lookback time
-    double tmax = Dc[Nz-1][4];
-    for (int jz = 0; jz < Nz; jz++) {
-        Dc[jz][4] = tmax - Dc[jz][4];
-    }
-    return Dc;
-}
-
-
 // matter transfer function (astro-ph/9709112)
 double cosmology::TM (double k) {
     double keq = 0.00326227*Hz(zeq)/(1.0+zeq);
@@ -128,7 +95,7 @@ vector<vector<double> > cosmology::sigmalist(int Nk, int NM, double Mmin, double
 }
 
 
-// Seth-Tormen HMF, {z,M,dndlnM}
+// Seth-Tormen HMF, {z,M,dn/dlnM}
 vector<vector<vector<double> > > cosmology::hmflist(vector<vector<double> > &sigma3, int Nz, double zmin, double zmax) {
     function<double(double)> nuf = [&](double nu) {
         double p = 0.3;
@@ -155,3 +122,53 @@ vector<vector<vector<double> > > cosmology::hmflist(vector<vector<double> > &sig
     
     return dndlnM;
 }
+
+// comoving distance, {z,d_c}
+vector<vector<double> > cosmology::dclist(int Nz, double zmin, double zmax) {
+    
+    double dlogz = (log(zmax)-log(zmin))/(1.0*(Nz-2));
+    double z1 = 0.0, z2 = zmin;
+    vector<double> d0 = {0.0, 0.0};
+    
+    vector<vector<double> > dlist(Nz, vector<double> (2));
+    dlist[0] = d0;
+    
+    for (int jz = 1; jz < Nz; jz++) {
+        d0[0] = z2;
+        d0[1] += (z2-z1)*306.535*exp((log(1.0/Hz(z2))+log(1.0/Hz(z1)))/2.0);
+        dlist[jz] = d0;
+        
+        z1 = z2;
+        z2 = exp(log(z2)+dlogz);
+    }
+    return dlist;
+}
+
+// age of the Universe, {z,t}
+vector<vector<double> > cosmology::tlist(int Nz, double zmin, double zmax) {
+    
+    double dlogz = (log(zmax)-log(zmin))/(1.0*(Nz-2));
+    double z1 = 0.0, z2 = zmin;
+    vector<double> d0 = {0.0, 0.0};
+    
+    vector<vector<double> > tlist(Nz, vector<double> (2));
+    tlist[0] = d0;
+    
+    for (int jz = 1; jz < Nz; jz++) {
+        d0[0] = z2;
+        d0[1] += (z2-z1)*exp((log(1.0/((1+z2)*Hz(z2)))+log(1.0/((1+z1)*Hz(z1))))/2.0);
+        
+        tlist[jz] = d0;
+        
+        z1 = z2;
+        z2 = exp(log(z2)+dlogz);
+    }
+    
+    double tmax = tlist[Nz-1][1];
+    for (int jz = 0; jz < Nz; jz++) {
+        tlist[jz][1] = tmax - tlist[jz][1];
+    }
+    
+    return tlist;
+}
+

@@ -20,6 +20,9 @@ class cosmology {
     double rhoc;
     double rhoM0;
     
+    vector<vector<double> > zdc;
+    vector<vector<double> > zt;
+    
     // z dependencies
     double Az(double z) {
         return OmegaM*pow(1+z,3.0) + OmegaR*pow(1+z,4.0) + OmegaL;
@@ -35,6 +38,30 @@ class cosmology {
     }
     double OmegaLz(double z) {
         return OmegaL/Az(z);
+    }
+    vector<vector<double> > dclist(int Nz, double zmin, double zmax);
+    vector<vector<double> > tlist(int Nz, double zmin, double zmax);
+    
+    void initialize() {
+        OmegaR = OmegaM/(1+zeq);
+        OmegaL = 1.0 - OmegaM - OmegaR;
+        OmegaC = OmegaM - OmegaB;
+        H0 = 0.000102247*h;
+        rhoc = 277.394*pow(h,2.0);
+        rhoM0 = OmegaM*rhoc;
+        
+        zdc = dclist(10000, 0.000001, 4000.0);
+        zt = tlist(10000, 0.000001, 4000.0);
+    }
+    
+    // luminosity distance
+    double DL(double z) {
+        return (1+z)*interpolate(z, zdc);
+    }
+    
+    // age of the universe
+    double age(double z) {
+        return interpolate(z, zt);
     }
     
     // growth function
