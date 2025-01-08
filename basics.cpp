@@ -26,27 +26,16 @@ double interpolate(double x, vector<vector<double> > &y) {
         cout << x << "   " << y[0][0] << endl;
         return y[0][1];
     }
-    double dx = y[1][0] - y[0][0];
-    int jx = (int) ((x-y[0][0])/dx);
-    if (jx < n-1) {
-        return y[jx][1] + (y[jx+1][1] - y[jx][1])*(x - y[jx][0])/dx;
-    }
-    return y[n-1][1];
-}
-
-// finds the x for which y(x)=y for a growing function y(x)
-double findrootG(double y, double dx, vector<vector<double> > &list) {
-    int n = list.size();
-    double xmin = list[0][0];
-    double xmax = list[n-1][0];
-    double x = (xmax+xmin)/2.0;
-    while (xmax-xmin > dx) {
-        if (interpolate(x, list) > y) {
-            xmax = x;
+    
+    int jmin = 0, jmax = n-1, jx;
+    while (jmax > jmin+1) {
+        jx = (int) floor((jmax+jmin)/2.0);
+        if (y[jx][0] < x) {
+            jmin = jx;
         } else {
-            xmin = x;
+            jmax = jx;
         }
-        x = (xmax+xmin)/2.0;
     }
-    return x;
+    jx = jmin;
+    return y[jx][1] + (x - y[jx][0])/(y[jx+1][0] - y[jx][0])*(y[jx+1][1] - y[jx][1]);
 }
