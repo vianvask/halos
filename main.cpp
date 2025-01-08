@@ -3,7 +3,7 @@
 // units: masses in solar masses, time in Myr, length in kpc
 
 int main (int argc, char *argv[]) {
-    cout << setprecision(15) << fixed;
+    cout << setprecision(3) << fixed;
     
     // timing
     clock_t time_req = clock();
@@ -18,7 +18,9 @@ int main (int argc, char *argv[]) {
         C.h = atof(argv[5]);
         C.T0 = atof(argv[6]);
         C.ns = atof(argv[7]);
-    } else { // run with PDG values
+    }
+    // run with PDG values
+    else {
         C.OmegaM = 0.315;
         C.OmegaB = 0.0493;
         C.zeq = 3402.0;
@@ -28,13 +30,9 @@ int main (int argc, char *argv[]) {
         C.ns = 0.965;
     }
     
-    // derived parameters
-    C.OmegaR = C.OmegaM/(1+C.zeq);
-    C.OmegaL = 1.0 - C.OmegaM - C.OmegaR;
-    C.OmegaC = C.OmegaM - C.OmegaB;
-    C.H0 = 0.000102247*C.h;
-    C.rhoc = 277.394*pow(C.h,2.0);
-    C.rhoM0 = C.OmegaM*C.rhoc;
+    C.initialize();
+    cout << "The age of the universe today is " << C.age(0.0) << " Myr." << endl;
+    cout << "The luminosity distance of a source at z = 1 is " << C.DL(1.0) << " kpc." << endl;
     
     // accuracy parameters
     int Nk = 1000;
@@ -44,7 +42,7 @@ int main (int argc, char *argv[]) {
     // mass and redshift ranges
     double Mmin = 1.0, Mmax = 1.0e16;
     double zmin = 0.01, zmax = 20.0;
-    
+
     // compute the variance of matter fluctuations, {M,sigma(M),sigma'(M)}
     vector<vector<double> > sigma = C.sigmalist(Nk, NM, Mmin, Mmax);
     
