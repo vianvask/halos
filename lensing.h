@@ -1,4 +1,4 @@
-#include "basics.h"
+#include "cosmology.h"
 
 // lensing amplification {lnmu, dlnmu/dlnM}
 vector<double> lnmu(double zs, double zl, double r, double M);
