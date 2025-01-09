@@ -3,7 +3,10 @@
 vector<vector<double> > comovingdistance(function<double(double)> Hz, const int Nz, const double zmin, const double zmax);
 
 class cosmology {
-    public:
+
+public:
+    int Nk, NM, Nz;
+    double Mmin, Mmax, zmin, zmax;
     
     // cosmological parameters
     double OmegaM;
@@ -20,8 +23,7 @@ class cosmology {
     double rhoc;
     double rhoM0;
     
-    vector<vector<double> > zdc;
-    vector<vector<double> > zt;
+    double deltaH8;
     
     // z dependencies
     double Az(double z) {
@@ -39,30 +41,6 @@ class cosmology {
     double OmegaLz(double z) {
         return OmegaL/Az(z);
     }
-    vector<vector<double> > dclist(int Nz, double zmin, double zmax);
-    vector<vector<double> > tlist(int Nz, double zmin, double zmax);
-    
-    void initialize() {
-        OmegaR = OmegaM/(1+zeq);
-        OmegaL = 1.0 - OmegaM - OmegaR;
-        OmegaC = OmegaM - OmegaB;
-        H0 = 0.000102247*h;
-        rhoc = 277.394*pow(h,2.0);
-        rhoM0 = OmegaM*rhoc;
-        
-        zdc = dclist(10000, 0.000001, 4000.0);
-        zt = tlist(10000, 0.000001, 4000.0);
-    }
-    
-    // luminosity distance
-    double DL(double z) {
-        return (1+z)*interpolate(z, zdc);
-    }
-    
-    // age of the universe
-    double age(double z) {
-        return interpolate(z, zt);
-    }
     
     // growth function
     double Dg(double z) {
@@ -74,6 +52,8 @@ class cosmology {
     double deltac(double z) {
         return 3.0/5.0*pow(3.0*PI/2.0,2.0/3.0)/Dg(z);
     }
+    
+private:
     
     // matter transfer function (astro-ph/9709112)
     double TM (double k);
@@ -92,12 +72,57 @@ class cosmology {
     }
     
     // variance of the matter fluctuations
-    double sigma(double RM, double deltaH, int Nk);
+    double sigmaf(double M, double deltaH);
     
     // variance of matter fluctuations, {M,sigma(M),sigma'(M)}
-    vector<vector<double> > sigmalist(int Nk, int NM, double Mmin, double Mmax);
+    vector<vector<double> > sigmalistf();
+    
+    vector<vector<double> > zdc;
+    vector<vector<double> > zt;
+    vector<vector<double> > Msigma;
+    
+    vector<vector<double> > dclist();
+    vector<vector<double> > tlist();
+    
+public:
     
     // Seth-Tormen HMF, {z,M,dndlnM}
-    vector<vector<vector<double> > > hmflist(vector<vector<double> > &sigma3, int Nz, double zmin, double zmax);
+    vector<vector<vector<double> > > hmflist();
+    
+    // halo consentration parameter (1601.02624)
+    double cons(double M, double z);
+    
+    // NFW scale radius and density
+    double rsf(double M, double z);
+    double rhosf(double M, double z);
+    double Drsf(double M, double z);
+    double Drhosf(double M, double z);
+    
+    void initialize() {
+        OmegaR = OmegaM/(1+zeq);
+        OmegaL = 1.0 - OmegaM - OmegaR;
+        OmegaC = OmegaM - OmegaB;
+        H0 = 0.000102247*h;
+        rhoc = 277.394*pow(h,2.0);
+        rhoM0 = OmegaM*rhoc;
+        
+        // fix deltaH to match the input sigma8
+        double M = 4.0*PI/3.0*pow(8000.0/h,3.0)*rhoM0;
+        deltaH8 = sigma8/sigmaf(M, 1.0);
+        
+        zdc = dclist();
+        zt = tlist();
+        
+        Msigma = sigmalistf();
+    }
+    
+    // luminosity distance
+    double DL(double z) {
+        return (1+z)*interpolate(z, zdc);
+    }
+    
+    // age of the universe
+    double age(double z) {
+        return interpolate(z, zt);
+    }
 };
-

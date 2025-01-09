@@ -49,8 +49,8 @@ double cosmology::TM (double k) {
 }
 
 // variance of the matter fluctuations
-double cosmology::sigma(double RM, double deltaH, int Nk) {
-    
+double cosmology::sigmaf(double M, double deltaH) {
+    double RM = pow(3.0*M/(4.0*PI*rhoM0),1.0/3.0);
     double kmin = 0.001/RM;
     double kmax = 1000.0/RM;
     double dlogk = (log(kmax)-log(kmin))/(1.0*(Nk-1));
@@ -68,20 +68,14 @@ double cosmology::sigma(double RM, double deltaH, int Nk) {
 
 
 // variance of matter fluctuations, {M,sigma(M),sigma'(M)}
-vector<vector<double> > cosmology::sigmalist(int Nk, int NM, double Mmin, double Mmax) {
-    
-    // fix deltaH to match the input sigma8
-    double deltaH = sigma8/sigma(8000.0/h, 1.0, Nk);
-    
+vector<vector<double> > cosmology::sigmalistf() {
     double dlogM = (log(Mmax)-log(Mmin))/(1.0*(NM-1));
     vector<vector<double> > sigma3(NM, vector<double> (3,0.0));
-    double RM, M = Mmin;
+    double M = Mmin;
     double sigman = 0.0, sigmanp = sigman;
     for (int jM = 0; jM < NM; jM++) {
-        RM = pow(3.0*M/(4.0*PI*rhoM0),1.0/3.0);
-        
         sigmanp = sigman;
-        sigman = sigma(RM, deltaH, Nk);
+        sigman = sigmaf(M, deltaH8);
         
         sigma3[jM][0] = M;
         sigma3[jM][1] = sigman;
@@ -95,27 +89,75 @@ vector<vector<double> > cosmology::sigmalist(int Nk, int NM, double Mmin, double
 }
 
 
+// halo consentration parameter (1601.02624)
+double cosmology::cons(double M, double z) {
+    double c0 = 3.395*pow(1+z,-0.215);
+    double beta = 0.307*pow(1+z,0.540);
+    double gamma1 = 0.628*pow(1+z,-0.047);
+    double gamma2 = 0.317*pow(1+z,-0.893);
+    double nu0 = (4.135 - 0.564*(1+z) - 0.210*pow(1+z,2.0) + 0.0557*pow(1+z,3.0) - 0.00348*pow(1+z,4.0))/Dg(z);
+    
+    double sigman = sigmaf(M, deltaH8);
+    double nu = deltac(z)*Dg(z)/sigman;
+    
+    return c0*pow(nu/nu0,-gamma1)*pow(1+pow(nu/nu0,1.0/beta),-beta*(gamma2-gamma1));
+}
+
+
+// NFW scale radius r_s and its derivative dr_s/dM
+double cosmology::rsf(double M, double z) {
+    double c = cons(M,z);
+    
+    double r200 = pow(3.0*M/(4.0*PI*200*rhoc),1.0/3.0);
+    return r200/c;
+}
+double cosmology::rhosf(double M, double z) {
+    double c = cons(M,z);
+    return 200*rhoc*pow(c,3.0)*(1+c)/(3.0*(log(1+c) + c*log(1+c) - c));
+}
+
+
+// NFW scale density rho_s and its derivative drho_s/dM
+double cosmology::Drsf(double M, double z) {
+    double dlogM = (log(Mmax)-log(Mmin))/(1.0*NM);
+        
+    double c = cons(M,z);
+    double Dc = (cons(exp(log(M)+dlogM),z)-cons(exp(log(M)-dlogM),z))/(exp(log(M)+dlogM)-exp(log(M)-dlogM));
+    
+    double r200 = pow(3.0*M/(4.0*PI*200*rhoc),1.0/3.0);
+    double Dr200 = 3.0/(4.0*PI*200*rhoc)*pow(3.0*M/(4.0*PI*200*rhoc),-2.0/3.0);
+    
+    return Dr200/c - r200*Dc/pow(c,2.0);
+}
+double cosmology::Drhosf(double M, double z) {
+    double dlogM = (log(Mmax)-log(Mmin))/(1.0*NM);
+
+    double c = cons(M,z);
+    double Dc = (cons(exp(log(M)+dlogM),z)-cons(exp(log(M)-dlogM),z))/(exp(log(M)+dlogM)-exp(log(M)-dlogM));
+
+    return Dc*pow(c,2.0)*(-c*(3+4*c) + 3*pow(1+c,2.0)*log(1+c))/(3.0*pow(c-(1+c)*log(1+c),2.0));
+}
+
+
 // Seth-Tormen HMF, {z,M,dn/dlnM}
-vector<vector<vector<double> > > cosmology::hmflist(vector<vector<double> > &sigma3, int Nz, double zmin, double zmax) {
+vector<vector<vector<double> > > cosmology::hmflist() {
     function<double(double)> nuf = [&](double nu) {
         double p = 0.3;
         double q = 0.75;
         double A = 1.0/(1+(pow(2.0,-p)*tgammaf(0.5-p)/sqrt(PI)));
         return A*(1+pow(q*nu,-p))*sqrt(q*nu/(2.0*PI))*exp(-q*nu/2.0);
     };
-    
-    int NM = sigma3.size();
-    
+        
     double dlogz = (log(zmax)-log(zmin))/(1.0*(Nz-1));
     vector<vector<vector<double> > > dndlnM(NM, vector<vector<double> > (Nz, vector<double> (3,0.0)));
     double z = zmin, M;
     for (int jz = 0; jz < Nz; jz++) {
         for (int jM = 0; jM < NM; jM++) {
-            M = sigma3[jM][0];
+            M = Msigma[jM][0];
             
             dndlnM[jz][jM][0] = z;
             dndlnM[jz][jM][1] = M;
-            dndlnM[jz][jM][2] = -rhoM0*nuf(pow(deltac(z)/sigma3[jM][1],2.0))*2.0*sigma3[jM][2]/sigma3[jM][1];
+            dndlnM[jz][jM][2] = -rhoM0*nuf(pow(deltac(z)/Msigma[jM][1],2.0))*2.0*Msigma[jM][2]/Msigma[jM][1];
         }
         z = exp(log(z) + dlogz);
     }
@@ -123,8 +165,9 @@ vector<vector<vector<double> > > cosmology::hmflist(vector<vector<double> > &sig
     return dndlnM;
 }
 
+
 // comoving distance, {z,d_c}
-vector<vector<double> > cosmology::dclist(int Nz, double zmin, double zmax) {
+vector<vector<double> > cosmology::dclist() {
     
     double dlogz = (log(zmax)-log(zmin))/(1.0*(Nz-2));
     double z1 = 0.0, z2 = zmin;
@@ -144,8 +187,9 @@ vector<vector<double> > cosmology::dclist(int Nz, double zmin, double zmax) {
     return dlist;
 }
 
+
 // age of the Universe, {z,t}
-vector<vector<double> > cosmology::tlist(int Nz, double zmin, double zmax) {
+vector<vector<double> > cosmology::tlist() {
     
     double dlogz = (log(zmax)-log(zmin))/(1.0*(Nz-2));
     double z1 = 0.0, z2 = zmin;
@@ -171,4 +215,3 @@ vector<vector<double> > cosmology::tlist(int Nz, double zmin, double zmax) {
     
     return tlist;
 }
-
