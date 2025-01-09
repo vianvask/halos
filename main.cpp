@@ -1,9 +1,9 @@
-#include "cosmology.h"
+#include "lensing.h"
 
 // units: masses in solar masses, time in Myr, length in kpc
 
 int main (int argc, char *argv[]) {
-    cout << setprecision(3) << fixed;
+    cout << setprecision(13) << fixed;
     
     // timing
     clock_t time_req = clock();
@@ -30,32 +30,34 @@ int main (int argc, char *argv[]) {
         C.ns = 0.965;
     }
     
+    // accuracy parameters
+    C.Nk = 1000;
+    C.NM = 1000;
+    C.Nz = 1000;
+    
+    // mass and redshift ranges
+    C.Mmin = 1.0;
+    C.Mmax = 1.0e16;
+    C.zmin = 0.01;
+    C.zmax = 20.0;
+    
     C.initialize();
     cout << "The age of the universe today is " << C.age(0.0) << " Myr." << endl;
     cout << "The luminosity distance of a source at z = 1 is " << C.DL(1.0) << " kpc." << endl;
-    
-    // accuracy parameters
-    int Nk = 1000;
-    int NM = 1000;
-    int Nz = 1000;
-    
-    // mass and redshift ranges
-    double Mmin = 1.0, Mmax = 1.0e16;
-    double zmin = 0.01, zmax = 20.0;
 
-    // compute the variance of matter fluctuations, {M,sigma(M),sigma'(M)}
-    vector<vector<double> > sigma = C.sigmalist(Nk, NM, Mmin, Mmax);
+    vector<double> lnmu0 = lnmu(C, 2.0, 1.0, 10.0, 1.0e9);
+    cout << lnmu0[0] << "   " << lnmu0[1] << endl;
     
     // compute the Seth-Tormen halo mass function {z,M,dndlnM}
-    vector<vector<vector<double> > > dndlnM = C.hmflist(sigma, Nz, zmin, zmax);
-    
+    vector<vector<vector<double> > > dndlnM = C.hmflist();
+        
     // output the halo mass function
     string filename = "hmf.dat";;
     ofstream outfile;
     outfile.open(filename.c_str());
     double z, M, hmf;
-    for (int jz = 0; jz < Nz; jz++) {
-        for (int jM = 0; jM < NM; jM++) {
+    for (int jz = 0; jz < C.Nz; jz++) {
+        for (int jM = 0; jM < C.NM; jM++) {
             z = dndlnM[jz][jM][0];
             M = dndlnM[jz][jM][1];
             hmf = dndlnM[jz][jM][2];
