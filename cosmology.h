@@ -76,27 +76,29 @@ private:
     
     // variance of matter fluctuations, {M,sigma(M),sigma'(M)}
     vector<vector<double> > sigmalistf();
+    vector<vector<double> > sigmalist;
     
-    vector<vector<double> > zdc;
-    vector<vector<double> > zt;
-    vector<vector<double> > Msigma;
+    // halo consentration parameter (1601.02624)
+    double cons(double M, double z);
+    vector<vector<vector<double> > > conslistf();
+    vector<vector<vector<double> > > conslist;
+    
+    // NFW scale radius and density and their derivatives, {z, M, r_s, dr_s/dM, rho_s, drho_s/dM}
+    vector<vector<vector<double> > > NFWlistf();
+    
+    // Seth-Tormen HMF, {z,M,dndlnM}
+    vector<vector<vector<double> > > hmflistf();
     
     vector<vector<double> > dclist();
     vector<vector<double> > tlist();
     
+    vector<vector<double> > zdc;
+    vector<vector<double> > zt;
+    
 public:
     
-    // Seth-Tormen HMF, {z,M,dndlnM}
-    vector<vector<vector<double> > > hmflist();
-    
-    // halo consentration parameter (1601.02624)
-    double cons(double M, double z);
-    
-    // NFW scale radius and density
-    double rsf(double M, double z);
-    double rhosf(double M, double z);
-    double Drsf(double M, double z);
-    double Drhosf(double M, double z);
+    vector<vector<vector<double> > > hmflist;
+    vector<vector<vector<double> > > NFWlist;
     
     void initialize() {
         OmegaR = OmegaM/(1+zeq);
@@ -107,13 +109,17 @@ public:
         rhoM0 = OmegaM*rhoc;
         
         // fix deltaH to match the input sigma8
-        double M = 4.0*PI/3.0*pow(8000.0/h,3.0)*rhoM0;
-        deltaH8 = sigma8/sigmaf(M, 1.0);
+        double M8 = 4.0*PI/3.0*pow(8000.0/h,3.0)*rhoM0;
+        deltaH8 = sigma8/sigmaf(M8, 1.0);
         
         zdc = dclist();
         zt = tlist();
+                
+        sigmalist = sigmalistf();
+        conslist = conslistf();
         
-        Msigma = sigmalistf();
+        NFWlist = NFWlistf();
+        hmflist = hmflistf();
     }
     
     // luminosity distance

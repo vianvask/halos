@@ -42,15 +42,13 @@ int main (int argc, char *argv[]) {
     C.zmax = 20.0;
     
     C.initialize();
+    time_req = clock() - time_req;
+    cout << "Initialization evaluation time: " << ((double) time_req/CLOCKS_PER_SEC/60.0) << " min." << endl;
     cout << "The age of the universe today is " << C.age(0.0) << " Myr." << endl;
     cout << "The luminosity distance of a source at z = 1 is " << C.DL(1.0) << " kpc." << endl;
-
-    vector<double> lnmu0 = lnmu(C, 2.0, 1.0, 10.0, 1.0e9);
-    cout << lnmu0[0] << "   " << lnmu0[1] << endl;
-    
-    // compute the Seth-Tormen halo mass function {z,M,dndlnM}
-    vector<vector<vector<double> > > dndlnM = C.hmflist();
         
+    P1(C, 100, 2.0, 0.1);
+    
     // output the halo mass function
     string filename = "hmf.dat";;
     ofstream outfile;
@@ -58,9 +56,9 @@ int main (int argc, char *argv[]) {
     double z, M, hmf;
     for (int jz = 0; jz < C.Nz; jz++) {
         for (int jM = 0; jM < C.NM; jM++) {
-            z = dndlnM[jz][jM][0];
-            M = dndlnM[jz][jM][1];
-            hmf = dndlnM[jz][jM][2];
+            z = C.hmflist[jz][jM][0];
+            M = C.hmflist[jz][jM][1];
+            hmf = C.hmflist[jz][jM][2];
             if (hmf < 1e-64) {
                 hmf = 0.0;
             }
@@ -73,7 +71,7 @@ int main (int argc, char *argv[]) {
     rgen mt(time(NULL));
     
     time_req = clock() - time_req;
-    cout << "Total evaluation time: " << ((double) time_req/CLOCKS_PER_SEC/60.0) << " min." << endl;
+    cout << "Evaluation time after initialization: " << ((double) time_req/CLOCKS_PER_SEC/60.0) << " min." << endl;
     
     return 0;
 }

@@ -65,82 +65,105 @@ double cosmology::sigmaf(double M, double deltaH) {
     
     return sqrt(sigma2);
 }
-
-
-// variance of matter fluctuations, {M,sigma(M),sigma'(M)}
+// variance of matter fluctuations, {M, sigma, dsigma/dM}
 vector<vector<double> > cosmology::sigmalistf() {
     double dlogM = (log(Mmax)-log(Mmin))/(1.0*(NM-1));
-    vector<vector<double> > sigma3(NM, vector<double> (3,0.0));
+    vector<vector<double> > Ms(NM, vector<double> (3,0.0));
     double M = Mmin;
     double sigman = 0.0, sigmanp = sigman;
     for (int jM = 0; jM < NM; jM++) {
         sigmanp = sigman;
         sigman = sigmaf(M, deltaH8);
         
-        sigma3[jM][0] = M;
-        sigma3[jM][1] = sigman;
-        sigma3[jM][2] = (sigman-sigmanp)/(exp(log(M)+dlogM)-M);
+        Ms[jM][0] = M;
+        Ms[jM][1] = sigman;
+        Ms[jM][2] = (sigman-sigmanp)/(exp(log(M)+dlogM)-M);
 
-        M = exp(log(M)+dlogM);
+        M = exp(log(M) + dlogM);
     }
-    sigma3[0][2] = sigma3[1][2];
+    Ms[0][2] = Ms[1][2];
     
-    return sigma3;
+    return Ms;
 }
 
 
 // halo consentration parameter (1601.02624)
-double cosmology::cons(double M, double z) {
+double cosmology::cons(double sigma, double z) {
     double c0 = 3.395*pow(1+z,-0.215);
     double beta = 0.307*pow(1+z,0.540);
     double gamma1 = 0.628*pow(1+z,-0.047);
     double gamma2 = 0.317*pow(1+z,-0.893);
     double nu0 = (4.135 - 0.564*(1+z) - 0.210*pow(1+z,2.0) + 0.0557*pow(1+z,3.0) - 0.00348*pow(1+z,4.0))/Dg(z);
     
-    double sigman = sigmaf(M, deltaH8);
-    double nu = deltac(z)*Dg(z)/sigman;
+    double nu = deltac(z)*Dg(z)/sigma;
     
     return c0*pow(nu/nu0,-gamma1)*pow(1+pow(nu/nu0,1.0/beta),-beta*(gamma2-gamma1));
 }
-
-
-// NFW scale radius r_s and its derivative dr_s/dM
-double cosmology::rsf(double M, double z) {
-    double c = cons(M,z);
-    
-    double r200 = pow(3.0*M/(4.0*PI*200*rhoc),1.0/3.0);
-    return r200/c;
+// halo consentration parameter, {z, M, c, dc/dM}
+vector<vector<vector<double> > > cosmology::conslistf() {
+    double dlogz = (log(zmax)-log(zmin))/(1.0*(Nz-1));
+    vector<vector<vector<double> > > zMc(NM, vector<vector<double> > (Nz, vector<double> (4,0.0)));
+    double z = zmin;
+    double c, cp, Dc;
+    for (int jz = 0; jz < Nz; jz++) {
+        c = 1.0;
+        for (int jM = 0; jM < NM; jM++) {
+            cp = c;
+            c = cons(sigmalist[jM][1],z);
+            if (jM == 0) {
+                Dc = (cons(sigmalist[jM+1][1],z) - c)/(sigmalist[jM+1][0]-sigmalist[jM][0]);
+            } else {
+                Dc = (c - cp)/(sigmalist[jM][0]-sigmalist[jM-1][0]);
+            }
+            zMc[jz][jM][0] = z;
+            zMc[jz][jM][1] = sigmalist[jM][0];
+            zMc[jz][jM][2] = c;
+            zMc[jz][jM][3] = Dc;
+        }
+        z = exp(log(z) + dlogz);
+    }
+    return zMc;
 }
-double cosmology::rhosf(double M, double z) {
-    double c = cons(M,z);
-    return 200*rhoc*pow(c,3.0)*(1+c)/(3.0*(log(1+c) + c*log(1+c) - c));
-}
 
 
-// NFW scale density rho_s and its derivative drho_s/dM
-double cosmology::Drsf(double M, double z) {
-    double dlogM = (log(Mmax)-log(Mmin))/(1.0*NM);
-        
-    double c = cons(M,z);
-    double Dc = (cons(exp(log(M)+dlogM),z)-cons(exp(log(M)-dlogM),z))/(exp(log(M)+dlogM)-exp(log(M)-dlogM));
+// NFW scale radius and density and their derivatives, {r_s, dr_s/dM, rho_s, drho_s/dM}
+vector<vector<vector<double> > > cosmology::NFWlistf() {
+    vector<vector<vector<double> > > zMNFW(Nz, vector<vector<double> > (NM, vector<double> (6,0.0)));
     
-    double r200 = pow(3.0*M/(4.0*PI*200*rhoc),1.0/3.0);
-    double Dr200 = 3.0/(4.0*PI*200*rhoc)*pow(3.0*M/(4.0*PI*200*rhoc),-2.0/3.0);
-    
-    return Dr200/c - r200*Dc/pow(c,2.0);
-}
-double cosmology::Drhosf(double M, double z) {
-    double dlogM = (log(Mmax)-log(Mmin))/(1.0*NM);
-
-    double c = cons(M,z);
-    double Dc = (cons(exp(log(M)+dlogM),z)-cons(exp(log(M)-dlogM),z))/(exp(log(M)+dlogM)-exp(log(M)-dlogM));
-
-    return Dc*pow(c,2.0)*(-c*(3+4*c) + 3*pow(1+c,2.0)*log(1+c))/(3.0*pow(c-(1+c)*log(1+c),2.0));
+    double z, M, c, Dc, r200, Dr200, rs, Drs, rhos, Drhos;
+    vector<double> zMc(4,0.0);
+    for (int jz = 0; jz < Nz; jz++) {
+        for (int jM = 0; jM < NM; jM++) {
+            
+            zMc = conslist[jz][jM];
+            z = zMc[0];
+            M = zMc[1];
+            c = zMc[2];
+            Dc = zMc[3];
+            
+            r200 = pow(3.0*M/(4.0*PI*200*rhoc),1.0/3.0);
+            Dr200 = 3.0/(4.0*PI*200*rhoc)*pow(3.0*M/(4.0*PI*200*rhoc),-2.0/3.0);
+            
+            rs =  r200/c;
+            Drs =  Dr200/c - r200*Dc/pow(c,2.0);
+            
+            rhos = 200*rhoc*pow(c,3.0)*(1+c)/(3.0*(log(1+c) + c*log(1+c) - c));
+            Drhos = Dc*pow(c,2.0)*(-c*(3+4*c) + 3*pow(1+c,2.0)*log(1+c))/(3.0*pow(c-(1+c)*log(1+c),2.0));
+            
+            zMNFW[jz][jM][0] = z;
+            zMNFW[jz][jM][1] = M;
+            zMNFW[jz][jM][2] = rs;
+            zMNFW[jz][jM][3] = Drs;
+            zMNFW[jz][jM][4] = rhos;
+            zMNFW[jz][jM][5] = Drhos;
+        }
+    }
+    return zMNFW;
 }
 
 
 // Seth-Tormen HMF, {z,M,dn/dlnM}
-vector<vector<vector<double> > > cosmology::hmflist() {
+vector<vector<vector<double> > > cosmology::hmflistf() {
     function<double(double)> nuf = [&](double nu) {
         double p = 0.3;
         double q = 0.75;
@@ -153,11 +176,11 @@ vector<vector<vector<double> > > cosmology::hmflist() {
     double z = zmin, M;
     for (int jz = 0; jz < Nz; jz++) {
         for (int jM = 0; jM < NM; jM++) {
-            M = Msigma[jM][0];
+            M = sigmalist[jM][0];
             
             dndlnM[jz][jM][0] = z;
             dndlnM[jz][jM][1] = M;
-            dndlnM[jz][jM][2] = -rhoM0*nuf(pow(deltac(z)/Msigma[jM][1],2.0))*2.0*Msigma[jM][2]/Msigma[jM][1];
+            dndlnM[jz][jM][2] = -rhoM0*nuf(pow(deltac(z)/sigmalist[jM][1],2.0))*2.0*sigmalist[jM][2]/sigmalist[jM][1];
         }
         z = exp(log(z) + dlogz);
     }
@@ -182,7 +205,7 @@ vector<vector<double> > cosmology::dclist() {
         dlist[jz] = d0;
         
         z1 = z2;
-        z2 = exp(log(z2)+dlogz);
+        z2 = exp(log(z2) + dlogz);
     }
     return dlist;
 }
