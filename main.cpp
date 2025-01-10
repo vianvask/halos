@@ -36,8 +36,8 @@ int main (int argc, char *argv[]) {
     C.Nz = 1000;
     
     // mass and redshift ranges
-    C.Mmin = 1.0;
-    C.Mmax = 1.0e16;
+    C.Mmin = 1.0e5;
+    C.Mmax = 1.0e17;
     C.zmin = 0.01;
     C.zmax = 20.0;
     
@@ -46,9 +46,7 @@ int main (int argc, char *argv[]) {
     cout << "Initialization evaluation time: " << ((double) time_req/CLOCKS_PER_SEC/60.0) << " min." << endl;
     cout << "The age of the universe today is " << C.age(0.0) << " Myr." << endl;
     cout << "The luminosity distance of a source at z = 1 is " << C.DL(1.0) << " kpc." << endl;
-        
-    P1(C, 100, 2.0, 0.1);
-    
+            
     // output the halo mass function
     string filename = "hmf.dat";;
     ofstream outfile;
@@ -64,6 +62,16 @@ int main (int argc, char *argv[]) {
             }
             outfile << z << "   " << M << "   " << hmf << endl;
         }
+    }
+    outfile.close();
+    
+    vector<vector<double> > N1list = dNdlnmu(C, 20, 2.0, 0.001, 1.0);
+    
+    // output the halo mass function
+    filename = "N1.dat";;
+    outfile.open(filename.c_str());
+    for (int j = 0; j < N1list.size(); j++) {
+        outfile << N1list[j][0] << "   " << N1list[j][1] << endl;
     }
     outfile.close();
     

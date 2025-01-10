@@ -1,7 +1,11 @@
 #include "lensing.h"
 
-// NFW lensing amplification and its derivative, {lnmu, dlnmu/dlnM}
-vector<double> lnmu(cosmology C, double zs, double zl, double r, double M) {
+double acot(double x) {
+    return PI/2.0 - atan(x);
+}
+
+// NFW lensing amplification and its derivative, {lnmu, dlnmu/dr}
+vector<double> lnmu(cosmology &C, double zs, double zl, double r, double M) {
     
     // angular diameter distances
     double DsA = C.DL(zs)/pow(1+zs,2.0);
@@ -18,43 +22,49 @@ vector<double> lnmu(cosmology C, double zs, double zl, double r, double M) {
     double Drs = zMNFW[3];
     double rhos = zMNFW[4];
     double Drhos = zMNFW[5];
-    
-    double X = r/rs;
-    complex<double> X2m1 (X*X-1,0.0);
-    
-    double Sigma = real(2.0*rs*rhos*(sqrt(X2m1) + (PI-2.0*atan(sqrt(X2m1))) - 2.0*atan((X+1)/sqrt(sqrt(X2m1))))/pow(X2m1,3.0/2.0));
-    double dSigmapdlnM = real(2.0*M*(Drhos*rs*X2m1 + 3.0*Drs*rhos*X*X)/pow(X2m1,2.0) + 4.0*M*(Drhos*rs*X2m1 + Drs*rhos*(4.0*X*X-1))*(PI/2.0 - atan(X2m1) - atan((1+X)/sqrt(X2m1)))/pow(X2m1,5.0/2.0));
 
-    vector<double> lnmu2 {Sigma/Sigmac, dSigmapdlnM/Sigmac};
+    double X = r/rs;
+    double Y, Sigma, dSigmapdr;
+    if (X>1) {
+        Y = X*X-1;
+        Sigma = 2.0*rs*rhos*(sqrt(Y) + 2.0*acot(sqrt(Y)) - 2.0*atan((X+1)/sqrt(Y)))/pow(Y,3.0/2.0);
+        dSigmapdr = 2.0*rs*rhos*(2.0 - 2.0*pow(X,4.0) + Y + 6.0*sqrt(Y)*(Y+1)*(-acot(sqrt(Y)) + atan((X+1)/sqrt(Y))))/(X*pow(Y,3.0));
+    } else {
+        Y = 1-X*X;
+        Sigma = 2.0*rs*rhos*(-sqrt(Y) + log((1+sqrt(Y))/X))/pow(Y,3.0/2.0);
+        dSigmapdr = 2.0*rs*rhos*(-sqrt(Y) + log((1.0+sqrt(Y))/X))/pow(Y,3.0/2.0);
+    }
+    vector<double> lnmu2 {Sigma/Sigmac, dSigmapdr/Sigmac};
     
     return lnmu2;
 }
 
 
 // maximal r so that lnmu(r) > lnmuthr
-double rmaxf(cosmology C, double zs, double zl, double M, double lnmuthr) {
-    double logrmax;
+double rmaxf(cosmology &C, double zs, double zl, double M, double lnmuthr) {
+    double rmax;
     double logr1 = log(1.0e-3), logr2 = log(1.0e5);
-    
+        
     if (lnmu(C, zs, zl, exp(logr1), M)[0] > lnmuthr) {
         while (logr2-logr1 > 0.1) {
-            logrmax = (logr2+logr1)/2.0;
-            if (lnmu(C, zs, zl, exp(logrmax), M)[0] > lnmuthr) {
-                logr1 = logrmax;
+            rmax = exp((logr2+logr1)/2.0);
+            if (lnmu(C, zs, zl, rmax, M)[0] > lnmuthr) {
+                logr1 = log(rmax);
             } else {
-                logr2 = logrmax;
+                logr2 = log(rmax);
             }
         }
+        rmax = exp((logr2+logr1)/2.0);
     } else {
-        logrmax = logr1;
+        rmax = 0.0;
     }
     
-    return exp(logrmax);
+    return rmax;
 }
 
 
 // number of halos withing radius rmax
-double Nhf(cosmology C, double zs, double lnmuthr) {
+double Nhf(cosmology &C, double zs, double lnmuthr) {
     double Nh = 0.0;
     double rmax, M, zl, dndlnM;
     
@@ -66,9 +76,7 @@ double Nhf(cosmology C, double zs, double lnmuthr) {
                 dndlnM = C.hmflist[jz][jM][2];
                 
                 rmax = rmaxf(C, zs, zl, M, lnmuthr);
-                
-                cout << zl << "   " << M << "   " << rmax << endl;
-                
+                                
                 Nh += 2.0*PI*pow((1+zl)*rmax,2.0)/C.Hz(zl)*dndlnM;
             }
         }
@@ -77,12 +85,35 @@ double Nhf(cosmology C, double zs, double lnmuthr) {
 }
 
 
-// TODO: probability distribution {lnmu, P1(lnmu)}
-vector<vector<double> > P1(cosmology C, int N, double zs, double lnmuthr) {
-    vector<vector<double> > P1(N, vector<double> (2, 0.0));
+// probability distribution normalized to N, {lnmu, dN/dlnmu}
+vector<vector<double> > dNdlnmu(cosmology &C, int N, double zs, double lnmuthr, double lnmumax) {
+    vector<vector<double> > N1(N, vector<double> (2, 0.0));
     
-    double Nh = Nhf(C, zs, lnmuthr);
-    cout << Nh << endl;
+    double zl, M, dndlnM, rmax, dlnmudr, Nh;
+    double dloglnmu = (log(lnmumax) - log(lnmuthr))/(1.0*N);
+    double x = lnmuthr;
     
-    return P1;
+    for (int jP = 0; jP < N; jP++) {
+        Nh = 0.0;
+        for (int jz = 0; jz < C.Nz; jz++) {
+            for (int jM = 0; jM < C.NM; jM++) {
+                zl = C.hmflist[jz][jM][0];
+                if(zl < zs) {
+                    M = C.hmflist[jz][jM][1];
+                    dndlnM = C.hmflist[jz][jM][2];
+                    
+                    rmax = rmaxf(C, zs, zl, M, x);
+                    dlnmudr = lnmu(C, zs, zl, rmax, M)[1];
+                    
+                    Nh += 2.0*PI*pow(1+zl,2.0)*rmax/C.Hz(zl)*dndlnM/abs(dlnmudr);
+                }
+            }
+        }
+
+        N1[jP][0] = x;
+        N1[jP][1] = Nh;
+        
+        x = exp(log(x) + dloglnmu);
+    }
+    return N1;
 }
