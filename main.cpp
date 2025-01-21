@@ -67,16 +67,40 @@ int main (int argc, char *argv[]) {
     
     vector<vector<double> > N1list = dNdlnmu(C, 20, 2.0, 0.001, 1.0);
     
-    // output the halo mass function
+    // output the distribution dN_1/dlnmu
     filename = "N1.dat";;
     outfile.open(filename.c_str());
+    outfile << setprecision(12) << fixed;
     for (int j = 0; j < N1list.size(); j++) {
-        outfile << N1list[j][0] << "   " << N1list[j][1] << endl;
+        outfile << N1list[j][0] << "   " << N1list[j][1] << "   " << N1list[j][2] << endl;
     }
     outfile.close();
+        
+    double Nh = N1list[N1list.size()-1][2];
+    cout << "Number of halos along each path: " << Nh << endl;
+
+    vector<vector<double> > Fm1(N1list.size(), vector<double> (2,0.0));
+    for (int j = 0; j < Fm1.size(); j++) {
+        Fm1[j][0] = N1list[j][2]/Nh;
+        Fm1[j][1] = log(N1list[j][0]);
+    }
     
     // random number generator
     rgen mt(time(NULL));
+    
+    double x, lnmutot;
+    vector<double> lnmu(1000000, 0.0);
+    filename = "lnmu.dat";
+    outfile.open(filename.c_str());
+    for (int j = 0; j<lnmu.size(); j++) {
+        lnmutot = 0.0;
+        for (int jh = 0; jh < Nh; jh++) {
+            x = randomreal(0.0,1.0,mt);
+            lnmutot += exp(interpolate(x,Fm1));
+        }
+        outfile << lnmutot << endl;
+    }
+    outfile.close();
     
     time_req = clock() - time_req;
     cout << "Evaluation time after initialization: " << ((double) time_req/CLOCKS_PER_SEC/60.0) << " min." << endl;

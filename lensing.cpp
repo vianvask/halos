@@ -25,14 +25,14 @@ vector<double> lnmu(cosmology &C, double zs, double zl, double r, double M) {
 
     double X = r/rs;
     double Y, Sigma, dSigmapdr;
-    if (X>1) {
+    if (X > 1.0) {
         Y = X*X-1;
-        Sigma = 2.0*rs*rhos*(sqrt(Y) + 2.0*acot(sqrt(Y)) - 2.0*atan((X+1)/sqrt(Y)))/pow(Y,3.0/2.0);
-        dSigmapdr = 2.0*rs*rhos*(2.0 - 2.0*pow(X,4.0) + Y + 6.0*sqrt(Y)*(Y+1)*(-acot(sqrt(Y)) + atan((X+1)/sqrt(Y))))/(X*pow(Y,3.0));
+        Sigma = 2*rs*rhos*(sqrt(Y) + 2*acot(sqrt(Y)) - 2*atan((X+1)/sqrt(Y)))/pow(Y,3.0/2.0);
+        dSigmapdr = 2*rhos*(2 - 2*pow(X,4.0) + Y + 6*sqrt(Y)*(Y+1)*(-acot(sqrt(Y)) + atan((X+1)/sqrt(Y))))/(X*pow(Y,3.0));
     } else {
         Y = 1-X*X;
-        Sigma = 2.0*rs*rhos*(-sqrt(Y) + log((1+sqrt(Y))/X))/pow(Y,3.0/2.0);
-        dSigmapdr = 2.0*rs*rhos*(-sqrt(Y) + log((1.0+sqrt(Y))/X))/pow(Y,3.0/2.0);
+        Sigma = 2*rs*rhos*(-sqrt(Y) + log((1+sqrt(Y))/X))/pow(Y,3.0/2.0);
+        dSigmapdr = 2*rhos*(-2 + 2*pow(X,4.0) + Y - 3*sqrt(Y)*(Y-1)*log((1+sqrt(Y))/X))/(X*pow(Y,3.0));
     }
     vector<double> lnmu2 {Sigma/Sigmac, dSigmapdr/Sigmac};
     
@@ -66,18 +66,19 @@ double rmaxf(cosmology &C, double zs, double zl, double M, double lnmuthr) {
 // number of halos withing radius rmax
 double Nhf(cosmology &C, double zs, double lnmuthr) {
     double Nh = 0.0;
-    double rmax, M, zl, dndlnM;
+    double rmax, M, zl, dz, dlnM, dndlnM;
     
-    for (int jz = 0; jz < C.Nz; jz++) {
-        for (int jM = 0; jM < C.NM; jM++) {
+    for (int jz = 1; jz < C.Nz; jz++) {
+        for (int jM = 1; jM < C.NM; jM++) {
             zl = C.hmflist[jz][jM][0];
             if(zl < zs) {
+                dz = zl - C.hmflist[jz-1][jM][0];
                 M = C.hmflist[jz][jM][1];
+                dlnM = log(M) - log(C.hmflist[jz][jM-1][1]);
                 dndlnM = C.hmflist[jz][jM][2];
                 
                 rmax = rmaxf(C, zs, zl, M, lnmuthr);
-                                
-                Nh += 2.0*PI*pow((1+zl)*rmax,2.0)/C.Hz(zl)*dndlnM;
+                Nh += 306.535*PI*pow((1+zl)*rmax,2.0)/C.Hz(zl)*dndlnM*dlnM*dz;
             }
         }
     }
@@ -86,34 +87,51 @@ double Nhf(cosmology &C, double zs, double lnmuthr) {
 
 
 // probability distribution normalized to N, {lnmu, dN/dlnmu}
-vector<vector<double> > dNdlnmu(cosmology &C, int N, double zs, double lnmuthr, double lnmumax) {
-    vector<vector<double> > N1(N, vector<double> (2, 0.0));
+vector<vector<double> > dNdlnmu(cosmology &C, int Nx, double zs, double lnmuthr, double lnmumax) {
+    vector<vector<double> > N1(Nx, vector<double> (3, 0.0));
     
-    double zl, M, dndlnM, rmax, dlnmudr, Nh;
-    double dloglnmu = (log(lnmumax) - log(lnmuthr))/(1.0*N);
-    double x = lnmuthr;
+    cout << Nhf(C, zs, lnmuthr) << endl;
     
-    for (int jP = 0; jP < N; jP++) {
-        Nh = 0.0;
-        for (int jz = 0; jz < C.Nz; jz++) {
-            for (int jM = 0; jM < C.NM; jM++) {
+    double zl, M, dz, dlnM, dndlnM, rmax, dlnmudr;
+    double dloglnmu = (log(lnmumax) - log(lnmuthr))/(1.0*(Nx-1));
+    double x = lnmuthr, xp = x;
+    
+    double Nhcum = 0.0;
+    double Nh = 0.0, Nhp = 0.0;
+    for (int jx = 0; jx < Nx; jx++) {
+        for (int jz = 1; jz < C.Nz; jz++) {
+            for (int jM = 1; jM < C.NM; jM++) {
                 zl = C.hmflist[jz][jM][0];
                 if(zl < zs) {
+                    dz = zl - C.hmflist[jz-1][jM][0];
                     M = C.hmflist[jz][jM][1];
+                    dlnM = log(M) - log(C.hmflist[jz][jM-1][1]);
                     dndlnM = C.hmflist[jz][jM][2];
                     
                     rmax = rmaxf(C, zs, zl, M, x);
-                    dlnmudr = lnmu(C, zs, zl, rmax, M)[1];
+                    if (rmax > 0.0) {
+                        dlnmudr = lnmu(C, zs, zl, rmax, M)[1];
+                    } else {
+                        dlnmudr = 1.0;
+                    }
                     
-                    Nh += 2.0*PI*pow(1+zl,2.0)*rmax/C.Hz(zl)*dndlnM/abs(dlnmudr);
+                    Nh += 306.535*2.0*PI*pow(1+zl,2.0)*rmax/C.Hz(zl)/abs(dlnmudr)*dndlnM*dlnM*dz;
                 }
             }
         }
-
-        N1[jP][0] = x;
-        N1[jP][1] = Nh;
         
+        Nhcum += exp((log(Nh) + log(Nhp))/2.0)*(x - xp);
+
+        N1[jx][0] = x;
+        N1[jx][1] = Nh;
+        N1[jx][2] = Nhcum;
+        
+        xp = x;
         x = exp(log(x) + dloglnmu);
+        
+        Nhp = Nh;
+        Nh = 0.0;
     }
+
     return N1;
 }

@@ -93,9 +93,9 @@ double cosmology::cons(double sigma, double z) {
     double beta = 0.307*pow(1+z,0.540);
     double gamma1 = 0.628*pow(1+z,-0.047);
     double gamma2 = 0.317*pow(1+z,-0.893);
-    double nu0 = (4.135 - 0.564*(1+z) - 0.210*pow(1+z,2.0) + 0.0557*pow(1+z,3.0) - 0.00348*pow(1+z,4.0))/Dg(z);
+    double nu0 = 4.135 - 0.564*(1+z) - 0.210*pow(1+z,2.0) + 0.0557*pow(1+z,3.0) - 0.00348*pow(1+z,4.0);
     
-    double nu = deltac(z)*Dg(z)/sigma;
+    double nu = deltac(z)/sigma;
     
     return c0*pow(nu/nu0,-gamma1)*pow(1+pow(nu/nu0,1.0/beta),-beta*(gamma2-gamma1));
 }
@@ -147,7 +147,7 @@ vector<vector<vector<double> > > cosmology::NFWlistf() {
             rs =  r200/c;
             Drs =  Dr200/c - r200*Dc/pow(c,2.0);
             
-            rhos = 200*rhoc*pow(c,3.0)*(1+c)/(3.0*(log(1+c) + c*log(1+c) - c));
+            rhos = 200*rhoc*pow(c,3.0)*(1+c)/(3.0*((1+c)*log(1+c) - c));
             Drhos = Dc*pow(c,2.0)*(-c*(3+4*c) + 3*pow(1+c,2.0)*log(1+c))/(3.0*pow(c-(1+c)*log(1+c),2.0));
             
             zMNFW[jz][jM][0] = z;
