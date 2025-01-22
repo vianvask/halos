@@ -65,42 +65,52 @@ int main (int argc, char *argv[]) {
     }
     outfile.close();
     
-    vector<vector<double> > N1list = dNdlnmu(C, 20, 2.0, 0.001, 1.0);
-    
-    // output the distribution dN_1/dlnmu
-    filename = "N1.dat";;
-    outfile.open(filename.c_str());
-    outfile << setprecision(12) << fixed;
-    for (int j = 0; j < N1list.size(); j++) {
-        outfile << N1list[j][0] << "   " << N1list[j][1] << "   " << N1list[j][2] << endl;
-    }
-    outfile.close();
-        
-    double Nh = N1list[N1list.size()-1][2];
-    cout << "Number of halos along each path: " << Nh << endl;
-
-    vector<vector<double> > Fm1(N1list.size(), vector<double> (2,0.0));
-    for (int j = 0; j < Fm1.size(); j++) {
-        Fm1[j][0] = N1list[j][2]/Nh;
-        Fm1[j][1] = log(N1list[j][0]);
-    }
-    
     // random number generator
     rgen mt(time(NULL));
+
+    ofstream outfile1, outfile2;
     
-    double x, lnmutot;
-    vector<double> lnmu(1000000, 0.0);
+    filename = "N1.dat";
+    outfile1.open(filename.c_str());
+    outfile << setprecision(12) << fixed;
+    
     filename = "lnmu.dat";
-    outfile.open(filename.c_str());
-    for (int j = 0; j<lnmu.size(); j++) {
-        lnmutot = 0.0;
-        for (int jh = 0; jh < Nh; jh++) {
-            x = randomreal(0.0,1.0,mt);
-            lnmutot += exp(interpolate(x,Fm1));
+    outfile2.open(filename.c_str());
+    
+    vector<double> zlist {0.2, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0};
+    vector<vector<double> > N1list;
+    
+    int Nlnmu = 100;
+    vector<vector<double> > Fm1(Nlnmu, vector<double> (2,0.0));
+    double Nh, x, lnmutot;
+    vector<double> lnmu(1000000, 0.0);
+    
+    for (int jz = 0; jz < zlist.size(); jz++) {
+        N1list = dNdlnmu(C, Nlnmu, zlist[jz], 1.0);
+        Nh = N1list[N1list.size()-1][2];
+        cout << "z = " << zlist[jz] << ", N_h = " << Nh << endl;
+        
+        // output the distribution dN_1/dlnmu
+        for (int j = 0; j < N1list.size(); j++) {
+            outfile1 << zlist[jz] << "   " << N1list[j][0] << "   " << N1list[j][1] << "   " << N1list[j][2] << endl;
         }
-        outfile << lnmutot << endl;
+        
+        for (int j = 0; j < Fm1.size(); j++) {
+            Fm1[j][0] = N1list[j][2]/Nh;
+            Fm1[j][1] = log(N1list[j][0]);
+        }
+        
+        for (int j = 0; j<lnmu.size(); j++) {
+            lnmutot = 0.0;
+            for (int jh = 0; jh < Nh; jh++) {
+                x = randomreal(0.0,1.0,mt);
+                lnmutot += exp(interpolate(x,Fm1));
+            }
+            outfile2 << zlist[jz] << "   " << lnmutot << endl;
+        }
     }
-    outfile.close();
+    outfile1.close();
+    outfile2.close();
     
     time_req = clock() - time_req;
     cout << "Evaluation time after initialization: " << ((double) time_req/CLOCKS_PER_SEC/60.0) << " min." << endl;

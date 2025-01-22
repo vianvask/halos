@@ -87,10 +87,21 @@ double Nhf(cosmology &C, double zs, double lnmuthr) {
 
 
 // probability distribution normalized to N, {lnmu, dN/dlnmu}
-vector<vector<double> > dNdlnmu(cosmology &C, int Nx, double zs, double lnmuthr, double lnmumax) {
+vector<vector<double> > dNdlnmu(cosmology &C, int Nx, double zs, double lnmumax) {
     vector<vector<double> > N1(Nx, vector<double> (3, 0.0));
     
-    cout << Nhf(C, zs, lnmuthr) << endl;
+    // find threshold lnmu that gives N_h = 50
+    double lnmuthr;
+    double lnmu1 = 1.0e-6, lnmu2 = 1.0;
+    while (log10(lnmu2)-log10(lnmu1) > 0.02) {
+        lnmuthr = pow(10.0, (log10(lnmu1)+log10(lnmu2))/2.0);
+        if (Nhf(C, zs, lnmuthr) > 50) {
+            lnmu1 = lnmuthr;
+        } else {
+            lnmu2 = lnmuthr;
+        }
+    }
+    cout << lnmuthr << "   " << Nhf(C, zs, lnmuthr) << endl;
     
     double zl, M, dz, dlnM, dndlnM, rmax, dlnmudr;
     double dloglnmu = (log(lnmumax) - log(lnmuthr))/(1.0*(Nx-1));
