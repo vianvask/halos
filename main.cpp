@@ -31,15 +31,15 @@ int main (int argc, char *argv[]) {
     }
     
     // accuracy parameters
-    C.Nk = 1000;
+    C.Nk = 100;
     C.NM = 1200;
-    C.Nz = 1000;
+    C.Nz = 100;
     
     // mass and redshift ranges
     C.Mmin = 1.0e5;
     C.Mmax = 1.0e17;
     C.zmin = 0.01;
-    C.zmax = 21.0;
+    C.zmax = 20.01;
     
     C.initialize();
     cout << "t_0 =  " << C.age(0.0) << " Myr." << endl;
@@ -63,9 +63,7 @@ int main (int argc, char *argv[]) {
         }
     }
     outfile.close();
-    
-    /*
-    
+        
     cout << "Generating lensing amplificaitons..." << endl;
     
     // random number generator
@@ -116,8 +114,6 @@ int main (int argc, char *argv[]) {
     }
     outfile1.close();
     outfile2.close();
-     
-     */
     
     time_req = clock() - time_req;
     cout << "Total evaluation time: " << ((double) time_req/CLOCKS_PER_SEC/60.0) << " min." << endl;

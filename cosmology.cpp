@@ -48,6 +48,7 @@ double cosmology::TM (double k) {
     return OmegaB/OmegaM*TB(k) + OmegaC/OmegaM*TC(k);
 }
 
+
 // variance of the matter fluctuations
 double cosmology::sigmaf(double M, double deltaH) {
     double RM = pow(3.0*M/(4.0*PI*rhoM0),1.0/3.0);
@@ -220,9 +221,11 @@ double cosmology::DeltaM(vector<double> &sigmap, double z, double dz) {
     return num/den - Mp;
 }
 
+
 // growth rate of the halo through mergers with smaller halos, {z,M,dM/dt}
 vector<vector<vector<double> > > cosmology::dotMlistf() {
-    double dz = 0.01;
+    double dz = 0.01; // z step over which DeltaM is computed
+    
     double dlogz = (log(zmax)-log(zmin))/(1.0*(Nz-1));
     vector<vector<vector<double> > > dMdt(Nz, vector<vector<double> > (NM, vector<double> (3,0.0)));
     
@@ -250,15 +253,16 @@ vector<vector<vector<double> > > cosmology::dotMlistf() {
 
 // comoving distance, {z,d_c}
 vector<vector<double> > cosmology::dclist() {
+    int Nz2 = 100*Nz;
     
-    double dlogz = (log(zmax)-log(zmin))/(1.0*(Nz-2));
+    double dlogz = (log(zmax)-log(zmin))/(1.0*(Nz2-2));
     double z1 = 0.0, z2 = zmin;
     vector<double> d0 = {0.0, 0.0};
     
-    vector<vector<double> > dlist(Nz, vector<double> (2));
+    vector<vector<double> > dlist(Nz2, vector<double> (2));
     dlist[0] = d0;
     
-    for (int jz = 1; jz < Nz; jz++) {
+    for (int jz = 1; jz < Nz2; jz++) {
         d0[0] = z2;
         d0[1] += (z2-z1)*306.535*exp((log(1.0/Hz(z2))+log(1.0/Hz(z1)))/2.0);
         dlist[jz] = d0;
@@ -272,15 +276,16 @@ vector<vector<double> > cosmology::dclist() {
 
 // age of the Universe, {z,t}
 vector<vector<double> > cosmology::tlist() {
+    int Nz2 = 100*Nz;
     
-    double dlogz = (log(zmax)-log(zmin))/(1.0*(Nz-2));
+    double dlogz = (log(zmax)-log(zmin))/(1.0*(Nz2-2));
     double z1 = 0.0, z2 = zmin;
     vector<double> d0 = {0.0, 0.0};
     
-    vector<vector<double> > tlist(Nz, vector<double> (2));
+    vector<vector<double> > tlist(Nz2, vector<double> (2));
     tlist[0] = d0;
     
-    for (int jz = 1; jz < Nz; jz++) {
+    for (int jz = 1; jz < Nz2; jz++) {
         d0[0] = z2;
         d0[1] += (z2-z1)*exp((log(1.0/((1+z2)*Hz(z2)))+log(1.0/((1+z1)*Hz(z1))))/2.0);
         
@@ -290,8 +295,8 @@ vector<vector<double> > cosmology::tlist() {
         z2 = exp(log(z2)+dlogz);
     }
     
-    double tmax = tlist[Nz-1][1];
-    for (int jz = 0; jz < Nz; jz++) {
+    double tmax = tlist[Nz2-1][1];
+    for (int jz = 0; jz < Nz2; jz++) {
         tlist[jz][1] = tmax - tlist[jz][1];
     }
     

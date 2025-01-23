@@ -53,6 +53,17 @@ public:
         return 3.0/5.0*pow(3.0*PI/2.0,2.0/3.0)/Dg(z);
     }
     
+    // star formation rate
+    double fstar(double M, double Mc, double epsilon, double alpha, double beta) {
+        return epsilon/(pow(M/Mc,alpha) + pow(M/Mc,beta));
+    }
+    
+    // UV magnitude
+    double kappaUV = 1.15e-22; // Msun s erg^-1 Myr^-1
+    double MUV(double M, double dotM, double Mc, double epsilon, double alpha, double beta) {
+        return 2.5*(20.652 - 0.434294*log(fstar(M,Mc,epsilon,alpha,beta)*dotM/kappaUV));
+    }
+    
 private:
     
     // matter transfer function (astro-ph/9709112)
@@ -124,7 +135,6 @@ public:
                 
         sigmalist = sigmalistf();
         conslist = conslistf();
-        
         NFWlist = NFWlistf();
         hmflist = hmflistf();
         dotMlist = dotMlistf();
