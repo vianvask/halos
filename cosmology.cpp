@@ -70,7 +70,7 @@ vector<vector<double> > cosmology::sigmalistf() {
     double dlogM = (log(Mmax)-log(Mmin))/(1.0*(NM-1));
     vector<vector<double> > Ms(NM, vector<double> (3,0.0));
     double M = Mmin;
-    double sigman = 0.0, sigmanp = sigman;
+    double sigman = 0.0, sigmanp;
     for (int jM = 0; jM < NM; jM++) {
         sigmanp = sigman;
         sigman = sigmaf(M, deltaH8);
@@ -102,7 +102,7 @@ double cosmology::cons(double sigma, double z) {
 // halo consentration parameter, {z, M, c, dc/dM}
 vector<vector<vector<double> > > cosmology::conslistf() {
     double dlogz = (log(zmax)-log(zmin))/(1.0*(Nz-1));
-    vector<vector<vector<double> > > zMc(NM, vector<vector<double> > (Nz, vector<double> (4,0.0)));
+    vector<vector<vector<double> > > zMc(Nz, vector<vector<double> > (NM, vector<double> (4,0.0)));
     double z = zmin;
     double c, cp, Dc;
     for (int jz = 0; jz < Nz; jz++) {
@@ -172,7 +172,7 @@ vector<vector<vector<double> > > cosmology::hmflistf() {
     };
         
     double dlogz = (log(zmax)-log(zmin))/(1.0*(Nz-1));
-    vector<vector<vector<double> > > dndlnM(NM, vector<vector<double> > (Nz, vector<double> (3,0.0)));
+    vector<vector<vector<double> > > dndlnM(Nz, vector<vector<double> > (NM, vector<double> (3,0.0)));
     double z = zmin, M;
     for (int jz = 0; jz < Nz; jz++) {
         for (int jM = 0; jM < NM; jM++) {
@@ -186,6 +186,65 @@ vector<vector<vector<double> > > cosmology::hmflistf() {
     }
     
     return dndlnM;
+}
+
+
+// the probability that the halo whose mass at z' is M' ends up being a part of a halo in the mass range (M,M+dM) at z<z':
+double cosmology::dPpdM(vector<double> &sigma, double z, vector<double> &sigmap, double zp) {
+    return 2.0*sigma[1]*abs(sigma[2])*pow(sigmap[1]/sigma[1],3.0)*(deltac(zp)-deltac(z))*deltac(z)/deltac(zp)/sqrt(2.0*PI*pow(pow(sigmap[1],2.0)-pow(sigma[1],2.0),3.0))*exp(-pow(pow(sigmap[1],2.0)*deltac(z) - pow(sigma[1],2.0)*deltac(zp),2.0)/(2.0*pow(sigma[1]*sigmap[1],2.0)*(pow(sigmap[1],2.0)-pow(sigma[1],2.0))));
+}
+double cosmology::DeltaM(vector<double> &sigmap, double z, double dz) {
+    double Mp = sigmap[0];
+    
+    // list of ratios at which the integrands are evaluated, M = (1+f)*M'
+    vector<double> fM(71, 0.0);
+    double logdf = 0.1;
+    for (int jf = 0; jf < fM.size(); jf++) {
+        fM[fM.size() - 1 - jf] = pow(10.0, -jf*logdf);
+    }
+    
+    // integrals over M
+    vector<double> sigmaj;
+    double M, dM, dPdMj, dPdMjm1 = 0.0, num = 0.0, den = 0.0;
+    for (int jM = 1; jM < fM.size(); jM++) {
+        M = (1.0+fM[jM])*Mp;
+        sigmaj = interpolaten(M, sigmalist);
+        dPdMj = dPpdM(sigmaj, z, sigmap, z+dz);
+        
+        dM = M - (1.0+fM[jM-1])*Mp;
+        num += M*(dPdMj + dPdMjm1)*dM/2.0;
+        den += (dPdMj + dPdMjm1)*dM/2.0;
+        
+        dPdMjm1 = dPdMj;
+    }
+    return num/den - Mp;
+}
+
+// growth rate of the halo through mergers with smaller halos, {z,M,dM/dt}
+vector<vector<vector<double> > > cosmology::dotMlistf() {
+    double dz = 0.01;
+    double dlogz = (log(zmax)-log(zmin))/(1.0*(Nz-1));
+    vector<vector<vector<double> > > dMdt(Nz, vector<vector<double> > (NM, vector<double> (3,0.0)));
+    
+    double z = zmin, M;
+    for (int jz = 0; jz < Nz; jz++) {
+        for (int jM = 0; jM < NM-1; jM++) {
+            M = sigmalist[jM][0];
+            
+            dMdt[jz][jM][0] = z;
+            dMdt[jz][jM][1] = M;
+            dMdt[jz][jM][2] = (1+z)*Hz(z)*DeltaM(sigmalist[jM], z, dz)/dz;
+        }
+        M = sigmalist[NM-1][0];
+        
+        dMdt[jz][NM-1][0] = z;
+        dMdt[jz][NM-1][1] = M;
+        dMdt[jz][NM-1][2] = dMdt[jz][NM-2][2];
+        
+        z = exp(log(z) + dlogz);
+    }
+    
+    return dMdt;
 }
 
 

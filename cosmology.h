@@ -89,6 +89,12 @@ private:
     // Seth-Tormen HMF, {z,M,dndlnM}
     vector<vector<vector<double> > > hmflistf();
     
+    double dPpdM(vector<double> &sigma, double z, vector<double> &sigmap, double zp);
+    double DeltaM(vector<double> &sigmap, double z, double dz);
+    // growth rate of the halo through mergers with smaller halos, {z,M,dM/dt}
+    vector<vector<vector<double> > > dotMlistf();
+
+    
     vector<vector<double> > dclist();
     vector<vector<double> > tlist();
     
@@ -98,6 +104,7 @@ private:
 public:
     
     vector<vector<vector<double> > > hmflist;
+    vector<vector<vector<double> > > dotMlist;
     vector<vector<vector<double> > > NFWlist;
     
     void initialize() {
@@ -120,6 +127,7 @@ public:
         
         NFWlist = NFWlistf();
         hmflist = hmflistf();
+        dotMlist = dotMlistf();
     }
     
     // luminosity distance

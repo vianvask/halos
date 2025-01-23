@@ -17,13 +17,11 @@ double randomreal(double x1, double x2, rgen &mt) {
 double interpolate(double x, vector<vector<double> > &y) {
     int n = y.size();
     if (x > y[n-1][0]) {
-        cout << "Warning: the point lies above of the interpolation range." << endl;
-        cout << x << "   " << y[n-1][0] << endl;
+        //cout << "Warning: the point lies above of the interpolation range." << endl;
         return y[n-1][1];
     }
     if (x < y[0][0]) {
-        cout << "Warning: the point lies below of the interpolation range." << endl;
-        cout << x << "   " << y[0][0] << endl;
+        //cout << "Warning: the point lies below of the interpolation range." << endl;
         return y[0][1];
     }
     
@@ -38,4 +36,33 @@ double interpolate(double x, vector<vector<double> > &y) {
     }
     jx = jmin;
     return y[jx][1] + (x - y[jx][0])/(y[jx+1][0] - y[jx][0])*(y[jx+1][1] - y[jx][1]);
+}
+vector<double> interpolaten(double x, vector<vector<double> > &y) {
+    int n = y.size();
+    if (x > y[n-1][0]) {
+        //cout << "Warning: the point lies above of the interpolation range." << endl;
+        return y[n-1];
+    }
+    if (x < y[0][0]) {
+        //cout << "Warning: the point lies below of the interpolation range." << endl;
+        return y[0];
+    }
+    
+    int jmin = 0, jmax = n-1, jx;
+    while (jmax > jmin+1) {
+        jx = (int) floor((jmax+jmin)/2.0);
+        if (y[jx][0] < x) {
+            jmin = jx;
+        } else {
+            jmax = jx;
+        }
+    }
+    jx = jmin;
+    
+    vector<double> tmp(y[0].size(),0.0);
+    tmp[0] = x;
+    for (int j = 1; j < tmp.size(); j++) {
+        tmp[j] = y[jx][j] + (x - y[jx][0])/(y[jx+1][0] - y[jx][0])*(y[jx+1][j] - y[jx][j]);
+    }
+    return tmp;
 }

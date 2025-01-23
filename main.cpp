@@ -3,7 +3,7 @@
 // units: masses in solar masses, time in Myr, length in kpc
 
 int main (int argc, char *argv[]) {
-    cout << setprecision(3) << fixed;
+    cout << setprecision(15) << fixed;
     
     // timing
     clock_t time_req = clock();
@@ -32,7 +32,7 @@ int main (int argc, char *argv[]) {
     
     // accuracy parameters
     C.Nk = 1000;
-    C.NM = 1000;
+    C.NM = 1200;
     C.Nz = 1000;
     
     // mass and redshift ranges
@@ -49,19 +49,22 @@ int main (int argc, char *argv[]) {
     string filename = "hmf.dat";;
     ofstream outfile;
     outfile.open(filename.c_str());
-    double z, M, hmf;
+    double z, M, hmf, dotM;
     for (int jz = 0; jz < C.Nz; jz++) {
         for (int jM = 0; jM < C.NM; jM++) {
             z = C.hmflist[jz][jM][0];
             M = C.hmflist[jz][jM][1];
             hmf = C.hmflist[jz][jM][2];
+            dotM = C.dotMlist[jz][jM][2];
             if (hmf < 1e-64) {
                 hmf = 0.0;
             }
-            outfile << z << "   " << M << "   " << hmf << endl;
+            outfile << z << "   " << M << "   " << hmf << "   " << dotM << endl;
         }
     }
     outfile.close();
+    
+    /*
     
     cout << "Generating lensing amplificaitons..." << endl;
     
@@ -113,6 +116,8 @@ int main (int argc, char *argv[]) {
     }
     outfile1.close();
     outfile2.close();
+     
+     */
     
     time_req = clock() - time_req;
     cout << "Total evaluation time: " << ((double) time_req/CLOCKS_PER_SEC/60.0) << " min." << endl;
