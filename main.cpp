@@ -3,7 +3,7 @@
 // units: masses in solar masses, time in Myr, length in kpc
 
 int main (int argc, char *argv[]) {
-    cout << setprecision(13) << fixed;
+    cout << setprecision(3) << fixed;
     
     // timing
     clock_t time_req = clock();
@@ -39,13 +39,11 @@ int main (int argc, char *argv[]) {
     C.Mmin = 1.0e5;
     C.Mmax = 1.0e17;
     C.zmin = 0.01;
-    C.zmax = 20.0;
+    C.zmax = 21.0;
     
     C.initialize();
-    time_req = clock() - time_req;
-    cout << "Initialization evaluation time: " << ((double) time_req/CLOCKS_PER_SEC/60.0) << " min." << endl;
-    cout << "The age of the universe today is " << C.age(0.0) << " Myr." << endl;
-    cout << "The luminosity distance of a source at z = 1 is " << C.DL(1.0) << " kpc." << endl;
+    cout << "t_0 =  " << C.age(0.0) << " Myr." << endl;
+    cout << "D_L(z=1) = " << C.DL(1.0) << " kpc." << endl;
             
     // output the halo mass function
     string filename = "hmf.dat";;
@@ -65,30 +63,33 @@ int main (int argc, char *argv[]) {
     }
     outfile.close();
     
+    cout << "Generating lensing amplificaitons..." << endl;
+    
     // random number generator
     rgen mt(time(NULL));
-
-    ofstream outfile1, outfile2;
     
     filename = "N1.dat";
+    ofstream outfile1;
     outfile1.open(filename.c_str());
     outfile << setprecision(12) << fixed;
     
     filename = "lnmu.dat";
+    ofstream outfile2;
     outfile2.open(filename.c_str());
     
-    vector<double> zlist {0.2, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0};
+    vector<double> zlist {0.2, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 12.0, 15.0, 20.0};
     vector<vector<double> > N1list;
-    
-    int Nlnmu = 100;
+        
+    int Nlnmu = 80;
     vector<vector<double> > Fm1(Nlnmu, vector<double> (2,0.0));
     double Nh, x, lnmutot;
-    vector<double> lnmu(1000000, 0.0);
+    vector<double> lnmu(10000000, 0.0);
     
     for (int jz = 0; jz < zlist.size(); jz++) {
+        cout << "z = " << zlist[jz] << endl;
+        
         N1list = dNdlnmu(C, Nlnmu, zlist[jz], 1.0);
         Nh = N1list[N1list.size()-1][2];
-        cout << "z = " << zlist[jz] << ", N_h = " << Nh << endl;
         
         // output the distribution dN_1/dlnmu
         for (int j = 0; j < N1list.size(); j++) {
@@ -100,6 +101,7 @@ int main (int argc, char *argv[]) {
             Fm1[j][1] = log(N1list[j][0]);
         }
         
+        // output realizations of lnmu
         for (int j = 0; j<lnmu.size(); j++) {
             lnmutot = 0.0;
             for (int jh = 0; jh < Nh; jh++) {
@@ -113,7 +115,7 @@ int main (int argc, char *argv[]) {
     outfile2.close();
     
     time_req = clock() - time_req;
-    cout << "Evaluation time after initialization: " << ((double) time_req/CLOCKS_PER_SEC/60.0) << " min." << endl;
+    cout << "Total evaluation time: " << ((double) time_req/CLOCKS_PER_SEC/60.0) << " min." << endl;
     
     return 0;
 }

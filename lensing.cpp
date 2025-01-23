@@ -101,12 +101,12 @@ vector<vector<double> > dNdlnmu(cosmology &C, int Nx, double zs, double lnmumax)
             lnmu2 = lnmuthr;
         }
     }
-    cout << lnmuthr << "   " << Nhf(C, zs, lnmuthr) << endl;
     
     double zl, M, dz, dlnM, dndlnM, rmax, dlnmudr;
     double dloglnmu = (log(lnmumax) - log(lnmuthr))/(1.0*(Nx-1));
     double x = lnmuthr, xp = x;
     
+    // compute the PDF and CDF of lnmu 
     double Nhcum = 0.0;
     double Nh = 0.0, Nhp = 0.0;
     for (int jx = 0; jx < Nx; jx++) {
