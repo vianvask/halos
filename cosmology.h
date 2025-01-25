@@ -53,17 +53,6 @@ public:
         return 3.0/5.0*pow(3.0*PI/2.0,2.0/3.0)/Dg(z);
     }
     
-    // star formation rate
-    double fstar(double M, double Mc, double epsilon, double alpha, double beta) {
-        return epsilon/(pow(M/Mc,alpha) + pow(M/Mc,beta));
-    }
-    
-    // UV magnitude
-    double kappaUV = 1.15e-22; // Msun s erg^-1 Myr^-1
-    double MUV(double M, double dotM, double Mc, double epsilon, double alpha, double beta) {
-        return 2.5*(20.652 - 0.434294*log(fstar(M,Mc,epsilon,alpha,beta)*dotM/kappaUV));
-    }
-    
 private:
     
     // matter transfer function (astro-ph/9709112)
@@ -102,9 +91,42 @@ private:
     
     double dPpdM(vector<double> &sigma, double z, vector<double> &sigmap, double zp);
     double DeltaM(vector<double> &sigmap, double z, double dz);
+    
     // growth rate of the halo through mergers with smaller halos, {z,M,dM/dt}
     vector<vector<vector<double> > > dotMlistf();
+    
+    // star formation rate
+    double fstar(double M, double Mc, double epsilon, double alpha, double beta) {
+        return epsilon/(pow(M/Mc,alpha) + pow(M/Mc,beta));
+    }
+    // derivative of the star formation rate, df_*/dM
+    double Dfstar(double M, double Mc, double epsilon, double alpha, double beta) {
+        return -(alpha*pow(M/Mc,alpha) + beta*pow(M/Mc,beta))*pow(fstar(M,Mc,epsilon,alpha,beta),2.0)/(epsilon*M);
+    }
+    
+    double kappaUV = 1.15e-22; // Msun s erg^-1 Myr^-1
+    
+    // the UV magnitude
+    double MUV(double M, double dotM, double Mc, double epsilon, double alpha, double beta) {
+        return 51.63 - 1.08574*log(fstar(M,Mc,epsilon,alpha,beta)*dotM/kappaUV);
+    }
+        
+    // derivative of the UV magnitude, dM_UV/dM
+    double DMUV(double M, double dotM, double DdotM, double Mc, double epsilon, double alpha, double beta) {
+        return -1.08574*(DdotM/dotM + Dfstar(M,Mc,epsilon,alpha,beta)/fstar(M,Mc,epsilon,alpha,beta));
+    }
+    
+    // dust extinction, MUV -> MUV - AUV (see 1406.1503 and Table 3 of 1306.2950)
+    double AUV(double MUV, double z) {
+        double C0 = 4.4, C1 = 2.0, sigmabeta = 0.34;
+        double beta = -exp(0.17*(19.5+MUV)/(1.54+0.075*z))*(1.54+0.075*z);
+        return max(0.0, C0 + 0.2*log(10)*pow(C1*sigmabeta,2.0) + C1*beta);
+    }
 
+    // UV luminosity function as a function of halo mass M (see e.g. 1906.06296)
+    double UVLF(double M, double dotM, double DdotM, double dndlnM, double Mt, double Mc, double epsilon, double alpha, double beta) {
+        return -exp(-Mt/M)*dndlnM/M/DMUV(M,dotM,DdotM,Mc,epsilon,alpha,beta);
+    }
     
     vector<vector<double> > dclist();
     vector<vector<double> > tlist();
@@ -117,6 +139,9 @@ public:
     vector<vector<vector<double> > > hmflist;
     vector<vector<vector<double> > > dotMlist;
     vector<vector<vector<double> > > NFWlist;
+    
+    // UV luminosity function, {z,M,MUV,AUV,Phi}
+    vector<vector<vector<double> > > UVLFlistf(double Mt, double Mc, double epsilon, double alpha, double beta);
     
     void initialize() {
         OmegaR = OmegaM/(1+zeq);

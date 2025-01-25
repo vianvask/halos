@@ -68,22 +68,25 @@ double cosmology::sigmaf(double M, double deltaH) {
 }
 // variance of matter fluctuations, {M, sigma, dsigma/dM}
 vector<vector<double> > cosmology::sigmalistf() {
-    double dlogM = (log(Mmax)-log(Mmin))/(1.0*(NM-1));
-    vector<vector<double> > Ms(NM, vector<double> (3,0.0));
-    double M = Mmin;
-    double sigman = 0.0, sigmanp;
-    for (int jM = 0; jM < NM; jM++) {
-        sigmanp = sigman;
-        sigman = sigmaf(M, deltaH8);
-        
-        Ms[jM][0] = M;
-        Ms[jM][1] = sigman;
-        Ms[jM][2] = (sigman-sigmanp)/(exp(log(M)+dlogM)-M);
-
-        M = exp(log(M) + dlogM);
-    }
-    Ms[0][2] = Ms[1][2];
     
+    int Nextra = (int) ceil((NM-1)*log(3.0)/log(Mmax/Mmin));
+        
+    double dlogM = (log(Mmax)-log(Mmin))/(1.0*(NM-1));
+    vector<vector<double> > Ms(NM+Nextra, vector<double> (3,0.0));
+    double M = exp(log(Mmin) - dlogM);
+    double sigma = sigmaf(M, deltaH8);
+    double sigman, Mn;
+    for (int jM = 0; jM < NM+Nextra; jM++) {
+        Mn = exp(log(M) + dlogM);
+        sigman = sigmaf(Mn, deltaH8);
+        
+        Ms[jM][0] = Mn;
+        Ms[jM][1] = sigman;
+        Ms[jM][2] = (sigman-sigma)/(Mn-M);
+
+        M = Mn;
+        sigma = sigman;
+    }
     return Ms;
 }
 
@@ -105,21 +108,21 @@ vector<vector<vector<double> > > cosmology::conslistf() {
     double dlogz = (log(zmax)-log(zmin))/(1.0*(Nz-1));
     vector<vector<vector<double> > > zMc(Nz, vector<vector<double> > (NM, vector<double> (4,0.0)));
     double z = zmin;
-    double c, cp, Dc;
+    double c, cn, M, Mn;
     for (int jz = 0; jz < Nz; jz++) {
-        c = 1.0;
+        M = sigmalist[0][0];
+        c = cons(sigmalist[0][1],z);
         for (int jM = 0; jM < NM; jM++) {
-            cp = c;
-            c = cons(sigmalist[jM][1],z);
-            if (jM == 0) {
-                Dc = (cons(sigmalist[jM+1][1],z) - c)/(sigmalist[jM+1][0]-sigmalist[jM][0]);
-            } else {
-                Dc = (c - cp)/(sigmalist[jM][0]-sigmalist[jM-1][0]);
-            }
+            Mn = sigmalist[jM+1][0];
+            cn = cons(sigmalist[jM+1][1],z);
+            
             zMc[jz][jM][0] = z;
-            zMc[jz][jM][1] = sigmalist[jM][0];
+            zMc[jz][jM][1] = M;
             zMc[jz][jM][2] = c;
-            zMc[jz][jM][3] = Dc;
+            zMc[jz][jM][3] = (cn - c)/(Mn - M);
+            
+            M = Mn;
+            c = cn;
         }
         z = exp(log(z) + dlogz);
     }
@@ -227,27 +230,55 @@ vector<vector<vector<double> > > cosmology::dotMlistf() {
     double dz = 0.01; // z step over which DeltaM is computed
     
     double dlogz = (log(zmax)-log(zmin))/(1.0*(Nz-1));
-    vector<vector<vector<double> > > dMdt(Nz, vector<vector<double> > (NM, vector<double> (3,0.0)));
+    vector<vector<vector<double> > > dMdt(Nz, vector<vector<double> > (NM, vector<double> (4,0.0)));
     
-    double z = zmin, M;
+    double z = zmin;
+    double Mj, Mjp1, dMdtj, dMdtjp1;
     for (int jz = 0; jz < Nz; jz++) {
-        for (int jM = 0; jM < NM-1; jM++) {
-            M = sigmalist[jM][0];
+        Mj = sigmalist[0][0];
+        dMdtj = (1+z)*Hz(z)*DeltaM(sigmalist[0], z, dz)/dz;
+        
+        for (int jM = 0; jM < NM; jM++) {
+            Mjp1 = sigmalist[jM+1][0];
+            dMdtjp1 = (1+z)*Hz(z)*DeltaM(sigmalist[jM+1], z, dz)/dz;
             
             dMdt[jz][jM][0] = z;
-            dMdt[jz][jM][1] = M;
-            dMdt[jz][jM][2] = (1+z)*Hz(z)*DeltaM(sigmalist[jM], z, dz)/dz;
+            dMdt[jz][jM][1] = Mj;
+            dMdt[jz][jM][2] = dMdtj;
+            dMdt[jz][jM][3] = (dMdtjp1 - dMdtj)/(Mjp1 - Mj);
+            
+            Mj = Mjp1;
+            dMdtj = dMdtjp1;
         }
-        M = sigmalist[NM-1][0];
-        
-        dMdt[jz][NM-1][0] = z;
-        dMdt[jz][NM-1][1] = M;
-        dMdt[jz][NM-1][2] = dMdt[jz][NM-2][2];
-        
         z = exp(log(z) + dlogz);
     }
     
     return dMdt;
+}
+
+
+// UV luminosity function, {z,M,MUV,AUV,Phi}
+vector<vector<vector<double> > > cosmology::UVLFlistf(double Mt, double Mc, double epsilon, double alpha, double beta) {
+    vector<vector<vector<double> > > phiUV(Nz, vector<vector<double> > (NM, vector<double> (5, 0.0)));
+    double zj, Mj, dotMj, DdotMj, dndlnMj, MUVj;
+    for (int jz = 0; jz < Nz; jz++) {
+        zj = dotMlist[jz][0][0];
+        for (int jM = 0; jM < NM; jM++) {
+            Mj = dotMlist[jz][jM][1];
+            dotMj = dotMlist[jz][jM][2];
+            DdotMj = dotMlist[jz][jM][3];
+            dndlnMj = hmflist[jz][jM][2];
+            
+            MUVj = MUV(Mj, dotMj, Mc, epsilon, alpha, beta);
+            
+            phiUV[jz][jM][0] = zj;
+            phiUV[jz][jM][1] = Mj;
+            phiUV[jz][jM][2] = MUVj;
+            phiUV[jz][jM][3] = AUV(MUVj, zj);
+            phiUV[jz][jM][4] = UVLF(Mj, dotMj, DdotMj, dndlnMj, Mt, Mc, epsilon, alpha, beta);
+        }
+    }
+    return phiUV;
 }
 
 

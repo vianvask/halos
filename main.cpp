@@ -31,7 +31,7 @@ int main (int argc, char *argv[]) {
     }
     
     // accuracy parameters
-    C.Nk = 100;
+    C.Nk = 1000;
     C.NM = 1200;
     C.Nz = 100;
     
@@ -44,26 +44,36 @@ int main (int argc, char *argv[]) {
     C.initialize();
     cout << "t_0 =  " << C.age(0.0) << " Myr." << endl;
     cout << "D_L(z=1) = " << C.DL(1.0) << " kpc." << endl;
+    
+    vector<vector<vector<double> > > UVLFlist = C.UVLFlistf(1.0e9, 3.2e11, 0.1, -1.2, 0.5);
             
-    // output the halo mass function
+    // output the halo mass function and the UV luminosity function
     string filename = "hmf.dat";;
     ofstream outfile;
     outfile.open(filename.c_str());
-    double z, M, hmf, dotM;
+    double z, M, hmf, dotM, DdotM, MUV, AUV, phiUV;
     for (int jz = 0; jz < C.Nz; jz++) {
         for (int jM = 0; jM < C.NM; jM++) {
             z = C.hmflist[jz][jM][0];
             M = C.hmflist[jz][jM][1];
             hmf = C.hmflist[jz][jM][2];
             dotM = C.dotMlist[jz][jM][2];
+            DdotM = C.dotMlist[jz][jM][3];
+            MUV = UVLFlist[jz][jM][2];
+            AUV = UVLFlist[jz][jM][3];
+            phiUV = UVLFlist[jz][jM][4];
             if (hmf < 1e-64) {
                 hmf = 0.0;
             }
-            outfile << z << "   " << M << "   " << hmf << "   " << dotM << endl;
+            if (abs(phiUV) < 1e-64) {
+                phiUV = 0.0;
+            }
+            outfile << z << "   " << M << "   " << hmf << "   " << dotM << "   " << DdotM << "   " << MUV << "   " << AUV << "   " << phiUV << endl;
         }
     }
     outfile.close();
-        
+    
+    /*
     cout << "Generating lensing amplificaitons..." << endl;
     
     // random number generator
@@ -114,6 +124,7 @@ int main (int argc, char *argv[]) {
     }
     outfile1.close();
     outfile2.close();
+     */
     
     time_req = clock() - time_req;
     cout << "Total evaluation time: " << ((double) time_req/CLOCKS_PER_SEC/60.0) << " min." << endl;
