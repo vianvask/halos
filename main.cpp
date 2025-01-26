@@ -73,28 +73,23 @@ int main (int argc, char *argv[]) {
     }
     outfile.close();
     
-    /*
-    cout << "Generating lensing amplificaitons..." << endl;
+    cout << "Generating lensing amplifications..." << endl;
+            
+    int Nlnmu = 80, Nreal = 10000000, Nbins = 10000;
+    double Nh, x, lnmutot, lnmumin, lnmumax, lnmumean, dlnmu, dP = 1.0/(1.0*Nreal);
+    
+    vector<double> zlist {0.2, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 12.0, 15.0, 20.0};
+
+    vector<vector<double> > N1list;
+    vector<vector<double> > Fm1(Nlnmu, vector<double> (2,0.0));
+    vector<double> lnmu(Nreal, 0.0);
+    vector<vector<double> > Plnmu(Nbins, vector<double> (2, 0.0));
+    
+    filename = "Plnmu.dat";
+    outfile.open(filename.c_str());
     
     // random number generator
     rgen mt(time(NULL));
-    
-    filename = "N1.dat";
-    ofstream outfile1;
-    outfile1.open(filename.c_str());
-    outfile << setprecision(12) << fixed;
-    
-    filename = "lnmu.dat";
-    ofstream outfile2;
-    outfile2.open(filename.c_str());
-    
-    vector<double> zlist {0.2, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 12.0, 15.0, 20.0};
-    vector<vector<double> > N1list;
-        
-    int Nlnmu = 80;
-    vector<vector<double> > Fm1(Nlnmu, vector<double> (2,0.0));
-    double Nh, x, lnmutot;
-    vector<double> lnmu(10000000, 0.0);
     
     for (int jz = 0; jz < zlist.size(); jz++) {
         cout << "z = " << zlist[jz] << endl;
@@ -102,29 +97,48 @@ int main (int argc, char *argv[]) {
         N1list = dNdlnmu(C, Nlnmu, zlist[jz], 1.0);
         Nh = N1list[N1list.size()-1][2];
         
-        // output the distribution dN_1/dlnmu
-        for (int j = 0; j < N1list.size(); j++) {
-            outfile1 << zlist[jz] << "   " << N1list[j][0] << "   " << N1list[j][1] << "   " << N1list[j][2] << endl;
-        }
-        
         for (int j = 0; j < Fm1.size(); j++) {
             Fm1[j][0] = N1list[j][2]/Nh;
             Fm1[j][1] = log(N1list[j][0]);
         }
         
-        // output realizations of lnmu
-        for (int j = 0; j<lnmu.size(); j++) {
+        // generate realizations of lnmu
+        lnmumin = 1.0;
+        lnmumax = 0.0;
+        lnmumean = 0.0;
+        for (int j = 0; j<Nreal; j++) {
             lnmutot = 0.0;
             for (int jh = 0; jh < Nh; jh++) {
                 x = randomreal(0.0,1.0,mt);
                 lnmutot += exp(interpolate(x,Fm1));
             }
-            outfile2 << zlist[jz] << "   " << lnmutot << endl;
+            if (lnmutot > lnmumax) {
+                lnmumax = lnmutot;
+            }
+            if (lnmutot < lnmumin) {
+                lnmumin = lnmutot;
+            }
+            lnmumean += lnmutot;
+            lnmu[j] = lnmutot;
+        }
+        lnmumean = lnmumean/(1.0*Nreal);
+        
+        // binning
+        dlnmu = (lnmumax-lnmumin)/(1.0*(Nbins-1));
+        for (int j = 0; j < Nbins; j++) {
+            Plnmu[j][0] = (lnmumin-lnmumean) + j*dlnmu;
+        }
+        for (int j = 0; j < Nreal; j++) {
+            Plnmu[(int) round((Nbins-1)*(lnmu[j]-lnmumin)/(lnmumax-lnmumin))][1] += dP/dlnmu;
+        }
+        
+        // output P(lnmu)
+        for (int j = 0; j < Nbins; j++) {
+            outfile << zlist[jz] << "   " << Plnmu[j][0] << "   " << Plnmu[j][1] << endl;
+            Plnmu[j][1] = 0.0;
         }
     }
-    outfile1.close();
-    outfile2.close();
-     */
+    outfile.close();
     
     time_req = clock() - time_req;
     cout << "Total evaluation time: " << ((double) time_req/CLOCKS_PER_SEC/60.0) << " min." << endl;
