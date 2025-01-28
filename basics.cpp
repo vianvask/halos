@@ -12,6 +12,10 @@ double randomreal(double x1, double x2, rgen &mt) {
     long double r01 = mt()/(1.0*mt.max());
     return (x1 + (x2-x1)*r01);
 }
+double randomreal(double x1, double x2) {
+    long double r01 = rand()/(1.0*RAND_MAX);
+    return (x1 + (x2-x1)*r01);
+}
 
 // linear interpolation
 double interpolate(double x, vector<vector<double> > &y) {

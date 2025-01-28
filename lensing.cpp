@@ -28,14 +28,13 @@ vector<double> kappa(cosmology &C, double zs, double zl, double r, double M, dou
     double X, Y;
     if (rS > 0.0) {
         // average over the source projection
-        int Navg = 32;
+        int Navg = 16;
         double rSp = rS*DlA/DsA;
         double R, theta;
         for (int j = 0; j < Navg; j++) {
-            
             // generate randon point inside the projection of the source in the lens plane
-            R = rSp*sqrt(rand()/(1.0*RAND_MAX));
-            theta = PI*rand()/(1.0*RAND_MAX);
+            R = rSp*sqrt(randomreal(0.0,1.0));
+            theta = randomreal(0.0,PI);
             
             X = sqrt(pow(r,2.0) + pow(R,2.0) - 2.0*r*R*cos(theta))/rs;
             if (X > 1.0) {
@@ -115,7 +114,7 @@ double Nhf(cosmology &C, double zs, double kappathr, double rS) {
 }
 
 
-// probability distribution normalized to N, {kappa, dN/dkappa}
+// single lens probability distribution normalized to number of haloes, {kappa, dN/dkappa}
 vector<vector<double> > dNdkappa(cosmology &C, int Nx, double zs, double kappamax, double rS) {
     vector<vector<double> > N1(Nx, vector<double> (3, 0.0));
     
@@ -174,4 +173,56 @@ vector<vector<double> > dNdkappa(cosmology &C, int Nx, double zs, double kappama
     }
 
     return N1;
+}
+
+
+// probability distribution of lnmu, {lnmu, dP/dlnmu}
+vector<vector<double> > Plnmuf(cosmology &C, int Nx, double zs, double kappamax, double rS, int Nreal, int Nbins, rgen &mt) {
+
+    vector<vector<double> > N1list = dNdkappa(C, Nx, zs, kappamax, rS);
+    double Nh = N1list[N1list.size()-1][2];
+    
+    vector<vector<double> > Fm1(Nx, vector<double> (2,0.0));
+    for (int j = 0; j < Fm1.size(); j++) {
+        Fm1[j][0] = N1list[j][2]/Nh;
+        Fm1[j][1] = log(N1list[j][0]);
+    }
+    
+    vector<double> lnmu(Nreal, 0.0);
+    vector<vector<double> > Plnmu(Nbins, vector<double> (2, 0.0));
+    double x, kappatot, lnmutot, lnmumin, lnmumax, lnmumean, dlnmu, dP = 1.0/(1.0*Nreal);
+    
+    // generate realizations of kappa
+    lnmumin = 1.0;
+    lnmumax = 0.0;
+    lnmumean = 0.0;
+    for (int j = 0; j<Nreal; j++) {
+        kappatot = 0.0;
+        for (int jh = 0; jh < Nh; jh++) {
+            x = randomreal(0.0,1.0,mt);
+            kappatot += exp(interpolate(x,Fm1));
+        }
+        
+        lnmutot = log(pow(1.0-kappatot,-2.0)); // mu ≈ (1-kappa)^-2 (see 1106.3823)
+        if (lnmutot > lnmumax) {
+            lnmumax = lnmutot;
+        }
+        if (lnmutot < lnmumin) {
+            lnmumin = lnmutot;
+        }
+        lnmumean += lnmutot;
+        lnmu[j] = lnmutot;
+    }
+    lnmumean = lnmumean/(1.0*Nreal);
+    
+    // binning
+    dlnmu = (lnmumax-lnmumin)/(1.0*(Nbins-1));
+    for (int j = 0; j < Nbins; j++) {
+        Plnmu[j][0] = (lnmumin-lnmumean) + j*dlnmu;
+    }
+    for (int j = 0; j < Nreal; j++) {
+        Plnmu[(int) round((Nbins-1)*(lnmu[j]-lnmumin)/(lnmumax-lnmumin))][1] += dP/dlnmu;
+    }
+    
+    return Plnmu;
 }
