@@ -4,8 +4,9 @@ double acot(double x) {
     return PI/2.0 - atan(x);
 }
 
-// NFW lensing amplification and its derivative, {lnmu, dlnmu/dr}
-vector<double> lnmu(cosmology &C, double zs, double zl, double r, double M) {
+// NFW lensing amplification and its derivative, {kappa, dkappa/dr}
+// r_S = source size, r = impact parameter
+vector<double> kappa(cosmology &C, double zs, double zl, double r, double M, double rS) {
     
     // angular diameter distances
     double DsA = C.DL(zs)/pow(1+zs,2.0);
@@ -22,33 +23,61 @@ vector<double> lnmu(cosmology &C, double zs, double zl, double r, double M) {
     double Drs = zMNFW[3];
     double rhos = zMNFW[4];
     double Drhos = zMNFW[5];
-
-    double X = r/rs;
-    double Y, Sigma, dSigmapdr;
-    if (X > 1.0) {
-        Y = X*X-1;
-        Sigma = 2*rs*rhos*(sqrt(Y) + 2*acot(sqrt(Y)) - 2*atan((X+1)/sqrt(Y)))/pow(Y,3.0/2.0);
-        dSigmapdr = 2*rhos*(2 - 2*pow(X,4.0) + Y + 6*sqrt(Y)*(Y+1)*(-acot(sqrt(Y)) + atan((X+1)/sqrt(Y))))/(X*pow(Y,3.0));
-    } else {
-        Y = 1-X*X;
-        Sigma = 2*rs*rhos*(-sqrt(Y) + log((1+sqrt(Y))/X))/pow(Y,3.0/2.0);
-        dSigmapdr = 2*rhos*(-2 + 2*pow(X,4.0) + Y - 3*sqrt(Y)*(Y-1)*log((1+sqrt(Y))/X))/(X*pow(Y,3.0));
-    }
-    vector<double> lnmu2 {Sigma/Sigmac, dSigmapdr/Sigmac};
     
-    return lnmu2;
+    double Sigma = 0.0, dSigmapdr = 0.0;
+    double X, Y;
+    if (rS > 0.0) {
+        // average over the source projection
+        int Navg = 32;
+        double rSp = rS*DlA/DsA;
+        double R, theta;
+        for (int j = 0; j < Navg; j++) {
+            
+            // generate randon point inside the projection of the source in the lens plane
+            R = rSp*sqrt(rand()/(1.0*RAND_MAX));
+            theta = PI*rand()/(1.0*RAND_MAX);
+            
+            X = sqrt(pow(r,2.0) + pow(R,2.0) - 2.0*r*R*cos(theta))/rs;
+            if (X > 1.0) {
+                Y = X*X-1;
+                Sigma += 2*rs*rhos*(sqrt(Y) + 2*acot(sqrt(Y)) - 2*atan((X+1)/sqrt(Y)))/pow(Y,3.0/2.0);
+                dSigmapdr += 2*rhos*(2 - 2*pow(X,4.0) + Y + 6*sqrt(Y)*(Y+1)*(-acot(sqrt(Y)) + atan((X+1)/sqrt(Y))))/(X*pow(Y,3.0));
+            } else {
+                Y = 1-X*X;
+                Sigma += 2*rs*rhos*(-sqrt(Y) + log((1+sqrt(Y))/X))/pow(Y,3.0/2.0);
+                dSigmapdr += 2*rhos*(-2 + 2*pow(X,4.0) + Y - 3*sqrt(Y)*(Y-1)*log((1+sqrt(Y))/X))/(X*pow(Y,3.0));
+            }
+        }
+        Sigma = Sigma/(1.0*Navg);
+        dSigmapdr = dSigmapdr/(1.0*Navg);
+    } else {
+        X = r/rs;
+        if (X > 1.0) {
+            Y = X*X-1;
+            Sigma = 2*rs*rhos*(sqrt(Y) + 2*acot(sqrt(Y)) - 2*atan((X+1)/sqrt(Y)))/pow(Y,3.0/2.0);
+            dSigmapdr = 2*rhos*(2 - 2*pow(X,4.0) + Y + 6*sqrt(Y)*(Y+1)*(-acot(sqrt(Y)) + atan((X+1)/sqrt(Y))))/(X*pow(Y,3.0));
+        } else {
+            Y = 1-X*X;
+            Sigma = 2*rs*rhos*(-sqrt(Y) + log((1+sqrt(Y))/X))/pow(Y,3.0/2.0);
+            dSigmapdr = 2*rhos*(-2 + 2*pow(X,4.0) + Y - 3*sqrt(Y)*(Y-1)*log((1+sqrt(Y))/X))/(X*pow(Y,3.0));
+        }
+    }
+    
+    vector<double> kappa2 {Sigma/Sigmac, dSigmapdr/Sigmac};
+    
+    return kappa2;
 }
 
 
-// maximal r so that lnmu(r) > lnmuthr
-double rmaxf(cosmology &C, double zs, double zl, double M, double lnmuthr) {
+// maximal r so that kappa(r) > kappathr
+double rmaxf(cosmology &C, double zs, double zl, double M, double kappathr, double rS) {
     double rmax;
     double logr1 = log(1.0e-3), logr2 = log(1.0e5);
         
-    if (lnmu(C, zs, zl, exp(logr1), M)[0] > lnmuthr) {
+    if (kappa(C, zs, zl, exp(logr1), M, rS)[0] > kappathr) {
         while (logr2-logr1 > 0.1) {
             rmax = exp((logr2+logr1)/2.0);
-            if (lnmu(C, zs, zl, rmax, M)[0] > lnmuthr) {
+            if (kappa(C, zs, zl, rmax, M, rS)[0] > kappathr) {
                 logr1 = log(rmax);
             } else {
                 logr2 = log(rmax);
@@ -64,7 +93,7 @@ double rmaxf(cosmology &C, double zs, double zl, double M, double lnmuthr) {
 
 
 // number of halos withing radius rmax
-double Nhf(cosmology &C, double zs, double lnmuthr) {
+double Nhf(cosmology &C, double zs, double kappathr, double rS) {
     double Nh = 0.0;
     double rmax, M, zl, dz, dlnM, dndlnM;
     
@@ -77,7 +106,7 @@ double Nhf(cosmology &C, double zs, double lnmuthr) {
                 dlnM = log(M) - log(C.hmflist[jz][jM-1][1]);
                 dndlnM = C.hmflist[jz][jM][2];
                 
-                rmax = rmaxf(C, zs, zl, M, lnmuthr);
+                rmax = rmaxf(C, zs, zl, M, kappathr, rS);
                 Nh += 306.535*PI*pow((1+zl)*rmax,2.0)/C.Hz(zl)*dndlnM*dlnM*dz;
             }
         }
@@ -86,27 +115,27 @@ double Nhf(cosmology &C, double zs, double lnmuthr) {
 }
 
 
-// probability distribution normalized to N, {lnmu, dN/dlnmu}
-vector<vector<double> > dNdlnmu(cosmology &C, int Nx, double zs, double lnmumax) {
+// probability distribution normalized to N, {kappa, dN/dkappa}
+vector<vector<double> > dNdkappa(cosmology &C, int Nx, double zs, double kappamax, double rS) {
     vector<vector<double> > N1(Nx, vector<double> (3, 0.0));
     
-    // find threshold lnmu that gives N_h = 50
-    double lnmuthr;
-    double lnmu1 = 1.0e-6, lnmu2 = 1.0;
-    while (log10(lnmu2)-log10(lnmu1) > 0.02) {
-        lnmuthr = pow(10.0, (log10(lnmu1)+log10(lnmu2))/2.0);
-        if (Nhf(C, zs, lnmuthr) > 50) {
-            lnmu1 = lnmuthr;
+    // find threshold kappa that gives N_h = 50
+    double kappathr;
+    double kappa1 = 1.0e-6, kappa2 = 1.0;
+    while (log10(kappa2)-log10(kappa1) > 0.02) {
+        kappathr = pow(10.0, (log10(kappa1)+log10(kappa2))/2.0);
+        if (Nhf(C, zs, kappathr, rS) > 50) {
+            kappa1 = kappathr;
         } else {
-            lnmu2 = lnmuthr;
+            kappa2 = kappathr;
         }
     }
     
-    double zl, M, dz, dlnM, dndlnM, rmax, dlnmudr;
-    double dloglnmu = (log(lnmumax) - log(lnmuthr))/(1.0*(Nx-1));
-    double x = lnmuthr, xp = x;
+    double zl, M, dz, dlnM, dndlnM, rmax, dkappadr;
+    double dlnkappa = (log(kappamax) - log(kappathr))/(1.0*(Nx-1));
+    double x = kappathr, xp = x;
     
-    // compute the PDF and CDF of lnmu 
+    // compute the PDF and CDF of kappa 
     double Nhcum = 0.0;
     double Nh = 0.0, Nhp = 0.0;
     for (int jx = 0; jx < Nx; jx++) {
@@ -119,14 +148,14 @@ vector<vector<double> > dNdlnmu(cosmology &C, int Nx, double zs, double lnmumax)
                     dlnM = log(M) - log(C.hmflist[jz][jM-1][1]);
                     dndlnM = C.hmflist[jz][jM][2];
                     
-                    rmax = rmaxf(C, zs, zl, M, x);
+                    rmax = rmaxf(C, zs, zl, M, x, rS);
                     if (rmax > 0.0) {
-                        dlnmudr = lnmu(C, zs, zl, rmax, M)[1];
+                        dkappadr = kappa(C, zs, zl, rmax, M, rS)[1];
                     } else {
-                        dlnmudr = 1.0;
+                        dkappadr = 1.0;
                     }
                     
-                    Nh += 306.535*2.0*PI*pow(1+zl,2.0)*rmax/C.Hz(zl)/abs(dlnmudr)*dndlnM*dlnM*dz;
+                    Nh += 306.535*2.0*PI*pow(1+zl,2.0)*rmax/C.Hz(zl)/abs(dkappadr)*dndlnM*dlnM*dz;
                 }
             }
         }
@@ -138,7 +167,7 @@ vector<vector<double> > dNdlnmu(cosmology &C, int Nx, double zs, double lnmumax)
         N1[jx][2] = Nhcum;
         
         xp = x;
-        x = exp(log(x) + dloglnmu);
+        x = exp(log(x) + dlnkappa);
         
         Nhp = Nh;
         Nh = 0.0;

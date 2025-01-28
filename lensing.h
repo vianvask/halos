@@ -1,7 +1,7 @@
 #include "cosmology.h"
 
 // lensing amplification lnmu and its derivative dlnmu/dlnM
-vector<double> lnmu(cosmology &C, double zs, double zl, double r, double M);
+vector<double> kappa(cosmology &C, double zs, double zl, double r, double M, double rS);
 
 // probability distribution {lnmu, P1(lnmu)}
-vector<vector<double> > dNdlnmu(cosmology &C, int N, double zs, double lnmumax);
+vector<vector<double> > dNdkappa(cosmology &C, int N, double zs, double lnmumax, double rS);

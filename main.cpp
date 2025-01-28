@@ -75,13 +75,13 @@ int main (int argc, char *argv[]) {
     
     cout << "Generating lensing amplifications..." << endl;
             
-    int Nlnmu = 80, Nreal = 10000000, Nbins = 10000;
-    double Nh, x, lnmutot, lnmumin, lnmumax, lnmumean, dlnmu, dP = 1.0/(1.0*Nreal);
+    int Nkappa = 80, Nreal = 100000000, Nbins = 10000;
+    double Nh, x, kappatot, lnmutot, lnmumin, lnmumax, lnmumean, dlnmu, dP = 1.0/(1.0*Nreal);
     
     vector<double> zlist {0.2, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 12.0, 15.0, 20.0};
 
     vector<vector<double> > N1list;
-    vector<vector<double> > Fm1(Nlnmu, vector<double> (2,0.0));
+    vector<vector<double> > Fm1(Nkappa, vector<double> (2,0.0));
     vector<double> lnmu(Nreal, 0.0);
     vector<vector<double> > Plnmu(Nbins, vector<double> (2, 0.0));
     
@@ -94,7 +94,8 @@ int main (int argc, char *argv[]) {
     for (int jz = 0; jz < zlist.size(); jz++) {
         cout << "z = " << zlist[jz] << endl;
         
-        N1list = dNdlnmu(C, Nlnmu, zlist[jz], 1.0);
+        // source size = 10.0 kpc
+        N1list = dNdkappa(C, Nkappa, zlist[jz], 1.0, 10.0);
         Nh = N1list[N1list.size()-1][2];
         
         for (int j = 0; j < Fm1.size(); j++) {
@@ -102,16 +103,18 @@ int main (int argc, char *argv[]) {
             Fm1[j][1] = log(N1list[j][0]);
         }
         
-        // generate realizations of lnmu
+        // generate realizations of kappa
         lnmumin = 1.0;
         lnmumax = 0.0;
         lnmumean = 0.0;
         for (int j = 0; j<Nreal; j++) {
-            lnmutot = 0.0;
+            kappatot = 0.0;
             for (int jh = 0; jh < Nh; jh++) {
                 x = randomreal(0.0,1.0,mt);
-                lnmutot += exp(interpolate(x,Fm1));
+                kappatot += exp(interpolate(x,Fm1));
             }
+            
+            lnmutot = log(pow(1.0-kappatot,-2.0)); // mu = (1-kappa)^-2 (see 1106.3823)
             if (lnmutot > lnmumax) {
                 lnmumax = lnmutot;
             }
@@ -132,7 +135,7 @@ int main (int argc, char *argv[]) {
             Plnmu[(int) round((Nbins-1)*(lnmu[j]-lnmumin)/(lnmumax-lnmumin))][1] += dP/dlnmu;
         }
         
-        // output P(lnmu)
+        // output P(kappa)
         for (int j = 0; j < Nbins; j++) {
             outfile << zlist[jz] << "   " << Plnmu[j][0] << "   " << Plnmu[j][1] << endl;
             Plnmu[j][1] = 0.0;
