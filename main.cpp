@@ -7,6 +7,8 @@
 int main (int argc, char *argv[]) {
     cout << setprecision(3) << fixed;
     
+    cout << "Preparing..." << endl;
+    
     // timing
     clock_t time_req = clock();
 
@@ -35,18 +37,13 @@ int main (int argc, char *argv[]) {
     cout << "t_0 =  " << C.age(0.0) << " Myr." << endl;
     cout << "D_L(z=1) = " << C.DL(1.0) << " kpc." << endl;
     
-    double z, M, hmf, dotM, DdotM, MUV, AUV, PhiUV;
+    double z, M, hmf, dotM, DdotM;
     string filename;
     ofstream outfile;
-    
-    cout << "Computing UV luminosity functions..." << endl;
-    
-    vector<vector<vector<double> > > UVLFlist = UVLFlistf(C, 1.0e9, 3.2e11, 0.1, -1.0, 0.6);
     
     // output the halo mass function and the UV luminosity function
     filename = "hmf.dat";
     outfile.open(filename.c_str());
-    
     for (int jz = 0; jz < C.Nz; jz++) {
         for (int jM = 0; jM < C.NM; jM++) {
             z = C.zlist[jz];
@@ -55,10 +52,7 @@ int main (int argc, char *argv[]) {
             dotM = C.dotMlist[jz][jM][2];
             DdotM = C.dotMlist[jz][jM][3];
             
-            MUV = UVLFlist[jz][jM][1];
-            AUV = UVLFlist[jz][jM][2];
-            PhiUV = UVLFlist[jz][jM][3];
-            outfile << z << "   " << M << "   " << max(1.0e-64,hmf) << "   " << dotM << "   " << DdotM << "   " << MUV << "   " << AUV << "   " << max(1.0e-64,PhiUV) << endl;
+            outfile << z << "   " << M << "   " << max(1.0e-64,hmf) << "   " << dotM << "   " << DdotM << endl;
         }
     }
     outfile.close();
@@ -137,48 +131,16 @@ int main (int argc, char *argv[]) {
     }
     cout << "}" << endl;
     
-    cout << "Computing lensed UV luminosity functions..." << endl;
+    cout << "Computing UV luminosity functions..." << endl;
     
+    // output the UV luminosity function (no dust + no lensing, dust + no lensing, dust + lensing)
     filename = "UVluminosity.dat";
     outfile.open(filename.c_str());
-    
-    vector<vector<vector<double> > > PhiUVlensed(Zlist.size(), vector<vector<double> > (C.NM, vector<double> (2,0.0)));
-    vector<vector<double> > PhiUVlist(C.NM, vector<double> (2,0.0));
-    int jz;
-    double dlnmu;
+    vector<vector<vector<double> > > PhiUVlensed = PhiUV(C, Zlist, Plnmuz, 1.0e9, 3.2e11, 0.1, -1.0, 0.6);
     for (int jZ = 0; jZ < Zlist.size(); jZ++) {
         z = Zlist[jZ];
-        Plnmu = Plnmuz[jZ];
-        
-        // find index of z in the longer list of z values
-        jz = lower_bound(C.zlist.begin(), C.zlist.end(), z)- C.zlist.begin();
-        if (jz > 0 && C.zlist[jz]-z > z-C.zlist[jz-1]) {
-            jz--;
-        }
-                
-        // make a list Phi(M_UV) that can be easily interpolated
         for (int jM = 0; jM < C.NM; jM++) {
-            PhiUVlist[jM][0] = UVLFlist[jz][jM][1];
-            PhiUVlist[jM][1] = UVLFlist[jz][jM][3];
-        }
-        
-        // compute the lensed UV luminosity function
-        for (int jM = 0; jM < C.NM; jM++) {
-            MUV = UVLFlist[jz][jM][1];
-            AUV = UVLFlist[jz][jM][2];
-            
-            // convolution integral
-            PhiUV = 0.0;
-            dlnmu = Plnmu[1][0]-Plnmu[0][0];
-            for (int jb = 0; jb < Plnmu.size(); jb++) {
-                PhiUV += interpolate(MUV - AUV + 1.08574*Plnmu[jb][0], PhiUVlist)*Plnmu[jb][1]*dlnmu/exp(Plnmu[jb][0]);
-            }
-            
-            PhiUVlensed[jZ][jM][0] = MUV;
-            PhiUVlensed[jZ][jM][1] = PhiUV; // dust + lensing
-            
-            // output the UV luminosity function (no dust + no lensing, dust + no lensing, dust + lensing)
-            outfile << z << "   " << MUV << "   " << max(1.0e-64,UVLFlist[jz][jM][3]) << "   " << max(1.0e-64,interpolate(MUV - AUV, PhiUVlist)) << "   " << max(1.0e-64,PhiUV) << endl;
+            outfile << z << "   " << PhiUVlensed[jZ][jM][0] << "   " << max(1.0e-64,PhiUVlensed[jZ][jM][1]) << "   " << max(1.0e-64,PhiUVlensed[jZ][jM][2]) << "   " << max(1.0e-64,PhiUVlensed[jZ][jM][3]) << endl;
         }
     }
     outfile.close();
