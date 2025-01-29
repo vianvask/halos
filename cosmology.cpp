@@ -66,16 +66,18 @@ double cosmology::sigmaf(double M, double deltaH) {
     
     return sqrt(sigma2);
 }
+
 // variance of matter fluctuations, {M, sigma, dsigma/dM}
 vector<vector<double> > cosmology::sigmalistf() {
-    
     int Nextra = (int) ceil((NM-1)*log(3.0)/log(Mmax/Mmin));
-        
-    double dlogM = (log(Mmax)-log(Mmin))/(1.0*(NM-1));
     vector<vector<double> > Ms(NM+Nextra, vector<double> (3,0.0));
+    
+    double dlogM = (log(Mmax)-log(Mmin))/(1.0*(NM-1));
     double M = exp(log(Mmin) - dlogM);
+    
     double sigma = sigmaf(M, deltaH8);
     double sigman, Mn;
+    
     for (int jM = 0; jM < NM+Nextra; jM++) {
         Mn = exp(log(M) + dlogM);
         sigman = sigmaf(Mn, deltaH8);
@@ -91,6 +93,19 @@ vector<vector<double> > cosmology::sigmalistf() {
 }
 
 
+// generates a list of z values
+vector<double> cosmology::zlistf() {
+    double dlogz = (log(zmax)-log(zmin))/(1.0*(Nz-1));
+    double z = zmin;
+    vector<double> zz(Nz,0.0);
+    for (int jz = 0; jz < Nz; jz++) {
+        zz[jz] = z;
+        z = exp(log(z) + dlogz);
+    }
+    return zz;
+}
+
+
 // halo consentration parameter (1601.02624)
 double cosmology::cons(double sigma, double z) {
     double c0 = 3.395*pow(1+z,-0.215);
@@ -103,13 +118,13 @@ double cosmology::cons(double sigma, double z) {
     
     return c0*pow(nu/nu0,-gamma1)*pow(1+pow(nu/nu0,1.0/beta),-beta*(gamma2-gamma1));
 }
+
 // halo consentration parameter, {z, M, c, dc/dM}
 vector<vector<vector<double> > > cosmology::conslistf() {
-    double dlogz = (log(zmax)-log(zmin))/(1.0*(Nz-1));
     vector<vector<vector<double> > > zMc(Nz, vector<vector<double> > (NM, vector<double> (4,0.0)));
-    double z = zmin;
-    double c, cn, M, Mn;
+    double z, c, cn, M, Mn;
     for (int jz = 0; jz < Nz; jz++) {
+        z = zlist[jz];
         M = sigmalist[0][0];
         c = cons(sigmalist[0][1],z);
         for (int jM = 0; jM < NM; jM++) {
@@ -124,7 +139,6 @@ vector<vector<vector<double> > > cosmology::conslistf() {
             M = Mn;
             c = cn;
         }
-        z = exp(log(z) + dlogz);
     }
     return zMc;
 }
@@ -177,8 +191,9 @@ vector<vector<vector<double> > > cosmology::hmflistf() {
         
     double dlogz = (log(zmax)-log(zmin))/(1.0*(Nz-1));
     vector<vector<vector<double> > > dndlnM(Nz, vector<vector<double> > (NM, vector<double> (3,0.0)));
-    double z = zmin, M;
+    double z, M;
     for (int jz = 0; jz < Nz; jz++) {
+        z = zlist[jz];
         for (int jM = 0; jM < NM; jM++) {
             M = sigmalist[jM][0];
             
@@ -186,7 +201,6 @@ vector<vector<vector<double> > > cosmology::hmflistf() {
             dndlnM[jz][jM][1] = M;
             dndlnM[jz][jM][2] = -rhoM0*nuf(pow(deltac(z)/sigmalist[jM][1],2.0))*2.0*sigmalist[jM][2]/sigmalist[jM][1];
         }
-        z = exp(log(z) + dlogz);
     }
     
     return dndlnM;
@@ -197,6 +211,7 @@ vector<vector<vector<double> > > cosmology::hmflistf() {
 double cosmology::dPpdM(vector<double> &sigma, double z, vector<double> &sigmap, double zp) {
     return 2.0*sigma[1]*abs(sigma[2])*pow(sigmap[1]/sigma[1],3.0)*(deltac(zp)-deltac(z))*deltac(z)/deltac(zp)/sqrt(2.0*PI*pow(pow(sigmap[1],2.0)-pow(sigma[1],2.0),3.0))*exp(-pow(pow(sigmap[1],2.0)*deltac(z) - pow(sigma[1],2.0)*deltac(zp),2.0)/(2.0*pow(sigma[1]*sigmap[1],2.0)*(pow(sigmap[1],2.0)-pow(sigma[1],2.0))));
 }
+
 double cosmology::DeltaM(vector<double> &sigmap, double z, double dz) {
     double Mp = sigmap[0];
     
@@ -232,9 +247,9 @@ vector<vector<vector<double> > > cosmology::dotMlistf() {
     double dlogz = (log(zmax)-log(zmin))/(1.0*(Nz-1));
     vector<vector<vector<double> > > dMdt(Nz, vector<vector<double> > (NM, vector<double> (4,0.0)));
     
-    double z = zmin;
-    double Mj, Mjp1, dMdtj, dMdtjp1;
+    double z, Mj, Mjp1, dMdtj, dMdtjp1;
     for (int jz = 0; jz < Nz; jz++) {
+        z = zlist[jz];
         Mj = sigmalist[0][0];
         dMdtj = (1+z)*Hz(z)*DeltaM(sigmalist[0], z, dz)/dz;
         
@@ -250,35 +265,9 @@ vector<vector<vector<double> > > cosmology::dotMlistf() {
             Mj = Mjp1;
             dMdtj = dMdtjp1;
         }
-        z = exp(log(z) + dlogz);
     }
     
     return dMdt;
-}
-
-
-// UV luminosity function, {z,M,MUV,AUV,Phi}
-vector<vector<vector<double> > > cosmology::UVLFlistf(double Mt, double Mc, double epsilon, double alpha, double beta) {
-    vector<vector<vector<double> > > phiUV(Nz, vector<vector<double> > (NM, vector<double> (5, 0.0)));
-    double zj, Mj, dotMj, DdotMj, dndlnMj, MUVj;
-    for (int jz = 0; jz < Nz; jz++) {
-        zj = dotMlist[jz][0][0];
-        for (int jM = 0; jM < NM; jM++) {
-            Mj = dotMlist[jz][jM][1];
-            dotMj = dotMlist[jz][jM][2];
-            DdotMj = dotMlist[jz][jM][3];
-            dndlnMj = hmflist[jz][jM][2];
-            
-            MUVj = MUV(Mj, dotMj, Mc, epsilon, alpha, beta);
-            
-            phiUV[jz][jM][0] = zj;
-            phiUV[jz][jM][1] = Mj;
-            phiUV[jz][jM][2] = MUVj;
-            phiUV[jz][jM][3] = AUV(MUVj, zj);
-            phiUV[jz][jM][4] = UVLF(Mj, dotMj, DdotMj, dndlnMj, Mt, Mc, epsilon, alpha, beta);
-        }
-    }
-    return phiUV;
 }
 
 
