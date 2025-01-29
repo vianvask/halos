@@ -1,4 +1,3 @@
-#include "cosmology.h"
 
 // NFW lensing amplification and its derivative, {kappa, dkappa/dr}
 vector<double> kappa(cosmology &C, double zs, double zl, double r, double M, double rS);

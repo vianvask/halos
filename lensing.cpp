@@ -1,3 +1,4 @@
+#include "cosmology.h"
 #include "lensing.h"
 
 double acot(double x) {
@@ -29,11 +30,11 @@ vector<double> kappa(cosmology &C, double zs, double zl, double r, double M, dou
     if (rS > 0.0) {
         // average over the source projection
         int Navg = 16;
-        double rSp = rS*DlA/DsA;
+        double rSproj = rS*DlA/DsA;
         double R, theta;
         for (int j = 0; j < Navg; j++) {
             // generate randon point inside the projection of the source in the lens plane
-            R = rSp*sqrt(randomreal(0.0,1.0));
+            R = rSproj*sqrt(randomreal(0.0,1.0));
             theta = randomreal(0.0,PI);
             
             X = sqrt(pow(r,2.0) + pow(R,2.0) - 2.0*r*R*cos(theta))/rs;
@@ -182,8 +183,8 @@ vector<vector<double> > Plnmuf(cosmology &C, int Nx, double zs, double kappamax,
     vector<vector<double> > N1list = dNdkappa(C, Nx, zs, kappamax, rS);
     double Nh = N1list[N1list.size()-1][2];
     
-    vector<vector<double> > Fm1(Nx, vector<double> (2,0.0));
-    for (int j = 0; j < Fm1.size(); j++) {
+    vector<vector<double> > Fm1(Nx,vector<double> (2,0.0));
+    for (int j = 0; j < Nx; j++) {
         Fm1[j][0] = N1list[j][2]/Nh;
         Fm1[j][1] = log(N1list[j][0]);
     }
