@@ -1,34 +1,24 @@
+#include "cosmology.h"
 #include "lensing.h"
+#include "UVluminosity.h"
 
 // units: masses in solar masses, time in Myr, length in kpc
 
 int main (int argc, char *argv[]) {
-    cout << setprecision(15) << fixed;
+    cout << setprecision(3) << fixed;
     
     // timing
     clock_t time_req = clock();
-    
-    // input parameters
+
+    // input parameters: PDG values
     cosmology C;
-    if (argc > 1) {
-        C.OmegaM = atof(argv[1]);
-        C.OmegaB = atof(argv[2]);
-        C.zeq = atof(argv[3]);
-        C.sigma8 = atof(argv[4]);
-        C.h = atof(argv[5]);
-        C.T0 = atof(argv[6]);
-        C.ns = atof(argv[7]);
-    }
-    // run with PDG values
-    else {
-        C.OmegaM = 0.315;
-        C.OmegaB = 0.0493;
-        C.zeq = 3402.0;
-        C.sigma8 = 0.811;
-        C.h = 0.674;
-        C.T0 = 2.7255;
-        C.ns = 0.965;
-    }
+    C.OmegaM = 0.315;
+    C.OmegaB = 0.0493;
+    C.zeq = 3402.0;
+    C.sigma8 = 0.811;
+    C.h = 0.674;
+    C.T0 = 2.7255;
+    C.ns = 0.965;
     
     // accuracy parameters
     C.Nk = 1000;
@@ -45,62 +35,153 @@ int main (int argc, char *argv[]) {
     cout << "t_0 =  " << C.age(0.0) << " Myr." << endl;
     cout << "D_L(z=1) = " << C.DL(1.0) << " kpc." << endl;
     
-    vector<vector<vector<double> > > UVLFlist = C.UVLFlistf(1.0e9, 3.2e11, 0.1, -1.0, 0.6);
-            
-    // output the halo mass function and the UV luminosity function
-    string filename = "hmf.dat";;
+    double z, M, hmf, dotM, DdotM, MUV, AUV, PhiUV;
+    string filename;
     ofstream outfile;
+    
+    cout << "Computing UV luminosity functions..." << endl;
+    
+    vector<vector<vector<double> > > UVLFlist = UVLFlistf(C, 1.0e9, 3.2e11, 0.1, -1.0, 0.6);
+    
+    // output the halo mass function and the UV luminosity function
+    filename = "hmf.dat";
     outfile.open(filename.c_str());
     
-    double z, M, hmf, dotM, DdotM, MUV, AUV, phiUV;
     for (int jz = 0; jz < C.Nz; jz++) {
         for (int jM = 0; jM < C.NM; jM++) {
-            z = C.hmflist[jz][jM][0];
+            z = C.zlist[jz];
             M = C.hmflist[jz][jM][1];
             hmf = C.hmflist[jz][jM][2];
             dotM = C.dotMlist[jz][jM][2];
             DdotM = C.dotMlist[jz][jM][3];
-            MUV = UVLFlist[jz][jM][2];
-            AUV = UVLFlist[jz][jM][3];
-            phiUV = UVLFlist[jz][jM][4];
-            if (hmf < 1e-64) {
-                hmf = 0.0;
-            }
-            if (abs(phiUV) < 1e-64) {
-                phiUV = 0.0;
-            }
-            outfile << z << "   " << M << "   " << hmf << "   " << dotM << "   " << DdotM << "   " << MUV << "   " << AUV << "   " << phiUV << endl;
+            
+            MUV = UVLFlist[jz][jM][1];
+            AUV = UVLFlist[jz][jM][2];
+            PhiUV = UVLFlist[jz][jM][3];
+            outfile << z << "   " << M << "   " << max(1.0e-64,hmf) << "   " << dotM << "   " << DdotM << "   " << MUV << "   " << AUV << "   " << max(1.0e-64,PhiUV) << endl;
         }
     }
     outfile.close();
     
-    /*
-    cout << "Generating lensing amplifications..." << endl;
+    vector<double> Zlist {4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0};
+    vector<vector<double> > Plnmu;
+    vector<vector<vector<double> > > Plnmuz;
     
-    filename = "Plnmu.dat";
+    // read or generate lensing amplification distribution
+    ifstream infile;
+    infile.open("Plnmu.dat");
+    
+    if (infile) {
+        cout << "Reading lensing amplifications..." << endl;
+        
+        Zlist.clear();
+        vector<double> tmp(2,0.0);
+        double A;
+        int jA = 0;
+        z = 0;
+        while (infile >> A) {
+            if (jA == 0) {
+                if (A > z) {
+                    if (z > 0) {
+                        Plnmuz.push_back(Plnmu);
+                        Plnmu.clear();
+                    }
+                    z = A;
+                    Zlist.push_back(z);
+                }
+                jA++;
+            } else if (jA == 1) {
+                tmp[jA-1] = A;
+                jA++;
+            } else if (jA == 2) {
+                tmp[jA-1] = A;
+                jA = 0;
+            }
+            if (jA == 0) {
+                Plnmu.push_back(tmp);
+            }
+        }
+        Plnmuz.push_back(Plnmu);
+        Plnmu.clear();
+    }
+    else {
+        cout << "Generating lensing amplifications..." << endl;
+        
+        filename = "Plnmu.dat";
+        outfile.open(filename.c_str());
+        
+        double rS = 10.0; // source radius in kpc
+        int Nkappa = 40;
+        int Nreal = 20000000;
+        int Nbins = 2000;
+        
+        rgen mt(time(NULL)); // random number generator
+        
+        for (int jz = 0; jz < Zlist.size(); jz++) {
+            z = Zlist[jz];
+            cout << "z = " << z << endl;
+            Plnmu = Plnmuf(C, Nkappa, z, 1.0, rS, Nreal, Nbins, mt);
+            
+            // output dP/dlnmu
+            for (int jb = 0; jb < Nbins; jb++) {
+                outfile << z << "   " << Plnmu[jb][0] << "   " << Plnmu[jb][1] << endl;
+            }
+            Plnmuz.push_back(Plnmu);
+        }
+        outfile.close();
+    }
+    
+    cout << "z = { ";
+    for (int jz = 0; jz < Zlist.size(); jz++) {
+        cout << Zlist[jz] << " ";
+    }
+    cout << "}" << endl;
+    
+    cout << "Computing lensed UV luminosity functions..." << endl;
+    
+    filename = "UVluminosity.dat";
     outfile.open(filename.c_str());
     
-    double rS = 20.0; // source radius in kpc
-    int Nkappa = 40, Nreal = 50000000, Nbins = 5000;
-    vector<double> zlist {0.5, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0};
-    
-    vector<vector<double> > Plnmu;
-    rgen mt(time(NULL)); // random number generator
-    
-    for (int jz = 0; jz < zlist.size(); jz++) {
-        z = zlist[jz];
-        cout << "z = " << z << endl;
+    vector<vector<vector<double> > > PhiUVlensed(Zlist.size(), vector<vector<double> > (C.NM, vector<double> (2,0.0)));
+    vector<vector<double> > PhiUVlist(C.NM, vector<double> (2,0.0));
+    int jz;
+    double dlnmu;
+    for (int jZ = 0; jZ < Zlist.size(); jZ++) {
+        z = Zlist[jZ];
+        Plnmu = Plnmuz[jZ];
         
-        // source radius = 20.0 kpc
-        Plnmu = Plnmuf(C, Nkappa, z, 1.0, rS, Nreal, Nbins, mt);
+        // find index of z in the longer list of z values
+        jz = lower_bound(C.zlist.begin(), C.zlist.end(), z)- C.zlist.begin();
+        if (jz > 0 && C.zlist[jz]-z > z-C.zlist[jz-1]) {
+            jz--;
+        }
+                
+        // make a list Phi(M_UV) that can be easily interpolated
+        for (int jM = 0; jM < C.NM; jM++) {
+            PhiUVlist[jM][0] = UVLFlist[jz][jM][1];
+            PhiUVlist[jM][1] = UVLFlist[jz][jM][3];
+        }
         
-        // output dP/dlnmu
-        for (int j = 0; j < Nbins; j++) {
-            outfile << z << "   " << Plnmu[j][0] << "   " << Plnmu[j][1] << endl;
+        // compute the lensed UV luminosity function
+        for (int jM = 0; jM < C.NM; jM++) {
+            MUV = UVLFlist[jz][jM][1];
+            AUV = UVLFlist[jz][jM][2];
+            
+            // convolution integral
+            PhiUV = 0.0;
+            dlnmu = Plnmu[1][0]-Plnmu[0][0];
+            for (int jb = 0; jb < Plnmu.size(); jb++) {
+                PhiUV += interpolate(MUV - AUV + 1.08574*Plnmu[jb][0], PhiUVlist)*Plnmu[jb][1]*dlnmu/exp(Plnmu[jb][0]);
+            }
+            
+            PhiUVlensed[jZ][jM][0] = MUV;
+            PhiUVlensed[jZ][jM][1] = PhiUV; // dust + lensing
+            
+            // output the UV luminosity function (no dust + no lensing, dust + no lensing, dust + lensing)
+            outfile << z << "   " << MUV << "   " << max(1.0e-64,UVLFlist[jz][jM][3]) << "   " << max(1.0e-64,interpolate(MUV - AUV, PhiUVlist)) << "   " << max(1.0e-64,PhiUV) << endl;
         }
     }
     outfile.close();
-    */
     
     time_req = clock() - time_req;
     cout << "Total evaluation time: " << ((double) time_req/CLOCKS_PER_SEC/60.0) << " min." << endl;
