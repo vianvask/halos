@@ -34,16 +34,14 @@ int main (int argc, char *argv[]) {
     C.zmax = 20.01;
     
     C.initialize();
-    cout << "t_0 =  " << C.age(0.0) << " Myr." << endl;
-    cout << "D_L(z=1) = " << C.DL(1.0) << " kpc." << endl;
+    //cout << "t_0 =  " << C.age(0.0) << " Myr." << endl;
+    //cout << "D_L(z=1) = " << C.DL(1.0) << " kpc." << endl;
     
     double z, M, hmf, dotM, DdotM;
-    string filename;
     ofstream outfile;
     
     // output the halo mass function and the UV luminosity function
-    filename = "hmf.dat";
-    outfile.open(filename.c_str());
+    outfile.open("hmf.dat");
     for (int jz = 0; jz < C.Nz; jz++) {
         for (int jM = 0; jM < C.NM; jM++) {
             z = C.zlist[jz];
@@ -57,86 +55,27 @@ int main (int argc, char *argv[]) {
     }
     outfile.close();
     
+    // list of z values for lensing
     vector<double> Zlist {4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0};
-    vector<vector<double> > Plnmu;
-    vector<vector<vector<double> > > Plnmuz;
+    
+    // lensing source radius in kpc
+    double rS = 10.0;
+    
+    // accuracy parameters for lensing
+    int Nkappa = 40;
+    int Nreal = 20000000;
+    int Nbins = 2000;
     
     // read or generate lensing amplification distribution
-    ifstream infile;
-    infile.open("Plnmu.dat");
-    
-    if (infile) {
-        cout << "Reading lensing amplifications..." << endl;
-        
-        Zlist.clear();
-        vector<double> tmp(2,0.0);
-        double A;
-        int jA = 0;
-        z = 0;
-        while (infile >> A) {
-            if (jA == 0) {
-                if (A > z) {
-                    if (z > 0) {
-                        Plnmuz.push_back(Plnmu);
-                        Plnmu.clear();
-                    }
-                    z = A;
-                    Zlist.push_back(z);
-                }
-                jA++;
-            } else if (jA == 1) {
-                tmp[jA-1] = A;
-                jA++;
-            } else if (jA == 2) {
-                tmp[jA-1] = A;
-                jA = 0;
-            }
-            if (jA == 0) {
-                Plnmu.push_back(tmp);
-            }
-        }
-        Plnmuz.push_back(Plnmu);
-        Plnmu.clear();
-    }
-    else {
-        cout << "Generating lensing amplifications..." << endl;
-        
-        filename = "Plnmu.dat";
-        outfile.open(filename.c_str());
-        
-        double rS = 10.0; // source radius in kpc
-        int Nkappa = 40;
-        int Nreal = 20000000;
-        int Nbins = 2000;
-        
-        rgen mt(time(NULL)); // random number generator
-        
-        for (int jz = 0; jz < Zlist.size(); jz++) {
-            z = Zlist[jz];
-            cout << "z = " << z << endl;
-            Plnmu = Plnmuf(C, Nkappa, z, 1.0, rS, Nreal, Nbins, mt);
-            
-            // output dP/dlnmu
-            for (int jb = 0; jb < Nbins; jb++) {
-                outfile << z << "   " << Plnmu[jb][0] << "   " << Plnmu[jb][1] << endl;
-            }
-            Plnmuz.push_back(Plnmu);
-        }
-        outfile.close();
-    }
-    
-    cout << "z = { ";
-    for (int jz = 0; jz < Zlist.size(); jz++) {
-        cout << Zlist[jz] << " ";
-    }
-    cout << "}" << endl;
+    vector<vector<vector<double> > > Plnmuz = getPlnmu(C, Zlist, rS, Nkappa, Nreal, Nbins);
     
     cout << "Computing UV luminosity functions..." << endl;
     
+    // benchmark case
+    vector<vector<vector<double> > > PhiUVlensed = PhiUV(C, Zlist, Plnmuz, 1.0e9, 1.4e11, 0.06, -1.0, 0.15, 1.0);
+    
     // output the UV luminosity function (no dust + no lensing, dust + no lensing, dust + lensing)
-    filename = "UVluminosity.dat";
-    outfile.open(filename.c_str());
-    vector<vector<vector<double> > > PhiUVlensed = PhiUV(C, Zlist, Plnmuz, 1.0e9, 3.2e11, 0.1, -1.0, 0.6);
+    outfile.open("UVluminosity.dat");
     for (int jZ = 0; jZ < Zlist.size(); jZ++) {
         z = Zlist[jZ];
         for (int jM = 0; jM < C.NM; jM++) {
@@ -144,6 +83,15 @@ int main (int argc, char *argv[]) {
         }
     }
     outfile.close();
+    
+    // read UV luminosity data files
+    vector<string> datafiles {"UVLF_ 2102.07775.txt", "UVLF_ 2108.01090.txt"};
+    vector<vector<double> > data = readUVdata(datafiles);
+    cout << "Read " << data.size() << " UV luminosity data points." << endl;
+    
+    cout << "Computing UV luminosity fit..." << endl;
+    
+    // TODO: scan over the SFR parameters
     
     time_req = clock() - time_req;
     cout << "Total evaluation time: " << ((double) time_req/CLOCKS_PER_SEC/60.0) << " min." << endl;
