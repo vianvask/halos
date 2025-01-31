@@ -227,3 +227,73 @@ vector<vector<double> > Plnmuf(cosmology &C, int Nx, double zs, double kappamax,
     
     return Plnmu;
 }
+
+
+// read or generate lensing amplification distribution
+vector<vector<vector<double> > > getPlnmu(cosmology &C, vector<double> &zlist, double rS, int Nkappa, int Nreal, int Nbins) {
+    vector<double> Zlist = zlist;
+    vector<vector<double> > Plnmu;
+    vector<vector<vector<double> > > Plnmuz;
+    
+    double z;
+    
+    ifstream infile;
+    infile.open("Plnmu.dat");
+    if (infile) {
+        cout << "Reading lensing amplifications..." << endl;
+        
+        Zlist.clear();
+        vector<double> tmp(2,0.0);
+        int jA = 0;
+        double A;
+        z = 0;
+        while (infile >> A) {
+            if (jA == 0) {
+                if (A > z) {
+                    if (z > 0) {
+                        Plnmuz.push_back(Plnmu);
+                        Plnmu.clear();
+                    }
+                    z = A;
+                    Zlist.push_back(z);
+                }
+                jA++;
+            } else {
+                tmp[jA-1] = A;
+                jA++;
+            }
+            if (jA == 2) {
+                Plnmu.push_back(tmp);
+                jA = 0;
+            }
+        }
+        Plnmuz.push_back(Plnmu);
+        Plnmu.clear();
+    }
+    else {
+        cout << "Generating lensing amplifications..." << endl;
+        
+        ofstream outfile;
+        outfile.open("Plnmu.dat");
+        
+        int Nkappa = 40;
+        
+        rgen mt(time(NULL)); // random number generator
+        
+        for (int jz = 0; jz < Zlist.size(); jz++) {
+            z = Zlist[jz];
+            cout << "z = " << z << endl;
+            Plnmu = Plnmuf(C, Nkappa, z, 1.0, rS, Nreal, Nbins, mt);
+            
+            // output dP/dlnmu
+            for (int jb = 0; jb < Nbins; jb++) {
+                outfile << z << "   " << Plnmu[jb][0] << "   " << Plnmu[jb][1] << endl;
+            }
+            Plnmuz.push_back(Plnmu);
+        }
+        outfile.close();
+    }
+    infile.close();
+    
+    return Plnmuz;
+}
