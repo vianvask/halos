@@ -92,19 +92,19 @@ vector<vector<vector<double> > > PhiUV(cosmology &C, vector<double> &Zlist, vect
     return PhiUVlensed;
 }
 
-// read UV luminosity data, {MUV, Phi, +sigmaPhi, -sigmaPhi}
+// read UV luminosity data, {z, MUV, Phi, +sigmaPhi, -sigmaPhi}
 vector<vector<double> > readUVdata(string filename) {
     ifstream infile;
     infile.open(filename);
     vector<vector<double> > data;
-    vector<double> line(4,0.0);
+    vector<double> line(5,0.0);
     int jline = 0;
     double A;
     if (infile) {
         while (infile >> A) {
             line[jline] = A;
             jline++;
-            if (jline == 4) {
+            if (jline == 5) {
                 jline = 0;
                 data.push_back(line);
             }
@@ -126,3 +126,90 @@ vector<vector<double> > readUVdata(vector<string> filenames) {
     }
     return data;
 }
+
+// normal distribution
+double NPDF(double x, double mu, double sigma) {
+    return exp(-pow((x-mu)/sigma,2.0)/2.0)/(sigma*sqrt(2.0*PI));
+}
+double NPDF2(double x, double mu, double sigmam, double sigmap) {
+    double P;
+    if (x < mu) {
+        P = 2*sigmam*NPDF(x, mu, sigmam)/(sigmam+sigmap);
+    } else {
+        P = 2*sigmap*NPDF(x, mu, sigmap)/(sigmam+sigmap);
+    }
+    return P;
+}
+
+// likelihood function
+double loglikelihood(cosmology &C, vector<double> &Zlist, vector<vector<vector<double> > > &Plnmuz, vector<vector<double> > &data, vector<double> &params) {
+    double logL = 0.0;
+    
+    vector<vector<vector<double> > > PhiUVlist = PhiUV(C, Zlist, Plnmuz, 1.0e9, exp(params[0]), params[1], params[2], params[3], 1.0);
+    
+    double z, MUV, meanPhi, sigmaPhip, sigmaPhim, Phi;
+    vector<vector<double> > PhiUVz;
+    for (int j = 0; j < data.size(); j++) {
+        z = data[j][0];
+        MUV = data[j][1];
+        meanPhi = data[j][2];
+        sigmaPhip = data[j][3];
+        sigmaPhim = data[j][4];
+        
+        // z in Zlist
+        PhiUVz = PhiUVlist[lower_bound(Zlist.begin(), Zlist.end(), z)- Zlist.begin()];
+        // Phi(M_UV)
+        Phi = interpolaten(MUV, PhiUVz)[3];
+        
+        logL += log(NPDF2(Phi,meanPhi,sigmaPhim,sigmaPhip));
+    }
+
+    return logL;
+}
+
+// Metropolis-Hastings MCMC sampler
+vector<vector<double> > mcmc_sampling(cosmology &C, vector<double> &Zlist, vector<vector<vector<double> > > &Plnmuz, vector<vector<double> > &data, vector<double> initial, vector<double> &steps, int Ns, rgen &mt) {
+    vector<vector<double> > chain;
+    vector<double> element;
+    
+    element.insert(element.end(), initial.begin(), initial.end());
+    element.push_back(loglikelihood(C, Zlist, Plnmuz, data, initial));
+    chain.push_back(element);
+    element.clear();
+    
+    uniform_real_distribution<> uniform_dist(0.0, 1.0);
+    
+    // Create normal distributions for each parameter based on its proposal width
+    vector<normal_distribution<>> proposal_distributions;
+    for (double step : steps) {
+        proposal_distributions.push_back(normal_distribution<>(0.0, step));
+    }
+    
+    double logLcurrent, logLproposed, logLdiff;
+    vector<double> current = initial;
+    for (int i = 0; i < Ns; i++) {
+        // propose new sample by modifying the current sample
+        vector<double> proposed = current;
+        for (int j = 0; j < current.size(); j++) {
+            proposed[j] += proposal_distributions[j](mt);
+        }
+        
+        // calculate the acceptance ratio based on the likelihood
+        logLcurrent = loglikelihood(C, Zlist, Plnmuz, data, current);
+        logLproposed = loglikelihood(C, Zlist, Plnmuz, data, proposed);
+        logLdiff = logLproposed-logLcurrent;
+
+        // accept or reject the proposed sample
+        if (log(uniform_dist(mt)) < logLdiff) {
+            current = proposed;
+            logLcurrent = logLproposed;
+            
+            element.insert(element.end(), current.begin(), current.end());
+            element.push_back(logLcurrent);
+            chain.push_back(element);
+            element.clear();
+        }
+    }
+    return chain;
+}
+

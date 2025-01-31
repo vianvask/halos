@@ -230,8 +230,7 @@ vector<vector<double> > Plnmuf(cosmology &C, int Nx, double zs, double kappamax,
 
 
 // read or generate lensing amplification distribution
-vector<vector<vector<double> > > getPlnmu(cosmology &C, vector<double> &zlist, double rS, int Nkappa, int Nreal, int Nbins) {
-    vector<double> Zlist = zlist;
+vector<vector<vector<double> > > getPlnmu(cosmology &C, vector<double> &Zlist, double rS, int Nkappa, int Nreal, int Nbins) {
     vector<vector<double> > Plnmu;
     vector<vector<vector<double> > > Plnmuz;
     
@@ -262,7 +261,7 @@ vector<vector<vector<double> > > getPlnmu(cosmology &C, vector<double> &zlist, d
                 tmp[jA-1] = A;
                 jA++;
             }
-            if (jA == 2) {
+            if (jA == 3) {
                 Plnmu.push_back(tmp);
                 jA = 0;
             }

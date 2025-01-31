@@ -2,10 +2,11 @@
 #include "lensing.h"
 #include "UVluminosity.h"
 
+
 // units: masses in solar masses, time in Myr, length in kpc
 
 int main (int argc, char *argv[]) {
-    cout << setprecision(3) << fixed;
+    cout << setprecision(15) << fixed;
     
     cout << "Preparing..." << endl;
     
@@ -34,8 +35,6 @@ int main (int argc, char *argv[]) {
     C.zmax = 20.01;
     
     C.initialize();
-    //cout << "t_0 =  " << C.age(0.0) << " Myr." << endl;
-    //cout << "D_L(z=1) = " << C.DL(1.0) << " kpc." << endl;
     
     double z, M, hmf, dotM, DdotM;
     ofstream outfile;
@@ -71,27 +70,42 @@ int main (int argc, char *argv[]) {
     
     cout << "Computing UV luminosity functions..." << endl;
     
-    // benchmark case
-    vector<vector<vector<double> > > PhiUVlensed = PhiUV(C, Zlist, Plnmuz, 1.0e9, 1.4e11, 0.06, -1.0, 0.15, 1.0);
-    
-    // output the UV luminosity function (no dust + no lensing, dust + no lensing, dust + lensing)
+    // output the UV luminosity function (no dust + no lensing, dust + no lensing, dust + lensing) for a benchmark case
+    vector<vector<vector<double> > > PhiUVlist = PhiUV(C, Zlist, Plnmuz, 1.0e9, 1.4e11, 0.06, -1.0, 0.15, 1.0);
     outfile.open("UVluminosity.dat");
     for (int jZ = 0; jZ < Zlist.size(); jZ++) {
         z = Zlist[jZ];
         for (int jM = 0; jM < C.NM; jM++) {
-            outfile << z << "   " << PhiUVlensed[jZ][jM][0] << "   " << max(1.0e-64,PhiUVlensed[jZ][jM][1]) << "   " << max(1.0e-64,PhiUVlensed[jZ][jM][2]) << "   " << max(1.0e-64,PhiUVlensed[jZ][jM][3]) << endl;
+            outfile << z << "   " << PhiUVlist[jZ][jM][0] << "   " << max(1.0e-64,PhiUVlist[jZ][jM][1]) << "   " << max(1.0e-64,PhiUVlist[jZ][jM][2]) << "   " << max(1.0e-64,PhiUVlist[jZ][jM][3]) << endl;
         }
     }
     outfile.close();
     
-    // read UV luminosity data files
+    // read UV luminosity data files, {MUV, Phi, +sigmaPhi, -sigmaPhi}
     vector<string> datafiles {"UVLF_ 2102.07775.txt", "UVLF_ 2108.01090.txt"};
     vector<vector<double> > data = readUVdata(datafiles);
     cout << "Read " << data.size() << " UV luminosity data points." << endl;
     
     cout << "Computing UV luminosity fit..." << endl;
     
-    // TODO: scan over the SFR parameters
+    // first element in the MCMC chain, {log(M_c/M_sun), epsilon, alpha, beta}
+    vector<double> initial {log(3.2e11), 0.1, -1.2, 0.5};
+    
+    vector<double> steps {0.5, 0.01, 0.04, 0.04}; // MCMC step sizes
+    double Nchains = 100;
+    rgen mt(time(NULL)); // random number generator
+    vector<vector<double> > chain = mcmc_sampling(C, Zlist, Plnmuz, data, initial, steps, Nchains, mt);
+    
+    int jmax = max_element(chain.begin(), chain.end(), [](const vector<double>& a, const vector<double>& b) { return a.back() < b.back(); }) - chain.begin();
+    cout << exp(chain[jmax][0]) << "   " << chain[jmax][1] << "   " << chain[jmax][2] << "   " << chain[jmax][3] << "   " << chain[jmax][4] << endl;
+    double logLmax = chain[jmax][4];
+    
+    // output the MCMC chain
+    outfile.open("mcmc_chain.dat");
+    for (int j = 0; j < chain.size(); j++) {
+        outfile << exp(chain[j][0]) << "   " << chain[j][1] << "   " << chain[j][2] << "   " << chain[j][3] << "   " << chain[j][4]-logLmax << endl;
+    }
+    outfile.close();
     
     time_req = clock() - time_req;
     cout << "Total evaluation time: " << ((double) time_req/CLOCKS_PER_SEC/60.0) << " min." << endl;
