@@ -89,7 +89,7 @@ private:
     vector<vector<vector<double> > > NFWlistf();
     
     // Seth-Tormen HMF, {z,M,dndlnM}
-    vector<vector<vector<double> > > hmflistf();
+    vector<vector<vector<double> > > HMFlistf();
     
     double dPpdM(vector<double> &sigma, double z, vector<double> &sigmap, double zp);
     double DeltaM(vector<double> &sigmap, double z, double dz);
@@ -106,7 +106,7 @@ private:
 public:
     
     vector<double> zlist;
-    vector<vector<vector<double> > > hmflist;
+    vector<vector<vector<double> > > HMFlist;
     vector<vector<vector<double> > > dotMlist;
     vector<vector<vector<double> > > NFWlist;
     
@@ -129,7 +129,7 @@ public:
         zlist = zlistf();
         conslist = conslistf();
         NFWlist = NFWlistf();
-        hmflist = hmflistf();
+        HMFlist = HMFlistf();
         dotMlist = dotMlistf();
     }
     

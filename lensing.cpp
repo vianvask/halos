@@ -99,12 +99,12 @@ double Nhf(cosmology &C, double zs, double kappathr, double rS) {
     
     for (int jz = 1; jz < C.Nz; jz++) {
         for (int jM = 1; jM < C.NM; jM++) {
-            zl = C.hmflist[jz][jM][0];
+            zl = C.HMFlist[jz][jM][0];
             if(zl < zs) {
-                dz = zl - C.hmflist[jz-1][jM][0];
-                M = C.hmflist[jz][jM][1];
-                dlnM = log(M) - log(C.hmflist[jz][jM-1][1]);
-                dndlnM = C.hmflist[jz][jM][2];
+                dz = zl - C.HMFlist[jz-1][jM][0];
+                M = C.HMFlist[jz][jM][1];
+                dlnM = log(M) - log(C.HMFlist[jz][jM-1][1]);
+                dndlnM = C.HMFlist[jz][jM][2];
                 
                 rmax = rmaxf(C, zs, zl, M, kappathr, rS);
                 Nh += 306.535*PI*pow((1+zl)*rmax,2.0)/C.Hz(zl)*dndlnM*dlnM*dz;
@@ -141,12 +141,12 @@ vector<vector<double> > dNdkappa(cosmology &C, int Nx, double zs, double kappama
     for (int jx = 0; jx < Nx; jx++) {
         for (int jz = 1; jz < C.Nz; jz++) {
             for (int jM = 1; jM < C.NM; jM++) {
-                zl = C.hmflist[jz][jM][0];
+                zl = C.HMFlist[jz][jM][0];
                 if(zl < zs) {
-                    dz = zl - C.hmflist[jz-1][jM][0];
-                    M = C.hmflist[jz][jM][1];
-                    dlnM = log(M) - log(C.hmflist[jz][jM-1][1]);
-                    dndlnM = C.hmflist[jz][jM][2];
+                    dz = zl - C.HMFlist[jz-1][jM][0];
+                    M = C.HMFlist[jz][jM][1];
+                    dlnM = log(M) - log(C.HMFlist[jz][jM-1][1]);
+                    dndlnM = C.HMFlist[jz][jM][2];
                     
                     rmax = rmaxf(C, zs, zl, M, x, rS);
                     if (rmax > 0.0) {

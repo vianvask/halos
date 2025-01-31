@@ -181,7 +181,7 @@ vector<vector<vector<double> > > cosmology::NFWlistf() {
 
 
 // Seth-Tormen HMF, {z,M,dn/dlnM}
-vector<vector<vector<double> > > cosmology::hmflistf() {
+vector<vector<vector<double> > > cosmology::HMFlistf() {
     function<double(double)> nuf = [&](double nu) {
         double p = 0.3;
         double q = 0.75;
@@ -322,3 +322,5 @@ vector<vector<double> > cosmology::tlist() {
     
     return tlist;
 }
+
+
