@@ -175,17 +175,7 @@ vector<vector<double> > mcmc_sampling(cosmology &C, vector<double> &Zlist, vecto
     }
     
     vector<double> current = initial;
-    for (int j = 0; j < current.size(); j++) {
-        current[j] += proposal_distributions[j](mt);
-    }
     double priorratio = 1.0;
-    for (int j = 0; j < priors.size(); ++j) {
-        priorratio *= prior(current[j],priors[j]);
-    }
-    if (priorratio == 0.0) {
-        cout << "bad initial point" << endl;
-        return chain;
-    }
     
     double logLcurrent = loglikelihood(C, Zlist, Plnmuz, data, current);
     cout << logLcurrent << endl;
