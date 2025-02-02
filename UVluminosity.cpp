@@ -140,8 +140,8 @@ double loglikelihood(cosmology &C, vector<double> &Zlist, vector<vector<vector<d
         z = data[j][0];
         MUV = data[j][1];
         meanPhi = data[j][2];
-        sigmaPhim = data[j][3];
-        sigmaPhip = data[j][4];
+        sigmaPhip = data[j][3];
+        sigmaPhim = data[j][4];
         
         // z in Zlist
         PhiUVz = PhiUVlist[lower_bound(Zlist.begin(), Zlist.end(), z) - Zlist.begin()];

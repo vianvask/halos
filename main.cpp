@@ -55,7 +55,7 @@ int main (int argc, char *argv[]) {
     outfile.close();
     
     // list of z values for lensing
-    vector<double> Zlist {4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0};
+    vector<double> Zlist {4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.5, 14.5};
     
     // lensing source radius in kpc
     double rS = 10.0;
@@ -69,7 +69,7 @@ int main (int argc, char *argv[]) {
     vector<vector<vector<double> > > Plnmuz = getPlnmu(C, Zlist, rS, Nkappa, Nreal, Nbins);
         
     // read UV luminosity data files, {MUV, Phi, +sigmaPhi, -sigmaPhi}
-    vector<string> datafiles {"UVLF_ 2102.07775.txt", "UVLF_ 2108.01090.txt"};
+    vector<string> datafiles {"UVLF_2102.07775.txt", "UVLF_2108.01090.txt", "UVLF_2403.03171.txt"};
     vector<vector<double> > data = readUVdata(datafiles);
     cout << "Read " << data.size() << " UV luminosity data points." << endl;
     
