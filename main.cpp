@@ -21,21 +21,26 @@ int main (int argc, char *argv[]) {
     C.T0 = 2.7255;
     C.ns = 0.965;
     
-    // mass and redshift ranges
+    // halo mass and redshift ranges
     C.Mmin = 1.0e6;
     C.Mmax = 1.0e17;
     C.zmin = 0.01;
     C.zmax = 20.01;
     
-    C.Nk = 1000; // integral over k in computation of sigma
-    C.NM = 1000; // number of halo mass bins
-    C.Nz = 100; // number of redshift bins
+    // integral over k in computation of sigma
+    C.Nk = 1000;
+    // number of halo mass bins
+    C.NM = 1000;
+    // number of redshift bins
+    C.Nz = 100;
     
-    double z, M, HMF, dotM, DdotM;
     ofstream outfile;
     
-    // output some halo mass functions
+    // FDM masses in units 10^-22 eV
     vector<double> m22list {0.0, 1.0, 10.0, 100.0};
+    
+    // output some halo mass functions
+    double z, M, HMF, dotM, DdotM;
     for (double m22 : m22list) {
         C.initialize(m22);
         outfile.open("HMF_m22_" + to_string_prec(m22,1) + ".dat");
@@ -55,34 +60,45 @@ int main (int argc, char *argv[]) {
 
     C.initialize(1.0);
     
-    // read or generate lensing amplification distribution
+    cout << "Generating/reading lensing amplifications..." << endl;
+    
+    // number of bins in distribution of P^1(kappa)
     int Nkappa = 40;
+    // number of realizations
     int Nreal = 10000000;
+    // number of lnmu bins
     int Nbins = 200;
-    double rS = 10.0;  // lensing source radius in kpc
+    // lensing source radius in kpc
+    double rS = 10.0;
+    // list of redshift values at which P(lnmu) is computed
     vector<double> Zlist {4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.5, 14.5};
     vector<vector<vector<double> > > Plnmuz = getPlnmu(C, Zlist, rS, Nkappa, Nreal, Nbins);
     
     // read UV luminosity data files, {MUV, Phi, +sigmaPhi, -sigmaPhi}
     vector<string> datafiles {"UVLF_2102.07775.txt", "UVLF_2108.01090.txt", "UVLF_2403.03171.txt"};
     vector<vector<double> > data = readUVdata(datafiles);
-    cout << "Read " << data.size() << " UV luminosity data points." << endl;
     
-    cout << "Computing UV luminosity fit..." << endl;
+    cout << "Computing UV luminosity fit (" << data.size() << " data points) ..." << endl;
     
-    // MCMC over parameters {M_c, epsilon, alpha, beta}
-    int Nsteps = 100; // number of steps
-    int Nchains = 40; // number of chains
-    vector<vector<double> > priors {{2.0e11, 7.0e11}, {0.02, 0.07}, {0.7, 1.5}, {0.1, 0.7}, {0.5, 2.0}, {7.0, 11.0}}; // flat priors
-    vector<double> initial(6,0.0); // first element
-    vector<double> steps {0.2e11, 0.02, 0.05, 0.05, 0.05, 0.1}; // random walk step sizes
-    rgen mt(time(NULL)); // random number generator
+    // random number generator
+    rgen mt(time(NULL));
+    
+    // max number of steps in each chain
+    int Nsteps = 100;
+    // number of chains
+    int Nchains = 40;
+   
+    // flat priors, {M_c, epsilon, alpha, beta, gamma, z_break}
+    vector<vector<double> > priors {{2.0e11, 7.0e11}, {0.02, 0.07}, {0.7, 1.5}, {0.1, 0.7}, {0.5, 2.0}, {7.0, 11.0}};
+    // random walk step sizes
+    vector<double> steps {0.2e11, 0.02, 0.05, 0.05, 0.05, 0.1};
 
     // output the MCMC chains and find the best fit
     outfile.open("MCMCchains.dat");
-    int jmax;
+    int jmax = 0;
     double logLmax = 0.0;
-    vector<double> bf;
+    vector<double> initial(6,0.0);
+    vector<double> bf = initial;
     vector<vector<double> > chain;
     for (int j = 0; j < Nchains; j++) {
         cout << j << endl;
@@ -115,11 +131,17 @@ int main (int argc, char *argv[]) {
     // output the UV luminosity function for the best fit
     vector<vector<vector<double> > > PhiUVlist = PhiUV(C, Zlist, Plnmuz, 1.0e9, bf[0], bf[1], bf[2], bf[3], bf[4], bf[5]);
     outfile.open("UVluminosity.dat");
+    double MUV, Phi0, Phi1, Phi2;
     for (int jZ = 0; jZ < Zlist.size(); jZ++) {
         z = Zlist[jZ];
         for (int jM = 0; jM < C.NM; jM++) {
-            // {z, M, MUV, no dust + no lensing, dust + no lensing, dust + lensing}
-            outfile << z << "   " << PhiUVlist[jZ][jM][0] << "   " << PhiUVlist[jZ][jM][4] << "   " << max(1.0e-64,PhiUVlist[jZ][jM][1]) << "   " << max(1.0e-64,PhiUVlist[jZ][jM][2]) << "   " << max(1.0e-64,PhiUVlist[jZ][jM][3]) << endl;
+            M = PhiUVlist[jZ][jM][0];
+            MUV = PhiUVlist[jZ][jM][4]; 
+            Phi0 = PhiUVlist[jZ][jM][1]; // no dust + no lensing
+            Phi1 = PhiUVlist[jZ][jM][2]; // dust + no lensing
+            Phi2 = PhiUVlist[jZ][jM][3]; // dust + lensing
+            
+            outfile << z << "   " << M << "   " << MUV << "   " << max(1.0e-64,Phi0) << "   " << max(1.0e-64,Phi1) << "   " << max(1.0e-64,Phi2) << endl;
         }
     }
     outfile.close();

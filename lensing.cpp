@@ -238,9 +238,7 @@ vector<vector<vector<double> > > getPlnmu(cosmology &C, vector<double> &Zlist, d
     
     ifstream infile;
     infile.open("Plnmu.dat");
-    if (infile) {
-        cout << "Reading lensing amplifications..." << endl;
-        
+    if (infile) {        
         Zlist.clear();
         vector<double> tmp(2,0.0);
         int jA = 0;
@@ -270,8 +268,6 @@ vector<vector<vector<double> > > getPlnmu(cosmology &C, vector<double> &Zlist, d
         Plnmu.clear();
     }
     else {
-        cout << "Generating lensing amplifications..." << endl;
-        
         ofstream outfile;
         outfile.open("Plnmu.dat");
         
