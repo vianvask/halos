@@ -76,13 +76,13 @@ int main (int argc, char *argv[]) {
     cout << "Computing UV luminosity fit..." << endl;
     
     // MCMC over parameters {M_c, epsilon, alpha, beta}
-    int Nsteps = 200; // number of steps
+    int Nsteps = 250; // number of steps
     int Nchains = 200; // number of chains
-    vector<vector<double> > priors {{0.6e11, 4.4e11}, {0.04, 0.11}, {-1.5, -0.5}, {0.1, 0.7}}; // flat priors
-    vector<double> initial(4,0.0); // first element
-    vector<double> steps {0.2e11, 0.02, 0.04, 0.04}; // random walk step sizes
+    vector<vector<double> > priors {{2.0e11, 7.0e11}, {0.02, 0.07}, {0.7, 1.5}, {0.1, 0.7}, {0.5, 2.0}, {7.0, 11.0}}; // flat priors
+    vector<double> initial(6,0.0); // first element
+    vector<double> steps {0.2e11, 0.02, 0.05, 0.05, 0.05, 0.1}; // random walk step sizes
     rgen mt(time(NULL)); // random number generator
-        
+
     // output the MCMC chains and find the best fit
     outfile.open("MCMCchains.dat");
     int jmax;
@@ -102,25 +102,29 @@ int main (int argc, char *argv[]) {
         
         // find best fit
         jmax = max_element(chain.begin(), chain.end(), [](const vector<double> &a, const vector<double> &b) { return a.back() < b.back(); }) - chain.begin();
-        if (chain[jmax][4] > logLmax) {
+        if (chain[jmax].back() > logLmax) {
             logLmax = chain[jmax][4];
             bf = chain[jmax];
         }
 
         // output the MCMC chain
         for (int j = 0; j < chain.size(); j++) {
-            outfile << chain[j][0] << "   " << chain[j][1] << "   " << chain[j][2] << "   " << chain[j][3] << "   " << chain[j][4] << endl;
+            for (int jp = 0; jp < chain[0].size(); jp++) {
+                outfile << chain[j][jp] << "   ";
+            }
+            outfile << endl;
         }
     }
     outfile.close();
-        
-    // output the UV luminosity function (no dust + no lensing, dust + no lensing, dust + lensing) for the best fit
-    vector<vector<vector<double> > > PhiUVlist = PhiUV(C, Zlist, Plnmuz, 1.0e9, bf[0], bf[1], bf[2], bf[3], 1.0);
+    
+    // output the UV luminosity function for the best fit
+    vector<vector<vector<double> > > PhiUVlist = PhiUV(C, Zlist, Plnmuz, 1.0e9, bf[0], bf[1], bf[2], bf[3], bf[4], bf[5]);
     outfile.open("UVluminosity.dat");
     for (int jZ = 0; jZ < Zlist.size(); jZ++) {
         z = Zlist[jZ];
         for (int jM = 0; jM < C.NM; jM++) {
-            outfile << z << "   " << PhiUVlist[jZ][jM][0] << "   " << max(1.0e-64,PhiUVlist[jZ][jM][1]) << "   " << max(1.0e-64,PhiUVlist[jZ][jM][2]) << "   " << max(1.0e-64,PhiUVlist[jZ][jM][3]) << endl;
+            // {z, M, MUV, no dust + no lensing, dust + no lensing, dust + lensing}
+            outfile << z << "   " << PhiUVlist[jZ][jM][0] << "   " << PhiUVlist[jZ][jM][4] << "   " << max(1.0e-64,PhiUVlist[jZ][jM][1]) << "   " << max(1.0e-64,PhiUVlist[jZ][jM][2]) << "   " << max(1.0e-64,PhiUVlist[jZ][jM][3]) << endl;
         }
     }
     outfile.close();

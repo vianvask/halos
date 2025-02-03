@@ -4,23 +4,24 @@
 double kappaUV = 1.15e-22; // Msun s erg^-1 Myr^-1
 
 // star formation rate
-double fstar(double M, double Mc, double epsilon, double alpha, double beta, double gamma) {
-    return epsilon*pow(pow(M/Mc,alpha/gamma) + pow(M/Mc,beta/gamma),-gamma);
+double fstar(double M, double Mc, double epsilon, double alpha, double beta, double gamma, double z, double zbreak) {
+    //return epsilon*max(1.0,pow(z/zbreak,gamma))*(alpha+beta)/(beta*pow(M/Mc,-alpha) + alpha*pow(M/Mc,beta));
+    return epsilon*max(1.0,1.0+gamma*(z-zbreak))*(alpha+beta)/(beta*pow(M/Mc,-alpha) + alpha*pow(M/Mc,beta));
 }
 
 // derivative of the star formation rate, df_*/dM
-double Dfstar(double M, double Mc, double epsilon, double alpha, double beta, double gamma) {
-    return -(alpha/(1+pow(M/Mc,(-alpha+beta)/gamma)) + beta/(1+pow(M/Mc,(alpha-beta)/gamma)))*fstar(M,Mc,epsilon,alpha,beta,gamma)/M;
+double Dfstarperfstar(double M, double Mc, double epsilon, double alpha, double beta) {
+    return beta*((alpha+beta)/(alpha*pow(M/Mc,alpha+beta)+beta) - 1)/M;
 }
 
 // the UV magnitude
-double MUV(double M, double dotM, double Mc, double epsilon, double alpha, double beta, double gamma) {
-    return 51.63 - 1.08574*log(fstar(M,Mc,epsilon,alpha,beta,gamma)*dotM/kappaUV);
+double MUV(double M, double dotM, double Mc, double epsilon, double alpha, double beta, double gamma, double z, double zbreak) {
+    return 51.63 - 1.08574*log(fstar(M,Mc,epsilon,alpha,beta,gamma,z,zbreak)*dotM/kappaUV);
 }
-    
+
 // derivative of the UV magnitude, dM_UV/dM
-double DMUV(double M, double dotM, double DdotM, double Mc, double epsilon, double alpha, double beta, double gamma) {
-    return -1.08574*(DdotM/dotM + Dfstar(M,Mc,epsilon,alpha,beta,gamma)/fstar(M,Mc,epsilon,alpha,beta,gamma));
+double DMUV(double M, double dotM, double DdotM, double Mc, double epsilon, double alpha, double beta) {
+    return -1.08574*(DdotM/dotM + Dfstarperfstar(M,Mc,epsilon,alpha,beta));
 }
 
 // dust extinction, MUV -> MUV - AUV (see 1406.1503 and Table 3 of 1306.2950)
@@ -31,14 +32,14 @@ double AUV(double MUV, double z) {
 }
 
 // UV luminosity function as a function of halo mass M (see e.g. 1906.06296)
-double UVLF(double M, double dotM, double DdotM, double dndlnM, double Mt, double Mc, double epsilon, double alpha, double beta, double gamma) {
-    return -exp(-Mt/M)*dndlnM/M/DMUV(M,dotM,DdotM,Mc,epsilon,alpha,beta,gamma);
+double UVLF(double M, double dotM, double DdotM, double dndlnM, double Mt, double Mc, double epsilon, double alpha, double beta) {
+    return -exp(-Mt/M)*dndlnM/M/DMUV(M,dotM,DdotM,Mc,epsilon,alpha,beta);
 }
 
 // UV luminosity function, {z, M_UV, Phi(no dust + no lensing), Phi(dust + no lensing), Phi(dust + lensing)}
-vector<vector<vector<double> > > PhiUV(cosmology &C, vector<double> &Zlist, vector<vector<vector<double> > > &Plnmuz, double Mt, double Mc, double epsilon, double alpha, double beta, double gamma) {
+vector<vector<vector<double> > > PhiUV(cosmology &C, vector<double> &Zlist, vector<vector<vector<double> > > &Plnmuz, double Mt, double Mc, double epsilon, double alpha, double beta, double gamma, double zbreak) {
     
-    vector<vector<vector<double> > > PhiUVlensed(Zlist.size(), vector<vector<double> > (C.NM, vector<double> (4,0.0)));
+    vector<vector<vector<double> > > PhiUVlensed(Zlist.size(), vector<vector<double> > (C.NM, vector<double> (5,0.0)));
     vector<vector<double> > PhiUVlist(C.NM, vector<double> (3,0.0));
     
     int jzp;
@@ -61,11 +62,11 @@ vector<vector<vector<double> > > PhiUV(cosmology &C, vector<double> &Zlist, vect
             DdotMj = C.dotMlist[jzp][jM][3];
             dndlnMj = C.HMFlist[jzp][jM][2];
             
-            MUVj = MUV(Mj, dotMj, Mc, epsilon, alpha, beta, gamma);
+            MUVj = MUV(Mj, dotMj, Mc, epsilon, alpha, beta, gamma, z, zbreak);
             
             PhiUVlist[jM][0] = MUVj;
             PhiUVlist[jM][1] = AUV(MUVj, z);
-            PhiUVlist[jM][2] = UVLF(Mj, dotMj, DdotMj, dndlnMj, Mt, Mc, epsilon, alpha, beta, gamma);
+            PhiUVlist[jM][2] = UVLF(Mj, dotMj, DdotMj, dndlnMj, Mt, Mc, epsilon, alpha, beta);
         }
         
         // compute the lensed UV luminosity function
@@ -84,6 +85,7 @@ vector<vector<vector<double> > > PhiUV(cosmology &C, vector<double> &Zlist, vect
             PhiUVlensed[jZ][jM][1] = PhiUVlist[jM][2]; // no dust + no lensing
             PhiUVlensed[jZ][jM][2] = interpolaten(MUVj - AUVj, PhiUVlist)[2]; // dust + lensing
             PhiUVlensed[jZ][jM][3] = PhiUVj; // dust + lensing
+            PhiUVlensed[jZ][jM][4] = C.dotMlist[jzp][jM][1]; // halo mass
         }
     }
     return PhiUVlensed;
@@ -121,7 +123,7 @@ vector<vector<double> > readUVdata(vector<string> filenames) {
 double NPDF(double x, double mu, double sigma) {
     return exp(-pow((x-mu)/sigma,2.0)/2.0)/(sigma*sqrt(2.0*PI));
 }
-double NPDF2(double x, double mu, double sigmam, double sigmap) {
+double NPDF2(double x, double mu, double sigmap, double sigmam) {
     if (x < mu) {
         return 2*sigmam*NPDF(x, mu, sigmam)/(sigmam+sigmap);
     }
@@ -132,7 +134,7 @@ double NPDF2(double x, double mu, double sigmam, double sigmap) {
 double loglikelihood(cosmology &C, vector<double> &Zlist, vector<vector<vector<double> > > &Plnmuz, vector<vector<double> > &data, vector<double> &params) {
     
     // compute the UV luminosity function
-    vector<vector<vector<double> > > PhiUVlist = PhiUV(C, Zlist, Plnmuz, 1.0e9, params[0], params[1], params[2], params[3], 1.0);
+    vector<vector<vector<double> > > PhiUVlist = PhiUV(C, Zlist, Plnmuz, 1.0e9, params[0], params[1], params[2], params[3], params[4], params[5]);
     
     vector<vector<double> > PhiUVz;
     double z, MUV, meanPhi, sigmaPhip, sigmaPhim, Phi, logL = 0.0;
@@ -149,7 +151,7 @@ double loglikelihood(cosmology &C, vector<double> &Zlist, vector<vector<vector<d
         // Phi(M_UV), convert to Mpc^-3 as data is in such units
         Phi = 1.0e9*interpolaten(MUV, PhiUVz)[3];
         
-        logL += log(NPDF2(Phi, meanPhi, sigmaPhim, sigmaPhip));
+        logL += log(NPDF2(Phi, meanPhi, sigmaPhip, sigmaPhim));
     }
     return logL;
 }
