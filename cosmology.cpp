@@ -1,6 +1,19 @@
 #include "cosmology.h"
 
-// matter transfer function (astro-ph/9709112)
+// generates a list of z values
+vector<double> cosmology::zlistf() {
+    double dlogz = (log(zmax)-log(zmin))/(1.0*(Nz-1));
+    double z = zmin;
+    vector<double> zz(Nz,0.0);
+    for (int jz = 0; jz < Nz; jz++) {
+        zz[jz] = z;
+        z = exp(log(z) + dlogz);
+    }
+    return zz;
+}
+
+
+// CDM matter transfer function (astro-ph/9709112)
 double cosmology::TM (double k) {
     double keq = 0.00326227*Hz(zeq)/(1.0+zeq);
     double ksilk = 0.0016*pow(OmegaB*pow(h,2.0),0.52)*pow(OmegaM*pow(h,2.0),0.73)*(1+pow(10.4*OmegaM*pow(h,2.0),-0.95));
@@ -49,11 +62,21 @@ double cosmology::TM (double k) {
 }
 
 
+// FDM matter transfer function (astro-ph/0003365)
+double cosmology::TMF (double k, double m22) {
+    double x = 1.61*pow(m22,1.0/18.0)*k/kJ(m22);
+    return cos(pow(x,3.0))/(1+pow(x,8.0))*TM(k);
+}
+
+
 // variance of the matter fluctuations
-double cosmology::sigmaf(double M, double deltaH) {
+double cosmology::sigmaf(double M, double deltaH, double m22) {
     double RM = pow(3.0*M/(4.0*PI*rhoM0),1.0/3.0);
-    double kmin = 0.001/RM;
     double kmax = 1000.0/RM;
+    if (m22 > 0.0) {
+        kmax = min(kmax, 2.0*kJ(m22));
+    }
+    double kmin = 1.0e-6*kmax;
     double dlogk = (log(kmax)-log(kmin))/(1.0*(Nk-1));
     
     double sigma2 = 0.0;
@@ -61,26 +84,29 @@ double cosmology::sigmaf(double M, double deltaH) {
     for (int jk = 0; jk < Nk; jk++) {
         k1 = k2;
         k2 = exp(log(k2)+dlogk);
-        sigma2 += exp((log(pow(W(k2*RM)*Deltak(k2,deltaH),2.0)/k2) + log(pow(W(k1*RM)*Deltak(k1,deltaH),2.0)/k1))/2.0)*(k2-k1);
+        if (m22 == 0.0) {
+            sigma2 += exp((log(pow(W(k2*RM)*Deltak(k2,deltaH),2.0)/k2) + log(pow(W(k1*RM)*Deltak(k1,deltaH),2.0)/k1))/2.0)*(k2-k1);
+        } else {
+            sigma2 += exp((log(pow(WF(k2*RM)*Deltak(k2,deltaH,m22),2.0)/k2) + log(pow(WF(k1*RM)*Deltak(k1,deltaH,m22),2.0)/k1))/2.0)*(k2-k1);
+        }
     }
-    
     return sqrt(sigma2);
 }
 
 // variance of matter fluctuations, {M, sigma, dsigma/dM}
-vector<vector<double> > cosmology::sigmalistf() {
+vector<vector<double> > cosmology::sigmalistf(double m22) {
     int Nextra = (int) ceil((NM-1)*log(3.0)/log(Mmax/Mmin));
     vector<vector<double> > Ms(NM+Nextra, vector<double> (3,0.0));
     
     double dlogM = (log(Mmax)-log(Mmin))/(1.0*(NM-1));
     double M = exp(log(Mmin) - dlogM);
     
-    double sigma = sigmaf(M, deltaH8);
+    double sigma = sigmaf(M, deltaH8, m22);
     double sigman, Mn;
     
     for (int jM = 0; jM < NM+Nextra; jM++) {
         Mn = exp(log(M) + dlogM);
-        sigman = sigmaf(Mn, deltaH8);
+        sigman = sigmaf(Mn, deltaH8, m22);
         
         Ms[jM][0] = Mn;
         Ms[jM][1] = sigman;
@@ -93,16 +119,30 @@ vector<vector<double> > cosmology::sigmalistf() {
 }
 
 
-// generates a list of z values
-vector<double> cosmology::zlistf() {
+// Seth-Tormen HMF, {z,M,dn/dlnM}
+vector<vector<vector<double> > > cosmology::HMFlistf() {
+    function<double(double)> nuf = [&](double nu) {
+        double p = 0.3;
+        double q = 0.75;
+        double A = 1.0/(1+(pow(2.0,-p)*tgammaf(0.5-p)/sqrt(PI)));
+        return A*(1+pow(q*nu,-p))*sqrt(q*nu/(2.0*PI))*exp(-q*nu/2.0);
+    };
+        
     double dlogz = (log(zmax)-log(zmin))/(1.0*(Nz-1));
-    double z = zmin;
-    vector<double> zz(Nz,0.0);
+    vector<vector<vector<double> > > dndlnM(Nz, vector<vector<double> > (NM, vector<double> (3,0.0)));
+    double z, M;
     for (int jz = 0; jz < Nz; jz++) {
-        zz[jz] = z;
-        z = exp(log(z) + dlogz);
+        z = zlist[jz];
+        for (int jM = 0; jM < NM; jM++) {
+            M = sigmalist[jM][0];
+            
+            dndlnM[jz][jM][0] = z;
+            dndlnM[jz][jM][1] = M;
+            dndlnM[jz][jM][2] = -rhoM0*nuf(pow(deltac(z)/sigmalist[jM][1],2.0))*2.0*sigmalist[jM][2]/sigmalist[jM][1];
+        }
     }
-    return zz;
+    
+    return dndlnM;
 }
 
 
@@ -177,33 +217,6 @@ vector<vector<vector<double> > > cosmology::NFWlistf() {
         }
     }
     return zMNFW;
-}
-
-
-// Seth-Tormen HMF, {z,M,dn/dlnM}
-vector<vector<vector<double> > > cosmology::HMFlistf() {
-    function<double(double)> nuf = [&](double nu) {
-        double p = 0.3;
-        double q = 0.75;
-        double A = 1.0/(1+(pow(2.0,-p)*tgammaf(0.5-p)/sqrt(PI)));
-        return A*(1+pow(q*nu,-p))*sqrt(q*nu/(2.0*PI))*exp(-q*nu/2.0);
-    };
-        
-    double dlogz = (log(zmax)-log(zmin))/(1.0*(Nz-1));
-    vector<vector<vector<double> > > dndlnM(Nz, vector<vector<double> > (NM, vector<double> (3,0.0)));
-    double z, M;
-    for (int jz = 0; jz < Nz; jz++) {
-        z = zlist[jz];
-        for (int jM = 0; jM < NM; jM++) {
-            M = sigmalist[jM][0];
-            
-            dndlnM[jz][jM][0] = z;
-            dndlnM[jz][jM][1] = M;
-            dndlnM[jz][jM][2] = -rhoM0*nuf(pow(deltac(z)/sigmalist[jM][1],2.0))*2.0*sigmalist[jM][2]/sigmalist[jM][1];
-        }
-    }
-    
-    return dndlnM;
 }
 
 

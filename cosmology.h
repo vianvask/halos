@@ -55,32 +55,49 @@ public:
     
 private:
     
-    // matter transfer function (astro-ph/9709112)
+    // CDM matter transfer function (astro-ph/9709112)
     double TM (double k);
     
-    // matter power spectrum
-    double Pk(double k, double deltaH) {
-        return pow(306.535*k/H0,3.0+ns)*pow(deltaH*TM(k),2.0)*2.0*pow(PI,2.0)/pow(k,3.0);
+    // Jeans length
+    double kJ(double m22) {
+        return 66.5e-3/pow(1+zeq,1.0/4.0)*sqrt(m22);
     }
+    
+    // FDM matter transfer function (astro-ph/0003365)
+    double TMF (double k, double m22);
+    
+    // CDM matter power spectrum
     double Deltak(double k, double deltaH) {
         return sqrt(pow(306.535*k/H0,3.0+ns)*pow(deltaH*TM(k),2.0));
     }
     
-    // window function
+    // FDM matter power spectrum
+    double Deltak(double k, double deltaH, double m22) {
+        return sqrt(pow(306.535*k/H0,3.0+ns)*pow(deltaH*TMF(k,m22),2.0));
+    }
+    
+    // CDM window function
     double W(double x) {
         return 3.0*(x*cos(x)-sin(x))/pow(x,3.0);
     }
     
+    // FDM window function
+    double WF(double x) {
+        double a = 0.447;
+        double b = 5.0;
+        return 1.0/(1.0+pow(a*x,b));
+    }
+    
     // variance of the matter fluctuations
-    double sigmaf(double M, double deltaH);
+    double sigmaf(double M, double deltaH, double m22);
     
     // variance of matter fluctuations, {M,sigma(M),sigma'(M)}
-    vector<vector<double> > sigmalistf();
+    vector<vector<double> > sigmalistf(double m22);
     vector<vector<double> > sigmalist;
     
     vector<double> zlistf();
     
-    // halo consentration parameter (1601.02624)
+    // CDM halo consentration parameter (1601.02624)
     double cons(double M, double z);
     vector<vector<vector<double> > > conslistf();
     vector<vector<vector<double> > > conslist;
@@ -110,7 +127,7 @@ public:
     vector<vector<vector<double> > > dotMlist;
     vector<vector<vector<double> > > NFWlist;
     
-    void initialize() {
+    void initialize(double m22) {
         OmegaR = OmegaM/(1+zeq);
         OmegaL = 1.0 - OmegaM - OmegaR;
         OmegaC = OmegaM - OmegaB;
@@ -120,17 +137,17 @@ public:
         
         // fix deltaH to match the input sigma8
         double M8 = 4.0*PI/3.0*pow(8000.0/h,3.0)*rhoM0;
-        deltaH8 = sigma8/sigmaf(M8, 1.0);
+        deltaH8 = sigma8/sigmaf(M8, 1.0, m22);
+                        
+        zlist = zlistf();
+        sigmalist = sigmalistf(m22);
+        HMFlist = HMFlistf();
+        dotMlist = dotMlistf();
         
         zdc = dclist();
         zt = tlist();
-                
-        sigmalist = sigmalistf();
-        zlist = zlistf();
         conslist = conslistf();
         NFWlist = NFWlistf();
-        HMFlist = HMFlistf();
-        dotMlist = dotMlistf();
     }
     
     // luminosity distance

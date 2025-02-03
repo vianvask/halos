@@ -6,15 +6,13 @@
 // units: masses in solar masses, time in Myr, length in kpc
 
 int main (int argc, char *argv[]) {
-    cout << setprecision(4) << fixed;
+    clock_t time_req = clock(); // timing
+    cout << setprecision(14) << fixed;
     
     cout << "Preparing..." << endl;
-    
-    // timing
-    clock_t time_req = clock();
-
-    // input parameters: PDG values
     cosmology C;
+    
+    // cosmological parameters: PDG values
     C.OmegaM = 0.315;
     C.OmegaB = 0.0493;
     C.zeq = 3402.0;
@@ -23,51 +21,48 @@ int main (int argc, char *argv[]) {
     C.T0 = 2.7255;
     C.ns = 0.965;
     
-    // accuracy parameters
-    C.Nk = 1000;
-    C.NM = 1200;
-    C.Nz = 100;
-    
     // mass and redshift ranges
-    C.Mmin = 1.0e5;
+    C.Mmin = 1.0e6;
     C.Mmax = 1.0e17;
     C.zmin = 0.01;
     C.zmax = 20.01;
     
-    C.initialize();
+    C.Nk = 1000; // integral over k in computation of sigma
+    C.NM = 1000; // number of halo mass bins
+    C.Nz = 100; // number of redshift bins
     
     double z, M, HMF, dotM, DdotM;
     ofstream outfile;
     
-    // output the halo mass function and the UV luminosity function
-    outfile.open("HMF.dat");
-    for (int jz = 0; jz < C.Nz; jz++) {
-        for (int jM = 0; jM < C.NM; jM++) {
-            z = C.zlist[jz];
-            M = C.HMFlist[jz][jM][1];
-            HMF = C.HMFlist[jz][jM][2];
-            dotM = C.dotMlist[jz][jM][2];
-            DdotM = C.dotMlist[jz][jM][3];
-            
-            outfile << z << "   " << M << "   " << max(1.0e-64,HMF) << "   " << dotM << "   " << DdotM << endl;
+    // output some halo mass functions
+    vector<double> m22list {0.0, 1.0, 10.0, 100.0};
+    for (double m22 : m22list) {
+        C.initialize(m22);
+        outfile.open("HMF_m22_" + to_string_prec(m22,1) + ".dat");
+        for (int jz = 0; jz < C.Nz; jz++) {
+            for (int jM = 0; jM < C.NM; jM++) {
+                z = C.zlist[jz];
+                M = C.HMFlist[jz][jM][1];
+                HMF = C.HMFlist[jz][jM][2];
+                dotM = C.dotMlist[jz][jM][2];
+                DdotM = C.dotMlist[jz][jM][3];
+                
+                outfile << z << "   " << M << "   " << max(1.0e-99,HMF) << "   " << dotM << "   " << DdotM << endl;
+            }
         }
+        outfile.close();
     }
-    outfile.close();
+
+    C.initialize(1.0);
     
-    // list of z values for lensing
-    vector<double> Zlist {4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.5, 14.5};
-    
-    // lensing source radius in kpc
-    double rS = 10.0;
-    
-    // accuracy parameters for lensing
+    // read or generate lensing amplification distribution
     int Nkappa = 40;
     int Nreal = 10000000;
     int Nbins = 200;
-    
-    // read or generate lensing amplification distribution
+    double rS = 10.0;  // lensing source radius in kpc
+    vector<double> Zlist {4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.5, 14.5};
     vector<vector<vector<double> > > Plnmuz = getPlnmu(C, Zlist, rS, Nkappa, Nreal, Nbins);
-        
+    
     // read UV luminosity data files, {MUV, Phi, +sigmaPhi, -sigmaPhi}
     vector<string> datafiles {"UVLF_2102.07775.txt", "UVLF_2108.01090.txt", "UVLF_2403.03171.txt"};
     vector<vector<double> > data = readUVdata(datafiles);
@@ -76,8 +71,8 @@ int main (int argc, char *argv[]) {
     cout << "Computing UV luminosity fit..." << endl;
     
     // MCMC over parameters {M_c, epsilon, alpha, beta}
-    int Nsteps = 250; // number of steps
-    int Nchains = 200; // number of chains
+    int Nsteps = 100; // number of steps
+    int Nchains = 40; // number of chains
     vector<vector<double> > priors {{2.0e11, 7.0e11}, {0.02, 0.07}, {0.7, 1.5}, {0.1, 0.7}, {0.5, 2.0}, {7.0, 11.0}}; // flat priors
     vector<double> initial(6,0.0); // first element
     vector<double> steps {0.2e11, 0.02, 0.05, 0.05, 0.05, 0.1}; // random walk step sizes
@@ -103,7 +98,7 @@ int main (int argc, char *argv[]) {
         // find best fit
         jmax = max_element(chain.begin(), chain.end(), [](const vector<double> &a, const vector<double> &b) { return a.back() < b.back(); }) - chain.begin();
         if (chain[jmax].back() > logLmax) {
-            logLmax = chain[jmax][4];
+            logLmax = chain[jmax].back();
             bf = chain[jmax];
         }
 
