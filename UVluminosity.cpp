@@ -36,18 +36,20 @@ double UVLF(double M, double dotM, double DdotM, double dndlnM, double Mt, doubl
     return -exp(-Mt/M)*dndlnM/M/DMUV(M,dotM,DdotM,Mc,epsilon,alpha,beta);
 }
 
+
 // UV luminosity function, {z, M_UV, Phi(no dust + no lensing), Phi(dust + no lensing), Phi(dust + lensing)}
-vector<vector<vector<double> > > PhiUV(cosmology &C, vector<double> &Zlist, vector<vector<vector<double> > > &Plnmuz, double Mt, double Mc, double epsilon, double alpha, double beta, double gamma, double zbreak) {
+vector<vector<vector<double> > > PhiUV(cosmology &C, double Mt, double Mc, double epsilon, double alpha, double beta, double gamma, double zbreak) {
     
-    vector<vector<vector<double> > > PhiUVlensed(Zlist.size(), vector<vector<double> > (C.NM, vector<double> (5,0.0)));
-    vector<vector<double> > PhiUVlist(C.NM, vector<double> (3,0.0));
+    vector<vector<vector<double> > > PhiUVlensed(C.Zlist.size(), vector<vector<double> > (C.NM, vector<double> (5,0.0)));
+    vector<vector<double> > PhiUVlist(C.NM, vector<double> (4,0.0));
+    
+    double z, dlnmu, Mj, dotMj, DdotMj, dndlnMj, MUVj, AUVj, PhiUVj;
+    vector<vector<double> > Plnmu(C.Plnmuz[0].size(), vector<double> (2,0.0));
     
     int jzp;
-    double z, dlnmu, Mj, dotMj, DdotMj, dndlnMj, MUVj, AUVj, PhiUVj;
-    vector<vector<double> > Plnmu(Plnmuz[0].size(), vector<double> (2,0.0));
-    for (int jZ = 0; jZ < Zlist.size(); jZ++) {
-        z = Zlist[jZ];
-        Plnmu = Plnmuz[jZ];
+    for (int jZ = 0; jZ < C.Zlist.size(); jZ++) {
+        z = C.Zlist[jZ];
+        Plnmu = C.Plnmuz[jZ];
         
         // find index of z in the longer list of z values
         jzp = lower_bound(C.zlist.begin(), C.zlist.end(), z)- C.zlist.begin();
@@ -57,38 +59,55 @@ vector<vector<vector<double> > > PhiUV(cosmology &C, vector<double> &Zlist, vect
              
         // compute the unlensed UV luminosity function
         for (int jM = 0; jM < C.NM; jM++) {
-            Mj = C.dotMlist[jzp][jM][1];
+            Mj = C.HMFlist[jzp][jM][1];
+            dndlnMj = C.HMFlist[jzp][jM][2];
+            
             dotMj = C.dotMlist[jzp][jM][2];
             DdotMj = C.dotMlist[jzp][jM][3];
-            dndlnMj = C.HMFlist[jzp][jM][2];
             
             MUVj = MUV(Mj, dotMj, Mc, epsilon, alpha, beta, gamma, z, zbreak);
             
             PhiUVlist[jM][0] = MUVj;
-            PhiUVlist[jM][1] = AUV(MUVj, z);
-            PhiUVlist[jM][2] = UVLF(Mj, dotMj, DdotMj, dndlnMj, Mt, Mc, epsilon, alpha, beta);
+            PhiUVlist[jM][1] = Mj;
+            PhiUVlist[jM][2] = AUV(MUVj, z);
+            PhiUVlist[jM][3] = UVLF(Mj, dotMj, DdotMj, dndlnMj, Mt, Mc, epsilon, alpha, beta);
         }
         
         // compute the lensed UV luminosity function
         for (int jM = 0; jM < C.NM; jM++) {
             MUVj = PhiUVlist[jM][0];
-            AUVj = PhiUVlist[jM][1];
+            Mj = PhiUVlist[jM][1];
+            AUVj = PhiUVlist[jM][2];
             
             // convolution integral
             PhiUVj = 0.0;
             dlnmu = Plnmu[1][0]-Plnmu[0][0];
             for (int jb = 0; jb < Plnmu.size(); jb++) {
-                PhiUVj += interpolaten(MUVj - AUVj + 1.08574*Plnmu[jb][0], PhiUVlist)[2]*Plnmu[jb][1]*dlnmu/exp(Plnmu[jb][0]);
+                PhiUVj += interpolaten(MUVj - AUVj + 1.08574*Plnmu[jb][0], PhiUVlist)[3]*Plnmu[jb][1]*dlnmu/exp(Plnmu[jb][0]);
             }
             
             PhiUVlensed[jZ][jM][0] = MUVj;
-            PhiUVlensed[jZ][jM][1] = PhiUVlist[jM][2]; // no dust + no lensing
-            PhiUVlensed[jZ][jM][2] = interpolaten(MUVj - AUVj, PhiUVlist)[2]; // dust + lensing
-            PhiUVlensed[jZ][jM][3] = PhiUVj; // dust + lensing
-            PhiUVlensed[jZ][jM][4] = C.dotMlist[jzp][jM][1]; // halo mass
+            PhiUVlensed[jZ][jM][1] = Mj;
+            PhiUVlensed[jZ][jM][2] = PhiUVlist[jM][3]; // no dust + no lensing
+            PhiUVlensed[jZ][jM][3] = interpolaten(MUVj - AUVj, PhiUVlist)[3]; // dust + no lensing
+            PhiUVlensed[jZ][jM][4] = PhiUVj; // dust + lensing
         }
     }
     return PhiUVlensed;
+}
+
+vector<vector<vector<double> > > PhiUV(cosmology &C, double Mt, double Mc, double epsilon, double alpha, double beta, double gamma, double zbreak, double m22) {
+    
+    // find index of z in the longer list of z values
+    int jm = lower_bound(C.m22list.begin(), C.m22list.end(), m22)- C.m22list.begin();
+    if (jm > 0 && C.m22list[jm]-m22 > m22-C.m22list[jm-1]) {
+        jm--;
+    }
+    
+    C.HMFlist = C.FDMHMFlist[jm];
+    C.dotMlist = C.FDMdotMlist[jm];
+    
+    return PhiUV(C, Mt, Mc, epsilon, alpha, beta, gamma, zbreak);
 }
 
 // read UV luminosity data, {z, MUV, Phi, +sigmaPhi, -sigmaPhi}
@@ -119,6 +138,7 @@ vector<vector<double> > readUVdata(vector<string> filenames) {
     return data;
 }
 
+
 // normal distribution
 double NPDF(double x, double mu, double sigma) {
     return exp(-pow((x-mu)/sigma,2.0)/2.0)/(sigma*sqrt(2.0*PI));
@@ -130,11 +150,17 @@ double NPDF2(double x, double mu, double sigmap, double sigmam) {
     return 2*sigmap*NPDF(x, mu, sigmap)/(sigmam+sigmap);
 }
 
+
 // likelihood function
-double loglikelihood(cosmology &C, vector<double> &Zlist, vector<vector<vector<double> > > &Plnmuz, vector<vector<double> > &data, vector<double> &params) {
-    
+double loglikelihood(cosmology &C, vector<vector<double> > &data, vector<double> &params) {
+        
     // compute the UV luminosity function
-    vector<vector<vector<double> > > PhiUVlist = PhiUV(C, Zlist, Plnmuz, 1.0e9, params[0], params[1], params[2], params[3], params[4], params[5]);
+    vector<vector<vector<double> > > PhiUVlist;
+    if (params.size() < 7) {
+        PhiUVlist = PhiUV(C, 1.0e9, params[0], params[1], params[2], params[3], params[4], params[5]);
+    } else {
+        PhiUVlist = PhiUV(C, 1.0e9, params[0], params[1], params[2], params[3], params[4], params[5], pow(10.0,params[6]));
+    }
     
     vector<vector<double> > PhiUVz;
     double z, MUV, meanPhi, sigmaPhip, sigmaPhim, Phi, logL = 0.0;
@@ -146,15 +172,16 @@ double loglikelihood(cosmology &C, vector<double> &Zlist, vector<vector<vector<d
         sigmaPhim = data[j][4];
         
         // z in Zlist
-        PhiUVz = PhiUVlist[lower_bound(Zlist.begin(), Zlist.end(), z) - Zlist.begin()];
+        PhiUVz = PhiUVlist[lower_bound(C.Zlist.begin(), C.Zlist.end(), z) - C.Zlist.begin()];
         
         // Phi(M_UV), convert to Mpc^-3 as data is in such units
-        Phi = 1.0e9*interpolaten(MUV, PhiUVz)[3];
+        Phi = 1.0e9*interpolaten(MUV, PhiUVz)[4];
         
         logL += log(NPDF2(Phi, meanPhi, sigmaPhip, sigmaPhim));
     }
     return logL;
 }
+
 
 // uniform distributions as priors
 double prior(double x, const vector<double> &bounds) {
@@ -165,8 +192,9 @@ double prior(double x, const vector<double> &bounds) {
     return 1.0/(upper-lower);
 }
 
+
 // Metropolis-Hastings MCMC sampler
-vector<vector<double> > mcmc_sampling(cosmology &C, vector<double> &Zlist, vector<vector<vector<double> > > &Plnmuz, vector<vector<double> > &data, vector<double> &initial, vector<double> &steps , vector<vector<double> > &priors, int Ns, rgen &mt) {
+vector<vector<double> > mcmc_sampling(cosmology &C, vector<vector<double> > &data, vector<double> &initial, vector<double> &steps , vector<vector<double> > &priors, int Ns, rgen &mt) {
     vector<vector<double> > chain;
     vector<double> element;
         
@@ -179,7 +207,7 @@ vector<vector<double> > mcmc_sampling(cosmology &C, vector<double> &Zlist, vecto
     vector<double> current = initial;
     double priorratio = 1.0;
     
-    double logLcurrent = loglikelihood(C, Zlist, Plnmuz, data, current);
+    double logLcurrent = loglikelihood(C, data, current);
     cout << logLcurrent << endl;
     
     element.insert(element.end(), current.begin(), current.end());
@@ -187,7 +215,7 @@ vector<vector<double> > mcmc_sampling(cosmology &C, vector<double> &Zlist, vecto
     chain.push_back(element);
     element.clear();
     
-    double logLproposed;
+    double logLproposed, paccept;
     vector<double> proposed;
     for (int i = 0; i < Ns; i++) {
         // generate new point by modifying the current sample
@@ -203,10 +231,11 @@ vector<vector<double> > mcmc_sampling(cosmology &C, vector<double> &Zlist, vecto
         
         if (priorratio > 0.0) {
             // calculate the acceptance ratio based on the likelihood
-            logLproposed = loglikelihood(C, Zlist, Plnmuz, data, proposed);
-            
+            logLproposed = loglikelihood(C, data, proposed);
+            paccept = randomreal(0.0,1.0,mt);
+                        
             // accept or reject the proposed sample
-            if (logLproposed - logLcurrent - log(priorratio) > log(randomreal(0.0,1.0,mt))) {
+            if (logLproposed - logLcurrent - log(priorratio) > log(paccept)) {
                 current = proposed;
                 logLcurrent = logLproposed;
                 cout << logLcurrent << endl;
