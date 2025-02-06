@@ -1,15 +1,28 @@
 #include "cosmology.h"
 
-// generates a list of z values
+// generates a list of redshifts
 vector<double> cosmology::zlistf() {
     double dlogz = (log(zmax)-log(zmin))/(1.0*(Nz-1));
     double z = zmin;
-    vector<double> zz(Nz,0.0);
+    vector<double> tmp(Nz,0.0);
     for (int jz = 0; jz < Nz; jz++) {
-        zz[jz] = z;
+        tmp[jz] = z;
         z = exp(log(z) + dlogz);
     }
-    return zz;
+    return tmp;
+}
+
+
+// generates a list of FDM masses
+vector<double> cosmology::m22listf() {
+    double dlogm22 = (log(m22max)-log(m22min))/(1.0*(Nm22-1));
+    double m22 = m22min;
+    vector<double> tmp(Nm22,0.0);
+    for (int jm = 0; jm < Nm22; jm++) {
+        tmp[jm] = m22;
+        m22 = exp(log(m22) + dlogm22);
+    }
+    return tmp;
 }
 
 

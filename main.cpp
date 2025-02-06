@@ -2,12 +2,11 @@
 #include "lensing.h"
 #include "UVluminosity.h"
 
-
 // units: masses in solar masses, time in Myr, length in kpc
 
 int main (int argc, char *argv[]) {
     clock_t time_req = clock(); // timing
-    cout << setprecision(14) << fixed;
+    cout << setprecision(4) << fixed;
     
     cout << "Preparing..." << endl;
     cosmology C;
@@ -21,46 +20,53 @@ int main (int argc, char *argv[]) {
     C.T0 = 2.7255;
     C.ns = 0.965;
     
-    // halo mass and redshift ranges
-    C.Mmin = 1.0e6;
-    C.Mmax = 1.0e17;
-    C.zmin = 0.01;
-    C.zmax = 20.01;
-    
     // integral over k in computation of sigma
     C.Nk = 1000;
-    // number of halo mass bins
+    
+    // halo masses
+    C.Mmin = 1.0e7;
+    C.Mmax = 1.0e17;
     C.NM = 1000;
-    // number of redshift bins
+    
+    // redshifts
+    C.zmin = 0.01;
+    C.zmax = 20.01;
     C.Nz = 100;
     
+    // FDM masses in units 10^-22 eV
+    C.m22min = 0.2;
+    C.m22max = 100.0;
+    C.Nm22 = 5;
+    
+    C.initialize();
     ofstream outfile;
     
-    // FDM masses in units 10^-22 eV
-    vector<double> m22list {0.0, 1.0, 10.0, 100.0};
+    cout << "Computing halo mass functions (" << C.m22list.size() << " m22 values)..." << endl;
+    C.FDM_halos();
     
     // output some halo mass functions
-    double z, M, HMF, dotM, DdotM;
-    for (double m22 : m22list) {
-        C.initialize(m22);
-        outfile.open("HMF_m22_" + to_string_prec(m22,1) + ".dat");
+    double m22, z, M, HMF, dotM, DdotM;
+    outfile.open("HMF.dat");
+    for (int jm = 0; jm < C.m22list.size(); jm++) {
+        m22 = C.m22list[jm];
         for (int jz = 0; jz < C.Nz; jz++) {
+            z = C.zlist[jz];
             for (int jM = 0; jM < C.NM; jM++) {
-                z = C.zlist[jz];
-                M = C.HMFlist[jz][jM][1];
-                HMF = C.HMFlist[jz][jM][2];
-                dotM = C.dotMlist[jz][jM][2];
-                DdotM = C.dotMlist[jz][jM][3];
+                M = C.FDMHMFlist[jm][jz][jM][1];
+                HMF = C.FDMHMFlist[jm][jz][jM][2];
+                dotM = C.FDMdotMlist[jm][jz][jM][2];
+                DdotM = C.FDMdotMlist[jm][jz][jM][3];
                 
-                outfile << z << "   " << M << "   " << max(1.0e-99,HMF) << "   " << dotM << "   " << DdotM << endl;
+                outfile << m22 << "   " << z << "   " << M << "   " << max(1.0e-99,HMF) << "   " << dotM << "   " << DdotM << endl;
             }
         }
-        outfile.close();
     }
-
-    C.initialize(1.0);
-    
+    outfile.close();
+        
     cout << "Generating/reading lensing amplifications..." << endl;
+    
+    // FDM does not significantly affect lensing amplifications
+    C.CDM_halos();
     
     // number of bins in distribution of P^1(kappa)
     int Nkappa = 40;
@@ -71,8 +77,8 @@ int main (int argc, char *argv[]) {
     // lensing source radius in kpc
     double rS = 10.0;
     // list of redshift values at which P(lnmu) is computed
-    vector<double> Zlist {4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.5, 14.5};
-    vector<vector<vector<double> > > Plnmuz = getPlnmu(C, Zlist, rS, Nkappa, Nreal, Nbins);
+    C.Zlist = {4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.5, 14.5};
+    C.Plnmuz = getPlnmu(C, rS, Nkappa, Nreal, Nbins);
     
     // read UV luminosity data files, {MUV, Phi, +sigmaPhi, -sigmaPhi}
     vector<string> datafiles {"UVLF_2102.07775.txt", "UVLF_2108.01090.txt", "UVLF_2403.03171.txt"};
@@ -84,20 +90,22 @@ int main (int argc, char *argv[]) {
     rgen mt(time(NULL));
     
     // max number of steps in each chain
-    int Nsteps = 100;
+    int Nsteps = 2000;
     // number of chains
-    int Nchains = 40;
-   
-    // flat priors, {M_c, epsilon, alpha, beta, gamma, z_break}
-    vector<vector<double> > priors {{2.0e11, 7.0e11}, {0.02, 0.07}, {0.7, 1.5}, {0.1, 0.7}, {0.5, 2.0}, {7.0, 11.0}};
-    // random walk step sizes
-    vector<double> steps {0.2e11, 0.02, 0.05, 0.05, 0.05, 0.1};
+    int Nchains = 200;
+       
+    // flat priors, {M_c, epsilon, alpha, beta, gamma, z_break, log_10(m22)}, and random walk step sizes
+    vector<vector<double> > priors {{1.0e11, 10.0e11}, {0.02, 0.06}, {0.5, 1.8}, {0.02, 0.9}, {0.0, 6.0}, {8.0, 15.0}, {log10(C.m22list.front()), log10(C.m22list.back())}};
+    vector<double> steps(priors.size(),0.0);
+    for (int j = 0; j < steps.size(); j++) {
+        steps[j] = (priors[j][1]-priors[j][0])/20.0;
+    }
 
     // output the MCMC chains and find the best fit
     outfile.open("MCMCchains.dat");
     int jmax = 0;
     double logLmax = 0.0;
-    vector<double> initial(6,0.0);
+    vector<double> initial(priors.size(),0.0);
     vector<double> bf = initial;
     vector<vector<double> > chain;
     for (int j = 0; j < Nchains; j++) {
@@ -109,7 +117,7 @@ int main (int argc, char *argv[]) {
         }
         
         // generate MCMC chain
-        chain = mcmc_sampling(C, Zlist, Plnmuz, data, initial, steps, priors, Nsteps, mt);
+        chain = mcmc_sampling(C, data, initial, steps, priors, Nsteps, mt);
         
         // find best fit
         jmax = max_element(chain.begin(), chain.end(), [](const vector<double> &a, const vector<double> &b) { return a.back() < b.back(); }) - chain.begin();
@@ -128,20 +136,22 @@ int main (int argc, char *argv[]) {
     }
     outfile.close();
     
+    //vector<double> bf {5.3e11, 0.04, 1.0, 0.3, 1.4, 10.0, 0.0};
+    
     // output the UV luminosity function for the best fit
-    vector<vector<vector<double> > > PhiUVlist = PhiUV(C, Zlist, Plnmuz, 1.0e9, bf[0], bf[1], bf[2], bf[3], bf[4], bf[5]);
+    vector<vector<vector<double> > > PhiUVlist = PhiUV(C, 1.0e9, bf[0], bf[1], bf[2], bf[3], bf[4], bf[5], pow(10.0,bf[6]));
     outfile.open("UVluminosity.dat");
     double MUV, Phi0, Phi1, Phi2;
-    for (int jZ = 0; jZ < Zlist.size(); jZ++) {
-        z = Zlist[jZ];
+    for (int jZ = 0; jZ < C.Zlist.size(); jZ++) {
+        z = C.Zlist[jZ];
         for (int jM = 0; jM < C.NM; jM++) {
-            M = PhiUVlist[jZ][jM][0];
-            MUV = PhiUVlist[jZ][jM][4]; 
-            Phi0 = PhiUVlist[jZ][jM][1]; // no dust + no lensing
-            Phi1 = PhiUVlist[jZ][jM][2]; // dust + no lensing
-            Phi2 = PhiUVlist[jZ][jM][3]; // dust + lensing
+            MUV = PhiUVlist[jZ][jM][0];
+            M = PhiUVlist[jZ][jM][1];
+            Phi0 = PhiUVlist[jZ][jM][2]; // no dust + no lensing
+            Phi1 = PhiUVlist[jZ][jM][3]; // dust + no lensing
+            Phi2 = PhiUVlist[jZ][jM][4]; // dust + lensing
             
-            outfile << z << "   " << M << "   " << MUV << "   " << max(1.0e-64,Phi0) << "   " << max(1.0e-64,Phi1) << "   " << max(1.0e-64,Phi2) << endl;
+            outfile << z << "   " << MUV << "   " << M << "   " << max(1.0e-64,Phi0) << "   " << max(1.0e-64,Phi1) << "   " << max(1.0e-64,Phi2) << endl;
         }
     }
     outfile.close();

@@ -8,6 +8,9 @@ public:
     int Nk, NM, Nz;
     double Mmin, Mmax, zmin, zmax;
     
+    int Nm22;
+    double m22min, m22max;
+    
     // cosmological parameters
     double OmegaM;
     double OmegaB;
@@ -23,6 +26,7 @@ public:
     double rhoc;
     double rhoM0;
     
+    double M8;
     double deltaH8;
     
     // z dependencies
@@ -96,6 +100,7 @@ private:
     vector<vector<double> > sigmalist;
     
     vector<double> zlistf();
+    vector<double> m22listf();
     
     // CDM halo consentration parameter (1601.02624)
     double cons(double M, double z);
@@ -122,32 +127,64 @@ private:
     
 public:
     
+    // list of redshifts, same as for HMF and dotM lists
     vector<double> zlist;
     vector<vector<vector<double> > > HMFlist;
     vector<vector<vector<double> > > dotMlist;
     vector<vector<vector<double> > > NFWlist;
     
-    void initialize(double m22) {
+    // list of redshifts, same as for P(lnmu,z) list
+    vector<double> Zlist;
+    vector<vector<vector<double> > > Plnmuz;
+    
+    // list of FDM masses, same as for HMF_FDM and dotM_FDM lists
+    vector<double> m22list;
+    vector<vector<vector<vector<double> > > > FDMHMFlist;
+    vector<vector<vector<vector<double> > > > FDMdotMlist;
+    
+    void initialize() {
         OmegaR = OmegaM/(1+zeq);
         OmegaL = 1.0 - OmegaM - OmegaR;
         OmegaC = OmegaM - OmegaB;
         H0 = 0.000102247*h;
         rhoc = 277.394*pow(h,2.0);
         rhoM0 = OmegaM*rhoc;
+        M8 = 4.0*PI/3.0*pow(8000.0/h,3.0)*rhoM0;
         
-        // fix deltaH to match the input sigma8
-        double M8 = 4.0*PI/3.0*pow(8000.0/h,3.0)*rhoM0;
-        deltaH8 = sigma8/sigmaf(M8, 1.0, m22);
-                        
         zlist = zlistf();
-        sigmalist = sigmalistf(m22);
-        HMFlist = HMFlistf();
-        dotMlist = dotMlistf();
+        m22list = m22listf();
         
         zdc = dclist();
         zt = tlist();
+    }
+       
+    void CDM_halos() {
+        // fix deltaH to match the input sigma8
+        deltaH8 = sigma8/sigmaf(M8, 1.0, 0.0);
+        
+        // halo mass function and halo growth rate
+        sigmalist = sigmalistf(0.0);
+        HMFlist = HMFlistf();
+        dotMlist = dotMlistf();
+
+        // NFW halo parameters
         conslist = conslistf();
         NFWlist = NFWlistf();
+    }
+    
+    void FDM_halos() {
+        for (double m22 : m22list) {
+            // fix deltaH to match the input sigma8
+            deltaH8 = sigma8/sigmaf(M8, 1.0, m22);
+                        
+            // halo mass function and halo growth rate
+            sigmalist = sigmalistf(m22);
+            HMFlist = HMFlistf();
+            dotMlist = dotMlistf();
+            
+            FDMHMFlist.push_back(HMFlist);
+            FDMdotMlist.push_back(dotMlist);
+        }
     }
     
     // luminosity distance

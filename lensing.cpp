@@ -230,7 +230,7 @@ vector<vector<double> > Plnmuf(cosmology &C, int Nx, double zs, double kappamax,
 
 
 // read or generate lensing amplification distribution
-vector<vector<vector<double> > > getPlnmu(cosmology &C, vector<double> &Zlist, double rS, int Nkappa, int Nreal, int Nbins) {
+vector<vector<vector<double> > > getPlnmu(cosmology &C, double rS, int Nkappa, int Nreal, int Nbins) {
     vector<vector<double> > Plnmu;
     vector<vector<vector<double> > > Plnmuz;
     
@@ -239,7 +239,7 @@ vector<vector<vector<double> > > getPlnmu(cosmology &C, vector<double> &Zlist, d
     ifstream infile;
     infile.open("Plnmu.dat");
     if (infile) {        
-        Zlist.clear();
+        C.Zlist.clear();
         vector<double> tmp(2,0.0);
         int jA = 0;
         double A;
@@ -252,7 +252,7 @@ vector<vector<vector<double> > > getPlnmu(cosmology &C, vector<double> &Zlist, d
                         Plnmu.clear();
                     }
                     z = A;
-                    Zlist.push_back(z);
+                    C.Zlist.push_back(z);
                 }
                 jA++;
             } else {
@@ -275,8 +275,8 @@ vector<vector<vector<double> > > getPlnmu(cosmology &C, vector<double> &Zlist, d
         
         rgen mt(time(NULL)); // random number generator
         
-        for (int jz = 0; jz < Zlist.size(); jz++) {
-            z = Zlist[jz];
+        for (int jz = 0; jz < C.Zlist.size(); jz++) {
+            z = C.Zlist[jz];
             cout << "z = " << z << endl;
             Plnmu = Plnmuf(C, Nkappa, z, 1.0, rS, Nreal, Nbins, mt);
             

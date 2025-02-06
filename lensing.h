@@ -9,5 +9,5 @@ vector<vector<double> > dNdkappa(cosmology &C, int N, double zs, double lnmumax,
 vector<vector<double> > Plnmuf(cosmology &C, int Nx, double zs, double kappamax, double rS, int Nreal, int Nbins, rgen &mt);
 
 // read or generate lensing amplification distribution
-vector<vector<vector<double> > > getPlnmu(cosmology &C, vector<double> &zlist, double rS, int Nkappa, int Nreal, int Nbins);
+vector<vector<vector<double> > > getPlnmu(cosmology &C, double rS, int Nkappa, int Nreal, int Nbins);
 
