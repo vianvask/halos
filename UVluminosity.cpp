@@ -194,7 +194,7 @@ double prior(double x, const vector<double> &bounds) {
 
 
 // Metropolis-Hastings MCMC sampler
-vector<vector<double> > mcmc_sampling(cosmology &C, vector<vector<double> > &data, vector<double> &initial, vector<double> &steps , vector<vector<double> > &priors, int Ns, rgen &mt) {
+vector<vector<double> > mcmc_sampling(cosmology &C, vector<vector<double> > &data, vector<double> &initial, vector<double> &steps , vector<vector<double> > &priors, int Ns, int Nbi, rgen &mt) {
     vector<vector<double> > chain;
     vector<double> element;
         
@@ -215,7 +215,7 @@ vector<vector<double> > mcmc_sampling(cosmology &C, vector<vector<double> > &dat
     chain.push_back(element);
     element.clear();
     
-    double logLproposed, paccept;
+    double logLproposed, paccept, acceptanceratio = 0.0;
     vector<double> proposed;
     for (int i = 0; i < Ns; i++) {
         // generate new point by modifying the current sample
@@ -236,17 +236,24 @@ vector<vector<double> > mcmc_sampling(cosmology &C, vector<vector<double> > &dat
                         
             // accept or reject the proposed sample
             if (logLproposed - logLcurrent - log(priorratio) > log(paccept)) {
+                
                 current = proposed;
                 logLcurrent = logLproposed;
                 cout << logLcurrent << endl;
                 
-                element.insert(element.end(), current.begin(), current.end());
-                element.push_back(logLcurrent);
-                chain.push_back(element);
-                element.clear();
+                if (i > Nbi) {
+                    acceptanceratio += 1.0/(1.0*(Ns-Nbi));
+                    
+                    element.insert(element.end(), current.begin(), current.end());
+                    element.push_back(logLcurrent);
+                    chain.push_back(element);
+                    element.clear();
+                }
             }
         }
     }
+    cout << "acceptance ratio = " << acceptanceratio << endl;
+    
     return chain;
 }
 

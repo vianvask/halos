@@ -7,6 +7,6 @@ vector<vector<vector<double> > > PhiUV(cosmology &C, double Mt, double Mc, doubl
 vector<vector<double> > readUVdata(vector<string> filenames);
 
 // Metropolis-Hastings MCMC sampler of the UV luminosity fit likelihood
-vector<vector<double> > mcmc_sampling(cosmology &C, vector<vector<double> > &data, vector<double> &initial, vector<double> &steps , vector<vector<double> > &priors, int Ns, rgen &mt);
+vector<vector<double> > mcmc_sampling(cosmology &C, vector<vector<double> > &data, vector<double> &initial, vector<double> &steps , vector<vector<double> > &priors, int Ns, int Nbi, rgen &mt);
 
 double loglikelihood(cosmology &C, vector<vector<double> > &data, vector<double> &params);

@@ -34,9 +34,9 @@ int main (int argc, char *argv[]) {
     C.Nz = 100;
     
     // FDM masses in units 10^-22 eV
-    C.m22min = 0.2;
-    C.m22max = 100.0;
-    C.Nm22 = 5;
+    C.m22min = 0.3;
+    C.m22max = 200.0;
+    C.Nm22 = 32;
     
     C.initialize();
     ofstream outfile;
@@ -93,14 +93,16 @@ int main (int argc, char *argv[]) {
     int Nsteps = 2000;
     // number of chains
     int Nchains = 200;
-       
+    // burn-in
+    int Nbi = 1000;
+    
     // flat priors, {M_c, epsilon, alpha, beta, gamma, z_break, log_10(m22)}, and random walk step sizes
-    vector<vector<double> > priors {{1.0e11, 10.0e11}, {0.02, 0.06}, {0.5, 1.8}, {0.02, 0.9}, {0.0, 6.0}, {8.0, 15.0}, {log10(C.m22list.front()), log10(C.m22list.back())}};
+    vector<vector<double> > priors {{3.0e11, 8.0e11}, {0.03, 0.05}, {0.6, 1.3}, {0.1, 0.6}, {0.0, 6.0}, {9.0, 14.0}, {log10(C.m22list.front()), log10(C.m22list.back())}};
     vector<double> steps(priors.size(),0.0);
     for (int j = 0; j < steps.size(); j++) {
         steps[j] = (priors[j][1]-priors[j][0])/20.0;
     }
-
+    
     // output the MCMC chains and find the best fit
     outfile.open("MCMCchains.dat");
     int jmax = 0;
@@ -117,7 +119,7 @@ int main (int argc, char *argv[]) {
         }
         
         // generate MCMC chain
-        chain = mcmc_sampling(C, data, initial, steps, priors, Nsteps, mt);
+        chain = mcmc_sampling(C, data, initial, steps, priors, Nsteps, Nbi, mt);
         
         // find best fit
         jmax = max_element(chain.begin(), chain.end(), [](const vector<double> &a, const vector<double> &b) { return a.back() < b.back(); }) - chain.begin();
@@ -125,7 +127,7 @@ int main (int argc, char *argv[]) {
             logLmax = chain[jmax].back();
             bf = chain[jmax];
         }
-
+        
         // output the MCMC chain
         for (int j = 0; j < chain.size(); j++) {
             for (int jp = 0; jp < chain[0].size(); jp++) {
@@ -136,7 +138,7 @@ int main (int argc, char *argv[]) {
     }
     outfile.close();
     
-    //vector<double> bf {5.3e11, 0.04, 1.0, 0.3, 1.4, 10.0, 0.0};
+    //vector<double> bf {5.6e11, 0.042, 0.95, 0.31, 1.1, 10.0, 0.0};
     
     // output the UV luminosity function for the best fit
     vector<vector<vector<double> > > PhiUVlist = PhiUV(C, 1.0e9, bf[0], bf[1], bf[2], bf[3], bf[4], bf[5], pow(10.0,bf[6]));
