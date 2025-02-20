@@ -29,11 +29,11 @@ vector<double> kappa(cosmology &C, double zs, double zl, double r, double M, dou
     double X, Y;
     if (rS > 0.0) {
         // average over the source projection
-        int Navg = 16;
+        int Navg = 32;
         double rSproj = rS*DlA/DsA;
         double R, theta;
         for (int j = 0; j < Navg; j++) {
-            // generate randon point inside the projection of the source in the lens plane
+            // generate random point inside the projection of the source in the lens plane
             R = rSproj*sqrt(randomreal(0.0,1.0));
             theta = randomreal(0.0,PI);
             
@@ -225,6 +225,20 @@ vector<vector<double> > Plnmuf(cosmology &C, int Nx, double zs, double kappamax,
         Plnmu[(int) round((Nbins-1)*(lnmu[j]-lnmumin)/(lnmumax-lnmumin))][1] += dP/dlnmu;
     }
     
+    // cut off the high lnmu part
+    int jmax = Nbins;
+    for (int j = 0; j < Nbins; j++) {
+        if (Plnmu[j][0] > 0.0 && Plnmu[j][1] < 3.0*dP/dlnmu) {
+            jmax = j;
+            j = Nbins;
+        }
+        if (Plnmu[j][0] > 6.0) {
+            jmax = j;
+            j = Nbins;
+        }
+    }
+    Plnmu.resize(jmax);
+    
     return Plnmu;
 }
 
@@ -281,7 +295,7 @@ vector<vector<vector<double> > > getPlnmu(cosmology &C, double rS, int Nkappa, i
             Plnmu = Plnmuf(C, Nkappa, z, 1.0, rS, Nreal, Nbins, mt);
             
             // output dP/dlnmu
-            for (int jb = 0; jb < Nbins; jb++) {
+            for (int jb = 0; jb < Plnmu.size(); jb++) {
                 outfile << z << "   " << Plnmu[jb][0] << "   " << Plnmu[jb][1] << endl;
             }
             Plnmuz.push_back(Plnmu);
