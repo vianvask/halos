@@ -87,9 +87,10 @@ private:
     
     // FDM window function
     double WF(double x) {
-        double a = 0.447;
-        double b = 5.0;
-        return 1.0/(1.0+pow(a*x,b));
+        double a = 0.43;
+        double b1 = 7.0;
+        double b2 = 1.0;
+        return 1.0-1.0/pow(1.0+pow(a*x,-b1/b2),b2);
     }
     
     // variance of the matter fluctuations

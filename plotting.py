@@ -26,9 +26,6 @@ samples[:, 0] /= 1e11
 # Scale epsilon by fB
 samples[:, 1] /= 0.1565
 
-# Remove large m22 values
-samples = samples[samples[:, 6] <= 2]
-
 # Compute the 95% lower bound on m22
 param = samples[:, 6]
 lower, upper = np.percentile(param, [5.0, 95.0])
@@ -40,7 +37,7 @@ labels = [r'$M_c/10^{11}M_\odot$', r'$\epsilon$', r'$\alpha$', r'$\beta$', r'$\g
 # Create a corner plot with shaded confidence levels in blue
 fig = corner.corner(
     samples,
-    range=[(4,7), (0.21,0.3), (0.75,1.15), (0.1,0.5), (0,3.2), (9.4,11.4), (-0.3,2)],
+    range=[(3,7), (0.23,0.31), (0.7,1.2), (0.1,0.5), (0,3.4), (9.4,11.4), (0,2)],
     labels = labels,
     title_fmt=".3f",
     show_titles = True,

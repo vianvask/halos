@@ -34,8 +34,8 @@ int main (int argc, char *argv[]) {
     C.Nz = 100;
     
     // FDM masses in units 10^-22 eV
-    C.m22min = 0.3;
-    C.m22max = 200.0;
+    C.m22min = 1.0;
+    C.m22max = 100.0;
     C.Nm22 = 32;
     
     C.initialize();
@@ -43,9 +43,25 @@ int main (int argc, char *argv[]) {
     
     cout << "Computing halo mass functions (" << C.m22list.size() << " m22 values)..." << endl;
     C.FDM_halos();
+    C.CDM_halos();
     
-    // output some halo mass functions
+    // output the CDM halo mass function
     double m22, z, M, HMF, dotM, DdotM;
+    outfile.open("HMF_CDM.dat");
+    for (int jz = 0; jz < C.Nz; jz++) {
+        z = C.zlist[jz];
+        for (int jM = 0; jM < C.NM; jM++) {
+            M = C.HMFlist[jz][jM][1];
+            HMF = C.HMFlist[jz][jM][2];
+            dotM = C.dotMlist[jz][jM][2];
+            DdotM = C.dotMlist[jz][jM][3];
+            
+            outfile << z << "   " << M << "   " << max(1.0e-99,HMF) << "   " << dotM << "   " << DdotM << endl;
+        }
+    }
+    outfile.close();
+    
+    // output the FDM halo mass functions
     outfile.open("HMF.dat");
     for (int jm = 0; jm < C.m22list.size(); jm++) {
         m22 = C.m22list[jm];
@@ -65,13 +81,10 @@ int main (int argc, char *argv[]) {
         
     cout << "Generating/reading lensing amplifications..." << endl;
     
-    // FDM does not significantly affect lensing amplifications
-    C.CDM_halos();
-    
     // number of bins in distribution of P^1(kappa)
     int Nkappa = 40;
     // number of realizations
-    int Nreal = 10000000;
+    int Nreal = 100000000;
     // number of lnmu bins
     int Nbins = 200;
     // lensing source radius in kpc
@@ -86,22 +99,24 @@ int main (int argc, char *argv[]) {
     
     cout << "Computing UV luminosity fit (" << data.size() << " data points) ..." << endl;
     
-    // random number generator
-    rgen mt(time(NULL));
-    
     // max number of steps in each chain
-    int Nsteps = 2000;
-    // number of chains
-    int Nchains = 200;
+    int Nsteps = 2400;
     // burn-in
-    int Nbi = 1000;
+    int Nbi = 1200;
+    // number of chains
+    int Nchains = 100;
     
-    // flat priors, {M_c, epsilon, alpha, beta, gamma, z_break, log_10(m22)}, and random walk step sizes
-    vector<vector<double> > priors {{3.0e11, 8.0e11}, {0.03, 0.05}, {0.6, 1.3}, {0.1, 0.6}, {0.0, 6.0}, {9.0, 14.0}, {log10(C.m22list.front()), log10(C.m22list.back())}};
+    // flat priors, {M_c, epsilon, alpha, beta, gamma, z_break, log_10(m22)}
+    vector<vector<double> > priors {{3.0e11, 7.0e11}, {0.03, 0.05}, {0.6, 1.2}, {0.1, 0.6}, {0.0, 4.0}, {9.0, 12.0}, {log10(C.m22list.front()), log10(C.m22list.back())}};
+    
+    // random walk step sizes
     vector<double> steps(priors.size(),0.0);
     for (int j = 0; j < steps.size(); j++) {
         steps[j] = (priors[j][1]-priors[j][0])/20.0;
     }
+    
+    // random number generator
+    rgen mt(time(NULL));
     
     // output the MCMC chains and find the best fit
     outfile.open("MCMCchains.dat");
@@ -118,10 +133,10 @@ int main (int argc, char *argv[]) {
             initial[jp] = randomreal(priors[jp][0],priors[jp][1]);
         }
         
-        // generate MCMC chain
+        // generate an MCMC chain
         chain = mcmc_sampling(C, data, initial, steps, priors, Nsteps, Nbi, mt);
         
-        // find best fit
+        // find the best fit
         jmax = max_element(chain.begin(), chain.end(), [](const vector<double> &a, const vector<double> &b) { return a.back() < b.back(); }) - chain.begin();
         if (chain[jmax].back() > logLmax) {
             logLmax = chain[jmax].back();
@@ -138,7 +153,7 @@ int main (int argc, char *argv[]) {
     }
     outfile.close();
     
-    //vector<double> bf {5.6e11, 0.042, 0.95, 0.31, 1.1, 10.0, 0.0};
+    //vector<double> bf {5.4e11, 0.04, 0.96, 0.30, 1.2, 10.0, log10(1.0)};
     
     // output the UV luminosity function for the best fit
     vector<vector<vector<double> > > PhiUVlist = PhiUV(C, 1.0e9, bf[0], bf[1], bf[2], bf[3], bf[4], bf[5], pow(10.0,bf[6]));
