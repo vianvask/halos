@@ -83,7 +83,7 @@ vector<vector<vector<double> > > PhiUV(cosmology &C, double Mt, double Mc, doubl
             PhiUVj = 0.0;
             dlnmu = Plnmu[1][0]-Plnmu[0][0];
             for (int jb = 0; jb < Plnmu.size(); jb++) {
-                PhiUVj += interpolaten(MUVj - AUVj + 1.08574*Plnmu[jb][0], PhiUVlist)[3]*Plnmu[jb][1]*dlnmu/exp(Plnmu[jb][0]);
+                PhiUVj += interpolaten(MUVj - AUVj + 1.086*Plnmu[jb][0], PhiUVlist)[3]*Plnmu[jb][1]*dlnmu;
             }
             
             PhiUVlensed[jZ][jM][0] = MUVj;
