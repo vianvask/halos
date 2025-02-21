@@ -8,8 +8,11 @@ public:
     int Nk, NM, Nz;
     double Mmin, Mmax, zmin, zmax;
     
-    int Nm22;
+    int Nm22 = 0;
     double m22min, m22max;
+    
+    int Nm3 = 0;
+    double m3min, m3max;
     
     // cosmological parameters
     double OmegaM;
@@ -67,8 +70,27 @@ private:
         return 66.5e-3/pow(1+zeq,1.0/4.0)*sqrt(m22);
     }
     
+    // k scale for FDM
+    double km22(double m22) {
+        return 1.0/1.61*pow(m22,-1.0/18.0)*kJ(m22);
+    }
+    
+    // k scale for WDM
+    double km3(double m3) {
+        return 1.0/72.7*pow(m3,1.11);
+    }
+    
     // FDM matter transfer function (astro-ph/0003365)
-    double TMF (double k, double m22);
+    double TMF (double k, double m22) {
+        return cos(pow(k/km22(m22),3.0))/(1+pow(k/km22(m22),8.0))*TM(k);
+    }
+    
+    // WDM matter transfer function
+    double TMW (double k, double m3) {
+        double mu = 1.12;
+        return pow(1.0+pow(k/km3(m3),2.0*mu),-5.0/mu)*TM(k);
+        
+    }
     
     // CDM matter power spectrum
     double Deltak(double k, double deltaH) {
@@ -76,8 +98,13 @@ private:
     }
     
     // FDM matter power spectrum
-    double Deltak(double k, double deltaH, double m22) {
+    double DeltakF(double k, double deltaH, double m22) {
         return sqrt(pow(306.535*k/H0,3.0+ns)*pow(deltaH*TMF(k,m22),2.0));
+    }
+    
+    // WDM matter power spectrum
+    double DeltakW(double k, double deltaH, double m3) {
+        return sqrt(pow(306.535*k/H0,3.0+ns)*pow(deltaH*TMW(k,m3),2.0));
     }
     
     // CDM window function
@@ -93,15 +120,24 @@ private:
         return 1.0-1.0/pow(1.0+pow(a*x,-b1/b2),b2);
     }
     
-    // variance of the matter fluctuations
-    double sigmaf(double M, double deltaH, double m22);
+    // WDM window function
+    double WW(double x) {
+        double a = 0.43;
+        double b1 = 7.0;
+        double b2 = 1.0;
+        return 1.0-1.0/pow(1.0+pow(a*x,-b1/b2),b2);
+    }
+    
+    // variance of the matter fluctuations, m22: FDM mass in 10^-22 eV, m3: WDM mass in keV
+    double sigmaf(double M, double deltaH, double m22, double m3);
     
     // variance of matter fluctuations, {M,sigma(M),sigma'(M)}
-    vector<vector<double> > sigmalistf(double m22);
+    vector<vector<double> > sigmalistf(double m22, double m3);
     vector<vector<double> > sigmalist;
     
     vector<double> zlistf();
     vector<double> m22listf();
+    vector<double> m3listf();
     
     // CDM halo consentration parameter (1601.02624)
     double cons(double M, double z);
@@ -143,6 +179,11 @@ public:
     vector<vector<vector<vector<double> > > > FDMHMFlist;
     vector<vector<vector<vector<double> > > > FDMdotMlist;
     
+    // list of WDM masses, same as for HMF_WDM and dotM_WDM lists
+    vector<double> m3list;
+    vector<vector<vector<vector<double> > > > WDMHMFlist;
+    vector<vector<vector<vector<double> > > > WDMdotMlist;
+    
     void initialize() {
         OmegaR = OmegaM/(1+zeq);
         OmegaL = 1.0 - OmegaM - OmegaR;
@@ -154,6 +195,7 @@ public:
         
         zlist = zlistf();
         m22list = m22listf();
+        m3list = m3listf();
         
         zdc = dclist();
         zt = tlist();
@@ -161,10 +203,10 @@ public:
        
     void CDM_halos() {
         // fix deltaH to match the input sigma8
-        deltaH8 = sigma8/sigmaf(M8, 1.0, 0.0);
+        deltaH8 = sigma8/sigmaf(M8, 1.0, 0.0, 0.0);
         
         // halo mass function and halo growth rate
-        sigmalist = sigmalistf(0.0);
+        sigmalist = sigmalistf(0.0, 0.0);
         HMFlist = HMFlistf();
         dotMlist = dotMlistf();
 
@@ -176,15 +218,30 @@ public:
     void FDM_halos() {
         for (double m22 : m22list) {
             // fix deltaH to match the input sigma8
-            deltaH8 = sigma8/sigmaf(M8, 1.0, m22);
+            deltaH8 = sigma8/sigmaf(M8, 1.0, m22, 0.0);
                         
             // halo mass function and halo growth rate
-            sigmalist = sigmalistf(m22);
+            sigmalist = sigmalistf(m22, 0.0);
             HMFlist = HMFlistf();
             dotMlist = dotMlistf();
             
             FDMHMFlist.push_back(HMFlist);
             FDMdotMlist.push_back(dotMlist);
+        }
+    }
+    
+    void WDM_halos() {
+        for (double m3 : m3list) {
+            // fix deltaH to match the input sigma8
+            deltaH8 = sigma8/sigmaf(M8, 1.0, 0.0, m3);
+                        
+            // halo mass function and halo growth rate
+            sigmalist = sigmalistf(0.0, m3);
+            HMFlist = HMFlistf();
+            dotMlist = dotMlistf();
+            
+            WDMHMFlist.push_back(HMFlist);
+            WDMdotMlist.push_back(dotMlist);
         }
     }
     

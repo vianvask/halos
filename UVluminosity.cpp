@@ -96,16 +96,24 @@ vector<vector<vector<double> > > PhiUV(cosmology &C, double Mt, double Mc, doubl
     return PhiUVlensed;
 }
 
-vector<vector<vector<double> > > PhiUV(cosmology &C, double Mt, double Mc, double epsilon, double alpha, double beta, double gamma, double zbreak, double m22) {
+vector<vector<vector<double> > > PhiUV(cosmology &C, double Mt, double Mc, double epsilon, double alpha, double beta, double gamma, double zbreak, double m) {
     
     // find index of z in the longer list of z values
-    int jm = lower_bound(C.m22list.begin(), C.m22list.end(), m22)- C.m22list.begin();
-    if (jm > 0 && C.m22list[jm]-m22 > m22-C.m22list[jm-1]) {
-        jm--;
+    if (C.m22list.size() > 0) {
+        int jm = lower_bound(C.m22list.begin(), C.m22list.end(), m)- C.m22list.begin();
+        if (jm > 0 && C.m22list[jm]-m > m-C.m22list[jm-1]) {
+            jm--;
+        }
+        C.HMFlist = C.FDMHMFlist[jm];
+        C.dotMlist = C.FDMdotMlist[jm];
+    } else {
+        int jm = lower_bound(C.m3list.begin(), C.m3list.end(), m)- C.m3list.begin();
+        if (jm > 0 && C.m3list[jm]-m > m-C.m3list[jm-1]) {
+            jm--;
+        }
+        C.HMFlist = C.WDMHMFlist[jm];
+        C.dotMlist = C.WDMdotMlist[jm];
     }
-    
-    C.HMFlist = C.FDMHMFlist[jm];
-    C.dotMlist = C.FDMdotMlist[jm];
     
     return PhiUV(C, Mt, Mc, epsilon, alpha, beta, gamma, zbreak);
 }

@@ -12,17 +12,38 @@ vector<double> cosmology::zlistf() {
     return tmp;
 }
 
-
 // generates a list of FDM masses
 vector<double> cosmology::m22listf() {
-    double dlogm22 = (log(m22max)-log(m22min))/(1.0*(Nm22-1));
-    double m22 = m22min;
-    vector<double> tmp(Nm22,0.0);
-    for (int jm = 0; jm < Nm22; jm++) {
-        tmp[jm] = m22;
-        m22 = exp(log(m22) + dlogm22);
+    if (Nm22 > 1) {
+        double dlogm22 = (log(m22max)-log(m22min))/(1.0*(Nm22-1));
+        double m22 = m22min;
+        vector<double> tmp(Nm22,0.0);
+        for (int jm = 0; jm < Nm22; jm++) {
+            tmp[jm] = m22;
+            m22 = exp(log(m22) + dlogm22);
+        }
+        return tmp;
+    } else {
+        vector<double> tmp;
+        return tmp;
     }
-    return tmp;
+}
+
+// generates a list of WDM masses
+vector<double> cosmology::m3listf() {
+    if (Nm3 > 1) {
+        double dlogm3 = (log(m3max)-log(m3min))/(1.0*(Nm3-1));
+        double m3 = m3min;
+        vector<double> tmp(Nm3,0.0);
+        for (int jm = 0; jm < Nm3; jm++) {
+            tmp[jm] = m3;
+            m3 = exp(log(m3) + dlogm3);
+        }
+        return tmp;
+    } else {
+        vector<double> tmp;
+        return tmp;
+    }
 }
 
 
@@ -74,20 +95,15 @@ double cosmology::TM (double k) {
     return OmegaB/OmegaM*TB(k) + OmegaC/OmegaM*TC(k);
 }
 
-
-// FDM matter transfer function (astro-ph/0003365)
-double cosmology::TMF (double k, double m22) {
-    double x = 1.61*pow(m22,1.0/18.0)*k/kJ(m22);
-    return cos(pow(x,3.0))/(1+pow(x,8.0))*TM(k);
-}
-
-
-// variance of the matter fluctuations
-double cosmology::sigmaf(double M, double deltaH, double m22) {
+// variance of the matter fluctuations, m22: FDM mass in 10^-22 eV, m3: WDM mass in keV
+double cosmology::sigmaf(double M, double deltaH, double m22, double m3) {
     double RM = pow(3.0*M/(4.0*PI*rhoM0),1.0/3.0);
     double kmax = 1000.0/RM;
     if (m22 > 0.0) {
-        kmax = min(kmax, 2.0*kJ(m22));
+        kmax = min(kmax, 2.0*km22(m22));
+    }
+    if (m3 > 0.0) {
+        kmax = min(kmax, 2.0*km3(m3));
     }
     double kmin = 1.0e-6*kmax;
     double dlogk = (log(kmax)-log(kmin))/(1.0*(Nk-1));
@@ -97,29 +113,33 @@ double cosmology::sigmaf(double M, double deltaH, double m22) {
     for (int jk = 0; jk < Nk; jk++) {
         k1 = k2;
         k2 = exp(log(k2)+dlogk);
-        if (m22 == 0.0) {
+        if (m22 == 0.0 && m3 == 0.0) {
             sigma2 += exp((log(pow(W(k2*RM)*Deltak(k2,deltaH),2.0)/k2) + log(pow(W(k1*RM)*Deltak(k1,deltaH),2.0)/k1))/2.0)*(k2-k1);
-        } else {
-            sigma2 += exp((log(pow(WF(k2*RM)*Deltak(k2,deltaH,m22),2.0)/k2) + log(pow(WF(k1*RM)*Deltak(k1,deltaH,m22),2.0)/k1))/2.0)*(k2-k1);
+        }
+        if (m22 > 0.0){
+            sigma2 += exp((log(pow(WF(k2*RM)*DeltakF(k2,deltaH,m22),2.0)/k2) + log(pow(WF(k1*RM)*DeltakF(k1,deltaH,m22),2.0)/k1))/2.0)*(k2-k1);
+        }
+        if (m3 > 0.0){
+            sigma2 += exp((log(pow(WW(k2*RM)*DeltakW(k2,deltaH,m3),2.0)/k2) + log(pow(WW(k1*RM)*DeltakW(k1,deltaH,m3),2.0)/k1))/2.0)*(k2-k1);
         }
     }
     return sqrt(sigma2);
 }
 
 // variance of matter fluctuations, {M, sigma, dsigma/dM}
-vector<vector<double> > cosmology::sigmalistf(double m22) {
+vector<vector<double> > cosmology::sigmalistf(double m22, double m3) {
     int Nextra = (int) ceil((NM-1)*log(3.0)/log(Mmax/Mmin));
     vector<vector<double> > Ms(NM+Nextra, vector<double> (3,0.0));
     
     double dlogM = (log(Mmax)-log(Mmin))/(1.0*(NM-1));
     double M = exp(log(Mmin) - dlogM);
     
-    double sigma = sigmaf(M, deltaH8, m22);
+    double sigma = sigmaf(M, deltaH8, m22, m3);
     double sigman, Mn;
     
     for (int jM = 0; jM < NM+Nextra; jM++) {
         Mn = exp(log(M) + dlogM);
-        sigman = sigmaf(Mn, deltaH8, m22);
+        sigman = sigmaf(Mn, deltaH8, m22, m3);
         
         Ms[jM][0] = Mn;
         Ms[jM][1] = sigman;

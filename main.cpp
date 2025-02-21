@@ -33,20 +33,26 @@ int main (int argc, char *argv[]) {
     C.zmax = 20.01;
     C.Nz = 100;
     
-    // FDM masses in units 10^-22 eV
+    // FDM masses in 10^-22 eV
     C.m22min = 1.0;
     C.m22max = 100.0;
-    C.Nm22 = 32;
+    C.Nm22 = 0;
+    
+    // WDM masses in keV
+    C.m3min = 1.0;
+    C.m3max = 100.0;
+    C.Nm3 = 32;
     
     C.initialize();
     ofstream outfile;
     
-    cout << "Computing halo mass functions (" << C.m22list.size() << " m22 values)..." << endl;
+    cout << "Computing halo mass functions (" << C.m22list.size() << " m22 values and " << C.m3list.size() << " m3 values)..." << endl;
     C.FDM_halos();
+    C.WDM_halos();
     C.CDM_halos();
     
     // output the CDM halo mass function
-    double m22, z, M, HMF, dotM, DdotM;
+    double m22, m3, z, M, HMF, dotM, DdotM;
     outfile.open("HMF_CDM.dat");
     for (int jz = 0; jz < C.Nz; jz++) {
         z = C.zlist[jz];
@@ -62,22 +68,44 @@ int main (int argc, char *argv[]) {
     outfile.close();
     
     // output the FDM halo mass functions
-    outfile.open("HMF.dat");
-    for (int jm = 0; jm < C.m22list.size(); jm++) {
-        m22 = C.m22list[jm];
-        for (int jz = 0; jz < C.Nz; jz++) {
-            z = C.zlist[jz];
-            for (int jM = 0; jM < C.NM; jM++) {
-                M = C.FDMHMFlist[jm][jz][jM][1];
-                HMF = C.FDMHMFlist[jm][jz][jM][2];
-                dotM = C.FDMdotMlist[jm][jz][jM][2];
-                DdotM = C.FDMdotMlist[jm][jz][jM][3];
-                
-                outfile << m22 << "   " << z << "   " << M << "   " << max(1.0e-99,HMF) << "   " << dotM << "   " << DdotM << endl;
+    if (C.m22list.size() > 0) {
+        outfile.open("HMF_FDM.dat");
+        for (int jm = 0; jm < C.m22list.size(); jm++) {
+            m22 = C.m22list[jm];
+            for (int jz = 0; jz < C.Nz; jz++) {
+                z = C.zlist[jz];
+                for (int jM = 0; jM < C.NM; jM++) {
+                    M = C.FDMHMFlist[jm][jz][jM][1];
+                    HMF = C.FDMHMFlist[jm][jz][jM][2];
+                    dotM = C.FDMdotMlist[jm][jz][jM][2];
+                    DdotM = C.FDMdotMlist[jm][jz][jM][3];
+                    
+                    outfile << m22 << "   " << z << "   " << M << "   " << max(1.0e-99,HMF) << "   " << dotM << "   " << DdotM << endl;
+                }
             }
         }
+        outfile.close();
     }
-    outfile.close();
+    
+    // output the WDM halo mass functions
+    if (C.m3list.size() > 0) {
+        outfile.open("HMF_WDM.dat");
+        for (int jm = 0; jm < C.m3list.size(); jm++) {
+            m3 = C.m3list[jm];
+            for (int jz = 0; jz < C.Nz; jz++) {
+                z = C.zlist[jz];
+                for (int jM = 0; jM < C.NM; jM++) {
+                    M = C.WDMHMFlist[jm][jz][jM][1];
+                    HMF = C.WDMHMFlist[jm][jz][jM][2];
+                    dotM = C.WDMdotMlist[jm][jz][jM][2];
+                    DdotM = C.WDMdotMlist[jm][jz][jM][3];
+                    
+                    outfile << m3 << "   " << z << "   " << M << "   " << max(1.0e-99,HMF) << "   " << dotM << "   " << DdotM << endl;
+                }
+            }
+        }
+        outfile.close();
+    }
         
     cout << "Generating/reading lensing amplifications..." << endl;
     
@@ -106,8 +134,13 @@ int main (int argc, char *argv[]) {
     // number of chains
     int Nchains = 100;
     
-    // flat priors, {M_c, epsilon, alpha, beta, gamma, z_break, log_10(m22)}
-    vector<vector<double> > priors {{3.0e11, 7.0e11}, {0.03, 0.05}, {0.6, 1.2}, {0.1, 0.6}, {0.0, 4.0}, {9.0, 12.0}, {log10(C.m22list.front()), log10(C.m22list.back())}};
+    // flat priors, {M_c, epsilon, alpha, beta, gamma, z_break, log_10(m)}
+    vector<vector<double> > priors;
+    if (C.m22list.size() > 0) {
+        priors = {{3.0e11, 7.0e11}, {0.03, 0.05}, {0.6, 1.2}, {0.1, 0.6}, {0.0, 4.0}, {9.0, 12.0}, {log10(C.m22list.front()), log10(C.m22list.back())}};
+    } else {
+        priors = {{3.0e11, 7.0e11}, {0.03, 0.05}, {0.6, 1.2}, {0.1, 0.6}, {0.0, 4.0}, {9.0, 12.0}, {log10(C.m3list.front()), log10(C.m3list.back())}};
+    }
     
     // random walk step sizes
     vector<double> steps(priors.size(),0.0);
@@ -153,10 +186,11 @@ int main (int argc, char *argv[]) {
     }
     outfile.close();
     
-    //vector<double> bf {5.4e11, 0.04, 0.96, 0.30, 1.2, 10.0, log10(1.0)};
+    //vector<double> bf {4.9e11, 0.042, 0.94, 0.31, 1.4, 10.0, 0.0};
     
     // output the UV luminosity function for the best fit
     vector<vector<vector<double> > > PhiUVlist = PhiUV(C, 1.0e9, bf[0], bf[1], bf[2], bf[3], bf[4], bf[5], pow(10.0,bf[6]));
+    //vector<vector<vector<double> > > PhiUVlist = PhiUV(C, 1.0e9, bf[0], bf[1], bf[2], bf[3], bf[4], bf[5]);
     outfile.open("UVluminosity.dat");
     double MUV, Phi0, Phi1, Phi2;
     for (int jZ = 0; jZ < C.Zlist.size(); jZ++) {

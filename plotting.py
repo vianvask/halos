@@ -7,7 +7,7 @@ rcParams["font.size"] = 13
 rcParams["text.usetex"] = True
 
 # Load MCMC samples (each row is one sample, each column is a parameter)
-samples = np.loadtxt("MCMCchains.dat")
+samples = np.loadtxt("MCMCchainsF.dat")
 
 # Find the index of the sample with the maximum likelihood
 best_fit_index = np.argmax(samples[:, -1])
@@ -19,6 +19,9 @@ best_fit_point = samples[best_fit_index]
 # Print the best fit point
 print("Best fit point:")
 print(best_fit_point)
+
+# Cut off large m22 values
+samples = samples[samples[:, 6] <= 0.7]
 
 # Scale Mc by 10^11
 samples[:, 0] /= 1e11
@@ -37,7 +40,7 @@ labels = [r'$M_c/10^{11}M_\odot$', r'$\epsilon$', r'$\alpha$', r'$\beta$', r'$\g
 # Create a corner plot with shaded confidence levels in blue
 fig = corner.corner(
     samples,
-    range=[(3,7), (0.23,0.31), (0.7,1.2), (0.1,0.5), (0,3.4), (9.4,11.4), (0,2)],
+    range=[(3,7), (0.23,0.31), (0.7,1.2), (0.1,0.5), (0,3.4), (9.4,11.4), (0,0.7)],
     labels = labels,
     title_fmt=".3f",
     show_titles = True,
@@ -58,5 +61,5 @@ axes = np.array(fig.axes).reshape((7, 7))  # Reshape based on number of paramete
 axes[6, 6].set_title(rf"$\log_{{10}} m_{{22}} > {lower:.3f} \,(95\%)$")
 
 # Save the plot as a PDF
-output_filename = "mcmc_corner_plot.pdf"
+output_filename = "FDM_corner.pdf"
 fig.savefig(output_filename, format="pdf", bbox_inches="tight")
