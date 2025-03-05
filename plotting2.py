@@ -21,7 +21,7 @@ print("Best fit point:")
 print(best_fit_point)
 
 # Cut off large m3 values
-samples = samples[samples[:, 6] <= 0.7]
+samples = samples[samples[:, 6] <= 1.2]
 
 # Scale Mc by 10^11
 samples[:, 0] /= 1e11
@@ -40,7 +40,7 @@ labels = [r'$M_c/10^{11}M_\odot$', r'$\epsilon$', r'$\alpha$', r'$\beta$', r'$\g
 # Create a corner plot with shaded confidence levels in blue
 fig = corner.corner(
     samples,
-    range=[(3,7), (0.23,0.31), (0.7,1.2), (0.1,0.5), (0,3.4), (9.4,11.4), (0,0.7)],
+    range = [(4,7.2), (0.2,0.25), (0.7,1.2), (0.1,0.6), (0,3), (9.6,11), (0,1.2)],
     labels = labels,
     title_fmt=".3f",
     show_titles = True,
@@ -58,7 +58,7 @@ fig = corner.corner(
 axes = np.array(fig.axes).reshape((7, 7))  # Reshape based on number of parameters
 
 # Change the title of m22
-axes[6, 6].set_title(rf"$\log_{{10}} m_{{22}} > {lower:.3f} \,(95\%)$")
+axes[6, 6].set_title(rf"$\log_{{10}} m_{{3}} > {lower:.3f} \,(95\%)$")
 
 # Save the plot as a PDF
 output_filename = "WDM_corner.pdf"

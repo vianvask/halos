@@ -46,7 +46,6 @@ vector<double> cosmology::m3listf() {
     }
 }
 
-
 // CDM matter transfer function (astro-ph/9709112)
 double cosmology::TM (double k) {
     double keq = 0.00326227*Hz(zeq)/(1.0+zeq);
@@ -95,36 +94,105 @@ double cosmology::TM (double k) {
     return OmegaB/OmegaM*TB(k) + OmegaC/OmegaM*TC(k);
 }
 
-// variance of the matter fluctuations, m22: FDM mass in 10^-22 eV, m3: WDM mass in keV
-double cosmology::sigmaf(double M, double deltaH, double m22, double m3) {
+// variance of the CDM matter fluctuations
+vector<double> cosmology::sigmaC(double M, double deltaH) {
     double RM = pow(3.0*M/(4.0*PI*rhoM0),1.0/3.0);
+    double DRM = RM/(3.0*M);
+    
     double kmax = 1000.0/RM;
-    if (m22 > 0.0) {
-        kmax = min(kmax, 2.0*km22(m22));
-    }
-    if (m3 > 0.0) {
-        kmax = min(kmax, 2.0*km3(m3));
-    }
     double kmin = 1.0e-6*kmax;
     double dlogk = (log(kmax)-log(kmin))/(1.0*(Nk-1));
+    
+    double sigma2 = 0.0, dsigma2 = 0.0;
+    double k1, k2 = kmin;
+    for (int jk = 0; jk < Nk; jk++) {
+        k1 = k2;
+        k2 = exp(log(k2)+dlogk);
+        sigma2 += (k2-k1)*(pow(W(k1*RM)*Deltak(k1,deltaH),2.0)/k1 + pow(W(k2*RM)*Deltak(k2,deltaH),2.0)/k2)/2.0;
+        dsigma2 += (k2-k1)*(2.0*k2*DRM*DW(k2*RM)*W(k2*RM)*pow(Deltak(k2,deltaH),2.0)/k2 + 2.0*k1*DRM*DW(k1*RM)*W(k1*RM)*pow(Deltak(k1,deltaH),2.0)/k1)/2.0;
+    }
+    return {sqrt(sigma2), dsigma2/(2.0*sqrt(sigma2))};
+}
+
+// variance of the FDM matter fluctuations
+vector<double> cosmology::sigmaF(double M, double deltaH, double m22) {
+    double RM = pow(3.0*M/(4.0*PI*rhoM0),1.0/3.0);
+    double DRM = RM/(3.0*M);
+    
+    double kmax = min(1000.0/RM, 10.0*km22(m22));
+    double kmin = 1.0e-6*kmax;
+    double dlogk = (log(kmax)-log(kmin))/(1.0*(Nk-1));
+    
+    double c = 1.0/0.43;
+    double b = 7.0;
+    function<double(double)> WF = [&](double x) {
+        return Ws(x,c,b);
+    };
+    function<double(double)> DWF = [&](double x) {
+        return DWs(x,c,b);
+    };
+    
+    double sigma2 = 0.0, dsigma2 = 0.0;
+    double k1, k2 = kmin;
+    for (int jk = 0; jk < Nk; jk++) {
+        k1 = k2;
+        k2 = exp(log(k2)+dlogk);
+        sigma2 += (k2-k1)*(pow(WF(k1*RM)*DeltakF(k1,deltaH,m22),2.0)/k1 + pow(WF(k2*RM)*DeltakF(k2,deltaH,m22),2.0)/k2)/2.0;
+        dsigma2 += (k2-k1)*(2.0*k2*DRM*DWF(k2*RM)*WF(k2*RM)*pow(DeltakF(k2,deltaH,m22),2.0)/k2 + 2.0*k1*DRM*DWF(k1*RM)*WF(k1*RM)*pow(DeltakF(k1,deltaH,m22),2.0)/k1)/2.0;
+    }
+    return {sqrt(sigma2), dsigma2/(2.0*sqrt(sigma2))};
+}
+
+// variance of the WDM matter fluctuations
+vector<double> cosmology::sigmaW(double M, double deltaH, double m3) {
+    double RM = pow(3.0*M/(4.0*PI*rhoM0),1.0/3.0);
+    double DRM = RM/(3.0*M);
+    
+    double kmax = min(1000.0/RM, 10.0*km3(m3));
+    double kmin = 1.0e-6*kmax;
+    double dlogk = (log(kmax)-log(kmin))/(1.0*(Nk-1));
+    
+    double c = 1.0/0.43;
+    double b = 7.0;
+    function<double(double)> WW = [&](double x) {
+        return Ws(x,c,b);
+    };
+    function<double(double)> DWW = [&](double x) {
+        return DWs(x,c,b);
+    };
+    
+    double sigma2 = 0.0, dsigma2 = 0.0;
+    double k1, k2 = kmin;
+    for (int jk = 0; jk < Nk; jk++) {
+        k1 = k2;
+        k2 = exp(log(k2)+dlogk);
+        sigma2 += (k2-k1)*(pow(WW(k1*RM)*DeltakW(k1,deltaH,m3),2.0)/k1 + pow(WW(k2*RM)*DeltakW(k2,deltaH,m3),2.0)/k2)/2.0;
+        dsigma2 += (k2-k1)*(2.0*k2*DRM*DWW(k2*RM)*WW(k2*RM)*pow(DeltakW(k2,deltaH,m3),2.0)/k2 + 2.0*k1*DRM*DWW(k1*RM)*WW(k1*RM)*pow(DeltakW(k1,deltaH,m3),2.0)/k1)/2.0;
+    }
+    return {sqrt(sigma2), dsigma2/(2.0*sqrt(sigma2))};
+}
+
+/*
+// variance of the WDM matter fluctuations, using sharp-k window function
+vector<double> cosmology::sigmaW(double M, double deltaH, double m3) {
+    double ct = 2.5; // see 1412.2133
+    double RM = pow(3.0*M/(4.0*PI*rhoM0),1.0/3.0)/ct;
+    double kmax = min(1.0/RM, 2.0*km3(m3));
+    double kmin = 1.0e-6*kmax;
+    double dlogk = (log(kmax)-log(kmin))/(1.0*(Nk-1));
+    
+    double dsigma2 = -pow(DeltakW(1.0/RM,deltaH,m3),2.0)/(3.0*M);
     
     double sigma2 = 0.0;
     double k1, k2 = kmin;
     for (int jk = 0; jk < Nk; jk++) {
         k1 = k2;
         k2 = exp(log(k2)+dlogk);
-        if (m22 == 0.0 && m3 == 0.0) {
-            sigma2 += exp((log(pow(W(k2*RM)*Deltak(k2,deltaH),2.0)/k2) + log(pow(W(k1*RM)*Deltak(k1,deltaH),2.0)/k1))/2.0)*(k2-k1);
-        }
-        if (m22 > 0.0){
-            sigma2 += exp((log(pow(WF(k2*RM)*DeltakF(k2,deltaH,m22),2.0)/k2) + log(pow(WF(k1*RM)*DeltakF(k1,deltaH,m22),2.0)/k1))/2.0)*(k2-k1);
-        }
-        if (m3 > 0.0){
-            sigma2 += exp((log(pow(WW(k2*RM)*DeltakW(k2,deltaH,m3),2.0)/k2) + log(pow(WW(k1*RM)*DeltakW(k1,deltaH,m3),2.0)/k1))/2.0)*(k2-k1);
-        }
+        sigma2 += (k2-k1)*(pow(DeltakW(k2,deltaH,m3),2.0)/k2 + pow(DeltakW(k1,deltaH,m3),2.0)/k1)/2.0;
     }
-    return sqrt(sigma2);
+    return {sqrt(sigma2), dsigma2/(2.0*sqrt(sigma2))};
 }
+ */
 
 // variance of matter fluctuations, {M, sigma, dsigma/dM}
 vector<vector<double> > cosmology::sigmalistf(double m22, double m3) {
@@ -133,49 +201,123 @@ vector<vector<double> > cosmology::sigmalistf(double m22, double m3) {
     
     double dlogM = (log(Mmax)-log(Mmin))/(1.0*(NM-1));
     double M = exp(log(Mmin) - dlogM);
-    
-    double sigma = sigmaf(M, deltaH8, m22, m3);
-    double sigman, Mn;
-    
-    for (int jM = 0; jM < NM+Nextra; jM++) {
-        Mn = exp(log(M) + dlogM);
-        sigman = sigmaf(Mn, deltaH8, m22, m3);
         
-        Ms[jM][0] = Mn;
-        Ms[jM][1] = sigman;
-        Ms[jM][2] = (sigman-sigma)/(Mn-M);
-
-        M = Mn;
-        sigma = sigman;
+    vector<double> sigma;
+    for (int jM = 0; jM < NM+Nextra; jM++) {
+        M = exp(log(M) + dlogM);
+        if (m22 == 0.0 && m3 == 0.0) {
+            sigma = sigmaC(M, deltaH8);
+        }
+        if (m22 > 0.0) {
+            sigma = sigmaF(M, deltaH8, m22);
+        }
+        if (m3 > 0.0) {
+            sigma = sigmaW(M, deltaH8, m3);
+        }
+        Ms[jM][0] = M;
+        Ms[jM][1] = sigma[0];
+        Ms[jM][2] = sigma[1];
     }
     return Ms;
 }
 
 
-// Seth-Tormen HMF, {z,M,dn/dlnM}
+// HMF, {z,M,dn/dlnM}
 vector<vector<vector<double> > > cosmology::HMFlistf() {
-    function<double(double)> nuf = [&](double nu) {
+    function<double(double)> nuf = [&](double nu2) {
         double p = 0.3;
-        double q = 0.75;
+        double q = 0.707;
         double A = 1.0/(1+(pow(2.0,-p)*tgammaf(0.5-p)/sqrt(PI)));
-        return A*(1+pow(q*nu,-p))*sqrt(q*nu/(2.0*PI))*exp(-q*nu/2.0);
+        return A*(1+pow(q*nu2,-p))*sqrt(q*nu2/(2.0*PI))*exp(-q*nu2/2.0);
     };
-        
+    
     double dlogz = (log(zmax)-log(zmin))/(1.0*(Nz-1));
     vector<vector<vector<double> > > dndlnM(Nz, vector<vector<double> > (NM, vector<double> (3,0.0)));
-    double z, M;
+    double z, M, sigma, dsigma;
     for (int jz = 0; jz < Nz; jz++) {
         z = zlist[jz];
         for (int jM = 0; jM < NM; jM++) {
             M = sigmalist[jM][0];
+            sigma = sigmalist[jM][1];
+            dsigma = sigmalist[jM][2];
             
             dndlnM[jz][jM][0] = z;
             dndlnM[jz][jM][1] = M;
-            dndlnM[jz][jM][2] = -rhoM0*nuf(pow(deltac(z)/sigmalist[jM][1],2.0))*2.0*sigmalist[jM][2]/sigmalist[jM][1];
+            dndlnM[jz][jM][2] = -rhoM0*nuf(pow(deltac(z)/sigma,2.0))*2.0*dsigma/sigma;
+        }
+    }
+    return dndlnM;
+}
+
+// the probability that the halo whose mass at z' is M' ends up being a part of a halo in the mass range (M,M+dM) at z<z':
+double cosmology::dPpdM(vector<double> &sigma, double z, vector<double> &sigmap, double zp, double Deltasigma2) {
+    //double Deltasigma2 = pow(sigmap[1],2.0) - pow(sigma[1],2.0);
+    long double pFC = (deltac(zp)-deltac(z))/sqrt(2.0*PI*pow(Deltasigma2,3.0))*exp(-pow(deltac(zp)-deltac(z),2.0)/(2.0*Deltasigma2));
+    return pFC*pow(sigmap[1]/sigma[1],3.0)*deltac(z)/deltac(zp)*exp(pow(deltac(zp),2.0)/(2.0*pow(sigmap[1],2.0)) - pow(deltac(z),2.0)/(2.0*pow(sigma[1],2.0)))*abs(sigma[2]);
+}
+
+double cosmology::DeltaM(vector<double> &sigmap, double z, double dz) {
+    double Mp = sigmap[0];
+    
+    // list of ratios at which the integrands are evaluated, M = (1+f)*M'
+    vector<double> fM(71, 0.0);
+    double logdf = 0.1;
+    for (int jf = 0; jf < fM.size(); jf++) {
+        fM[fM.size() - 1 - jf] = pow(10.0, -jf*logdf);
+    }
+    
+    // integral over M
+    vector<double> sigmaj = sigmap;
+    double M, dM, dPdMj, dPdMjm1 = 0.0, num = 0.0, den = 0.0, Deltasigma2 = 0.0;
+    for (int jM = 1; jM < fM.size(); jM++) {
+        M = (1.0+fM[jM])*Mp;
+        dM = M - (1.0+fM[jM-1])*Mp;
+        
+        sigmaj = interpolaten(M, sigmalist);
+        Deltasigma2 += -2.0*sigmaj[1]*sigmaj[2]*dM; // sigmap^2 - sigma^2
+        dPdMj = dPpdM(sigmaj, z, sigmap, z+dz, Deltasigma2);
+        
+        num += M*(dPdMj + dPdMjm1)*dM/2.0;
+        den += (dPdMj + dPdMjm1)*dM/2.0;
+        
+        dPdMjm1 = dPdMj;
+    }
+    if (den > 0.0) {
+        return num/den - Mp;
+    } else {
+        return 1.0e-99;
+    }
+}
+
+
+// growth rate of the halo through mergers with smaller halos, {z, M, dM/dt}
+vector<vector<vector<double> > > cosmology::dotMlistf() {
+    double dz = 0.01; // z step over which DeltaM is computed
+    
+    double dlogz = (log(zmax)-log(zmin))/(1.0*(Nz-1));
+    vector<vector<vector<double> > > dMdt(Nz, vector<vector<double> > (NM, vector<double> (4,0.0)));
+    
+    double z, Mj, Mjp1, dMdtj, dMdtjp1;
+    for (int jz = 0; jz < Nz; jz++) {
+        z = zlist[jz];
+        Mj = sigmalist[0][0];
+        dMdtj = (1+z)*Hz(z)*DeltaM(sigmalist[0], z, dz)/dz;
+        
+        for (int jM = 0; jM < NM; jM++) {
+            Mjp1 = sigmalist[jM+1][0];
+            dMdtjp1 = (1+z)*Hz(z)*DeltaM(sigmalist[jM+1], z, dz)/dz;
+            
+            dMdt[jz][jM][0] = z;
+            dMdt[jz][jM][1] = Mj;
+            dMdt[jz][jM][2] = dMdtj;
+            dMdt[jz][jM][3] = (dMdtjp1 - dMdtj)/(Mjp1 - Mj);
+            
+            Mj = Mjp1;
+            dMdtj = dMdtjp1;
         }
     }
     
-    return dndlnM;
+    return dMdt;
 }
 
 
@@ -253,69 +395,6 @@ vector<vector<vector<double> > > cosmology::NFWlistf() {
 }
 
 
-// the probability that the halo whose mass at z' is M' ends up being a part of a halo in the mass range (M,M+dM) at z<z':
-double cosmology::dPpdM(vector<double> &sigma, double z, vector<double> &sigmap, double zp) {
-    return 2.0*sigma[1]*abs(sigma[2])*pow(sigmap[1]/sigma[1],3.0)*(deltac(zp)-deltac(z))*deltac(z)/deltac(zp)/sqrt(2.0*PI*pow(pow(sigmap[1],2.0)-pow(sigma[1],2.0),3.0))*exp(-pow(pow(sigmap[1],2.0)*deltac(z) - pow(sigma[1],2.0)*deltac(zp),2.0)/(2.0*pow(sigma[1]*sigmap[1],2.0)*(pow(sigmap[1],2.0)-pow(sigma[1],2.0))));
-}
-
-double cosmology::DeltaM(vector<double> &sigmap, double z, double dz) {
-    double Mp = sigmap[0];
-    
-    // list of ratios at which the integrands are evaluated, M = (1+f)*M'
-    vector<double> fM(71, 0.0);
-    double logdf = 0.1;
-    for (int jf = 0; jf < fM.size(); jf++) {
-        fM[fM.size() - 1 - jf] = pow(10.0, -jf*logdf);
-    }
-    
-    // integrals over M
-    vector<double> sigmaj;
-    double M, dM, dPdMj, dPdMjm1 = 0.0, num = 0.0, den = 0.0;
-    for (int jM = 1; jM < fM.size(); jM++) {
-        M = (1.0+fM[jM])*Mp;
-        sigmaj = interpolaten(M, sigmalist);
-        dPdMj = dPpdM(sigmaj, z, sigmap, z+dz);
-        
-        dM = M - (1.0+fM[jM-1])*Mp;
-        num += M*(dPdMj + dPdMjm1)*dM/2.0;
-        den += (dPdMj + dPdMjm1)*dM/2.0;
-        
-        dPdMjm1 = dPdMj;
-    }
-    return num/den - Mp;
-}
-
-
-// growth rate of the halo through mergers with smaller halos, {z,M,dM/dt}
-vector<vector<vector<double> > > cosmology::dotMlistf() {
-    double dz = 0.01; // z step over which DeltaM is computed
-    
-    double dlogz = (log(zmax)-log(zmin))/(1.0*(Nz-1));
-    vector<vector<vector<double> > > dMdt(Nz, vector<vector<double> > (NM, vector<double> (4,0.0)));
-    
-    double z, Mj, Mjp1, dMdtj, dMdtjp1;
-    for (int jz = 0; jz < Nz; jz++) {
-        z = zlist[jz];
-        Mj = sigmalist[0][0];
-        dMdtj = (1+z)*Hz(z)*DeltaM(sigmalist[0], z, dz)/dz;
-        
-        for (int jM = 0; jM < NM; jM++) {
-            Mjp1 = sigmalist[jM+1][0];
-            dMdtjp1 = (1+z)*Hz(z)*DeltaM(sigmalist[jM+1], z, dz)/dz;
-            
-            dMdt[jz][jM][0] = z;
-            dMdt[jz][jM][1] = Mj;
-            dMdt[jz][jM][2] = dMdtj;
-            dMdt[jz][jM][3] = (dMdtjp1 - dMdtj)/(Mjp1 - Mj);
-            
-            Mj = Mjp1;
-            dMdtj = dMdtjp1;
-        }
-    }
-    
-    return dMdt;
-}
-
 
 // comoving distance, {z,d_c}
 vector<vector<double> > cosmology::dclist() {
@@ -368,5 +447,4 @@ vector<vector<double> > cosmology::tlist() {
     
     return tlist;
 }
-
 
