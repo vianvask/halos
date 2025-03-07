@@ -201,7 +201,7 @@ double prior(double x, const vector<double> &bounds) {
 }
 
 
-// Metropolis-Hastings MCMC sampler
+// Metropolis-Hastings MCMC sampler of the UV luminosity fit likelihood
 vector<vector<double> > mcmc_sampling(cosmology &C, vector<vector<double> > &data, vector<double> &initial, vector<double> &steps , vector<vector<double> > &priors, int Ns, int Nbi, rgen &mt) {
     vector<vector<double> > chain;
     vector<double> element;
@@ -263,6 +263,55 @@ vector<vector<double> > mcmc_sampling(cosmology &C, vector<vector<double> > &dat
     cout << "acceptance ratio = " << acceptanceratio << endl;
     
     return chain;
+}
+
+
+vector<double> UFfit(cosmology &C, vector<vector<double> > &priors, vector<double> &steps, int Nsteps, int Nbi, int Nchains) {
+    // random number generator
+    rgen mt(time(NULL));
+    
+    // read UV luminosity data files, {MUV, Phi, +sigmaPhi, -sigmaPhi}
+    vector<string> datafiles {"UVLF_2102.07775.txt", "UVLF_2108.01090.txt", "UVLF_2403.03171.txt"};
+    vector<vector<double> > data = readUVdata(datafiles);
+    
+    // output the MCMC chains and find the best fit
+    ofstream outfile;
+    outfile.open("MCMCchains.dat");
+    int jmax = 0;
+    double logLmax = 0.0;
+    vector<double> initial(priors.size(),0.0);
+    vector<double> bf = initial;
+    vector<vector<double> > chain;
+    for (int j = 0; j < Nchains; j++) {
+        cout << j << endl;
+        
+        // generate initial point inside the prior ranges
+        for (int jp = 0; jp <  initial.size(); jp++) {
+            initial[jp] = randomreal(priors[jp][0],priors[jp][1]);
+        }
+        
+        // generate an MCMC chain
+        chain = mcmc_sampling(C, data, initial, steps, priors, Nsteps, Nbi, mt);
+        
+        // find the best fit
+        jmax = max_element(chain.begin(), chain.end(), [](const vector<double> &a, const vector<double> &b) { return a.back() < b.back(); }) - chain.begin();
+        if (chain[jmax].back() > logLmax) {
+            logLmax = chain[jmax].back();
+            bf = chain[jmax];
+        }
+        
+        // output the MCMC chain
+        for (int j = 0; j < chain.size(); j++) {
+            for (int jp = 0; jp < chain[0].size(); jp++) {
+                outfile << chain[j][jp] << "   ";
+            }
+            outfile << endl;
+        }
+    }
+    outfile.close();
+    
+    // return the best fit point
+    return bf;
 }
 
 
