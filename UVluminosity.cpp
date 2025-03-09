@@ -216,7 +216,6 @@ vector<vector<double> > mcmc_sampling(cosmology &C, vector<vector<double> > &dat
     double priorratio = 1.0;
     
     double logLcurrent = loglikelihood(C, data, current);
-    cout << logLcurrent << endl;
     
     element.insert(element.end(), current.begin(), current.end());
     element.push_back(logLcurrent);
@@ -247,7 +246,6 @@ vector<vector<double> > mcmc_sampling(cosmology &C, vector<vector<double> > &dat
                 
                 current = proposed;
                 logLcurrent = logLproposed;
-                cout << logLcurrent << endl;
                 
                 if (i > Nbi) {
                     acceptanceratio += 1.0/(1.0*(Ns-Nbi));

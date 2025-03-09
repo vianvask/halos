@@ -170,9 +170,9 @@ int main (int argc, char *argv[]) {
         // flat priors, {M_c, epsilon, alpha, beta, gamma, z_break, log_10(m)}
         vector<vector<double> > priors;
         if (C.m22list.size() > 0) {
-            priors = {{4.0e11, 7.0e11}, {0.03, 0.04}, {0.7, 1.1}, {0.1, 0.5}, {0.0, 3.0}, {9.0, 11.0}, {log10(C.m22list.front()), log10(C.m22list.back())}};
+            priors = {{4.6e11, 8.6e11}, {0.0096, 0.0118}, {0.75, 1.2}, {0.1, 0.5}, {0.0, 3.0}, {9.5, 11.0}, {log10(C.m22list.front()), log10(C.m22list.back())}};
         } else {
-            priors = {{4.0e11, 7.0e11}, {0.03, 0.04}, {0.7, 1.1}, {0.1, 0.5}, {0.0, 3.0}, {9.0, 11.0}, {log10(C.m3list.front()), log10(C.m3list.back())}};
+            priors = {{4.6e11, 8.6e11}, {0.0096, 0.0118}, {0.75, 1.2}, {0.1, 0.5}, {0.0, 3.0}, {9.5, 11.0}, {log10(C.m3list.front()), log10(C.m3list.back())}};
         }
         // random walk step sizes
         vector<double> steps(priors.size(),0.0);

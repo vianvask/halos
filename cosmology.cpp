@@ -12,6 +12,7 @@ vector<double> cosmology::zlistf() {
     return tmp;
 }
 
+
 // generates a list of FDM masses
 vector<double> cosmology::m22listf() {
     if (Nm22 > 1) {
@@ -29,6 +30,7 @@ vector<double> cosmology::m22listf() {
     }
 }
 
+
 // generates a list of WDM masses
 vector<double> cosmology::m3listf() {
     if (Nm3 > 1) {
@@ -45,6 +47,7 @@ vector<double> cosmology::m3listf() {
         return tmp;
     }
 }
+
 
 // CDM matter transfer function (astro-ph/9709112)
 double cosmology::TM (double k) {
@@ -94,6 +97,7 @@ double cosmology::TM (double k) {
     return OmegaB/OmegaM*TB(k) + OmegaC/OmegaM*TC(k);
 }
 
+
 // variance of the CDM matter fluctuations
 vector<double> cosmology::sigmaC(double M, double deltaH) {
     double RM = pow(3.0*M/(4.0*PI*rhoM0),1.0/3.0);
@@ -113,6 +117,7 @@ vector<double> cosmology::sigmaC(double M, double deltaH) {
     }
     return {sqrt(sigma2), dsigma2/(2.0*sqrt(sigma2))};
 }
+
 
 // variance of the FDM matter fluctuations
 vector<double> cosmology::sigmaF(double M, double deltaH, double m22) {
@@ -142,6 +147,7 @@ vector<double> cosmology::sigmaF(double M, double deltaH, double m22) {
     }
     return {sqrt(sigma2), dsigma2/(2.0*sqrt(sigma2))};
 }
+
 
 // variance of the WDM matter fluctuations
 vector<double> cosmology::sigmaW(double M, double deltaH, double m3) {
@@ -196,7 +202,7 @@ vector<double> cosmology::sigmaW(double M, double deltaH, double m3) {
 
 // variance of matter fluctuations, {M, sigma, dsigma/dM}
 vector<vector<double> > cosmology::sigmalistf(double m22, double m3) {
-    int Nextra = (int) ceil((NM-1)*log(3.0)/log(Mmax/Mmin));
+    int Nextra = (int) ceil((NM-1)*log(3.0)/log(Mmax/Mmin)); // extend the M range for computation of dotM
     vector<vector<double> > Ms(NM+Nextra, vector<double> (3,0.0));
     
     double dlogM = (log(Mmax)-log(Mmin))/(1.0*(NM-1));
@@ -222,15 +228,29 @@ vector<vector<double> > cosmology::sigmalistf(double m22, double m3) {
 }
 
 
+// first crossing probability with ellipsoidal collapse
+double cosmology::pFC(double delta, double S) {
+    double p = 0.3;
+    double q = 0.707;
+    double A = 1.0/(1+pow(2.0,-p)*tgammaf(0.5-p)/sqrt(PI));
+    
+    double nu2 = pow(delta,2.0)/S;
+    
+    return A*(1+pow(q*nu2,-p))*sqrt(q*nu2/(2.0*PI))*exp(-q*nu2/2.0)/S;
+}
+double cosmology::lnpFC(double delta, double S) {
+    double p = 0.3;
+    double q = 0.707;
+    double A = 1.0/(1+pow(2.0,-p)*tgammaf(0.5-p)/sqrt(PI));
+    
+    double nu2 = pow(delta,2.0)/S;
+    
+    return log(A*(1+pow(q*nu2,-p))*sqrt(q*nu2/(2.0*PI))) - q*nu2/2.0 - log(S);
+}
+
+
 // HMF, {z,M,dn/dlnM}
 vector<vector<vector<double> > > cosmology::HMFlistf() {
-    function<double(double)> nuf = [&](double nu2) {
-        double p = 0.3;
-        double q = 0.707;
-        double A = 1.0/(1+(pow(2.0,-p)*tgammaf(0.5-p)/sqrt(PI)));
-        return A*(1+pow(q*nu2,-p))*sqrt(q*nu2/(2.0*PI))*exp(-q*nu2/2.0);
-    };
-    
     double dlogz = (log(zmax)-log(zmin))/(1.0*(Nz-1));
     vector<vector<vector<double> > > dndlnM(Nz, vector<vector<double> > (NM, vector<double> (3,0.0)));
     double z, M, sigma, dsigma;
@@ -243,7 +263,7 @@ vector<vector<vector<double> > > cosmology::HMFlistf() {
             
             dndlnM[jz][jM][0] = z;
             dndlnM[jz][jM][1] = M;
-            dndlnM[jz][jM][2] = -rhoM0*nuf(pow(deltac(z)/sigma,2.0))*2.0*dsigma/sigma;
+            dndlnM[jz][jM][2] = -rhoM0*pFC(deltac(z),pow(sigma,2.0))*2.0*sigma*dsigma;
         }
     }
     return dndlnM;
@@ -251,11 +271,8 @@ vector<vector<vector<double> > > cosmology::HMFlistf() {
 
 // the probability that the halo whose mass at z' is M' ends up being a part of a halo in the mass range (M,M+dM) at z<z':
 double cosmology::dPpdM(vector<double> &sigma, double z, vector<double> &sigmap, double zp, double Deltasigma2) {
-    //double Deltasigma2 = pow(sigmap[1],2.0) - pow(sigma[1],2.0);
-    long double pFC = (deltac(zp)-deltac(z))/sqrt(2.0*PI*pow(Deltasigma2,3.0))*exp(-pow(deltac(zp)-deltac(z),2.0)/(2.0*Deltasigma2));
-    return pFC*pow(sigmap[1]/sigma[1],3.0)*deltac(z)/deltac(zp)*exp(pow(deltac(zp),2.0)/(2.0*pow(sigmap[1],2.0)) - pow(deltac(z),2.0)/(2.0*pow(sigma[1],2.0)))*abs(sigma[2]);
+    return exp(lnpFC(deltac(zp)-deltac(z),Deltasigma2) + lnpFC(deltac(z),pow(sigma[1],2.0)) - lnpFC(deltac(zp),pow(sigmap[1],2.0)) + log(2.0*sigma[1]*abs(sigma[2])));
 }
-
 double cosmology::DeltaM(vector<double> &sigmap, double z, double dz) {
     double Mp = sigmap[0];
     

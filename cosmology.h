@@ -141,6 +141,10 @@ private:
     // NFW scale radius and density and their derivatives, {z, M, r_s, dr_s/dM, rho_s, drho_s/dM}
     vector<vector<vector<double> > > NFWlistf();
     
+    // first crossing probability (deltap>delta, Sp>S) with ellipsoidal collapse
+    double pFC(double delta, double S);
+    double lnpFC(double delta, double S);
+
     // Seth-Tormen HMF, {z,M,dndlnM}
     vector<vector<vector<double> > > HMFlistf();
     
