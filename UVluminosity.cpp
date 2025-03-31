@@ -3,25 +3,14 @@
 
 double kappaUV = 1.15e-22; // Msun s erg^-1 Myr^-1
 
-// star formation rate
-double fstar(double M, double Mc, double epsilon, double alpha, double beta, double gamma, double z, double zbreak) {
-    //return epsilon*max(1.0,pow(z/zbreak,gamma))*(alpha+beta)/(beta*pow(M/Mc,-alpha) + alpha*pow(M/Mc,beta));
-    return epsilon*max(1.0,1.0+gamma*(z-zbreak))*(alpha+beta)/(beta*pow(M/Mc,-alpha) + alpha*pow(M/Mc,beta));
-}
-
-// derivative of the star formation rate, df_*/dM
-double Dfstarperfstar(double M, double Mc, double epsilon, double alpha, double beta) {
-    return beta*((alpha+beta)/(alpha*pow(M/Mc,alpha+beta)+beta) - 1)/M;
-}
-
 // the UV magnitude
-double MUV(double M, double dotM, double Mc, double epsilon, double alpha, double beta, double gamma, double z, double zbreak) {
-    return 51.63 - 1.08574*log(fstar(M,Mc,epsilon,alpha,beta,gamma,z,zbreak)*dotM/kappaUV);
+double MUV(cosmology &C, double z, double M, double dotM, double Mc, double epsilon, double alpha, double beta, double gamma, double zc) {
+    return 51.63 - 1.08574*log(C.fstar(z,M,Mc,epsilon,alpha,beta,gamma,zc)*dotM/kappaUV);
 }
 
 // derivative of the UV magnitude, dM_UV/dM
-double DMUV(double M, double dotM, double DdotM, double Mc, double epsilon, double alpha, double beta) {
-    return -1.08574*(DdotM/dotM + Dfstarperfstar(M,Mc,epsilon,alpha,beta));
+double DMUV(cosmology &C, double M, double dotM, double DdotM, double Mc, double epsilon, double alpha, double beta) {
+    return -1.08574*(DdotM/dotM + C.Dfstarperfstar(M,Mc,epsilon,alpha,beta));
 }
 
 // dust extinction, MUV -> MUV - AUV (see 1406.1503 and Table 3 of 1306.2950)
@@ -32,13 +21,12 @@ double AUV(double MUV, double z) {
 }
 
 // UV luminosity function as a function of halo mass M (see e.g. 1906.06296)
-double UVLF(double M, double dotM, double DdotM, double dndlnM, double Mt, double Mc, double epsilon, double alpha, double beta) {
-    return -exp(-Mt/M)*dndlnM/M/DMUV(M,dotM,DdotM,Mc,epsilon,alpha,beta);
+double UVLF(cosmology &C, double M, double dotM, double DdotM, double dndlnM, double Mt, double Mc, double epsilon, double alpha, double beta) {
+    return -exp(-Mt/M)*dndlnM/M/DMUV(C,M,dotM,DdotM,Mc,epsilon,alpha,beta);
 }
 
-
 // UV luminosity function, {z, M_UV, Phi(no dust + no lensing), Phi(dust + no lensing), Phi(dust + lensing)}
-vector<vector<vector<double> > > PhiUV(cosmology &C, double Mt, double Mc, double epsilon, double alpha, double beta, double gamma, double zbreak) {
+vector<vector<vector<double> > > PhiUV(cosmology &C, double Mt, double Mc, double epsilon, double alpha, double beta, double gamma, double zc) {
     
     vector<vector<vector<double> > > PhiUVlensed(C.Zlist.size(), vector<vector<double> > (C.NM, vector<double> (5,0.0)));
     vector<vector<double> > PhiUVlist(C.NM, vector<double> (4,0.0));
@@ -65,12 +53,12 @@ vector<vector<vector<double> > > PhiUV(cosmology &C, double Mt, double Mc, doubl
             dotMj = C.dotMlist[jzp][jM][2];
             DdotMj = C.dotMlist[jzp][jM][3];
             
-            MUVj = MUV(Mj, dotMj, Mc, epsilon, alpha, beta, gamma, z, zbreak);
+            MUVj = MUV(C, z, Mj, dotMj, Mc, epsilon, alpha, beta, gamma, zc);
             
             PhiUVlist[jM][0] = MUVj;
             PhiUVlist[jM][1] = Mj;
             PhiUVlist[jM][2] = AUV(MUVj, z);
-            PhiUVlist[jM][3] = UVLF(Mj, dotMj, DdotMj, dndlnMj, Mt, Mc, epsilon, alpha, beta);
+            PhiUVlist[jM][3] = UVLF(C, Mj, dotMj, DdotMj, dndlnMj, Mt, Mc, epsilon, alpha, beta);
         }
         
         // compute the lensed UV luminosity function
@@ -96,7 +84,7 @@ vector<vector<vector<double> > > PhiUV(cosmology &C, double Mt, double Mc, doubl
     return PhiUVlensed;
 }
 
-vector<vector<vector<double> > > PhiUV(cosmology &C, double Mt, double Mc, double epsilon, double alpha, double beta, double gamma, double zbreak, double m) {
+vector<vector<vector<double> > > PhiUV(cosmology &C, double Mt, double Mc, double epsilon, double alpha, double beta, double gamma, double zc, double m) {
     
     // find index of z in the longer list of z values
     if (C.m22list.size() > 0) {
@@ -115,7 +103,7 @@ vector<vector<vector<double> > > PhiUV(cosmology &C, double Mt, double Mc, doubl
         C.dotMlist = C.WDMdotMlist[jm];
     }
     
-    return PhiUV(C, Mt, Mc, epsilon, alpha, beta, gamma, zbreak);
+    return PhiUV(C, Mt, Mc, epsilon, alpha, beta, gamma, zc);
 }
 
 // read UV luminosity data, {z, MUV, Phi, +sigmaPhi, -sigmaPhi}
@@ -179,10 +167,9 @@ double loglikelihood(cosmology &C, vector<vector<double> > &data, vector<double>
         sigmaPhip = data[j][3];
         sigmaPhim = data[j][4];
         
-        // z in Zlist
         PhiUVz = PhiUVlist[lower_bound(C.Zlist.begin(), C.Zlist.end(), z) - C.Zlist.begin()];
         
-        // Phi(M_UV), convert to Mpc^-3 as data is in such units
+        // Phi(M_UV), convert to Mpc^-3 as the data is in those units
         Phi = 1.0e9*interpolaten(MUV, PhiUVz)[4];
         
         logL += log(NPDF2(Phi, meanPhi, sigmaPhip, sigmaPhim));

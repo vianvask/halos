@@ -157,7 +157,8 @@ int main (int argc, char *argv[]) {
     C.Zlist = {4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.5, 14.5};
     C.Plnmuz = getPlnmu(C, rS, Nkappa, Nreal, Nbins);
 
-    vector<double> bf = {5.6e11, 0.036, 0.94, 0.31, 1.2, 10.0};
+    vector<double> bf = {4.3e11, 0.049, 0.93, 0.38, 1.1, 10.1};
+    
     if (doUVfit == 1) {
         cout << "Computing UV luminosity fit..." << endl;
         
@@ -170,10 +171,11 @@ int main (int argc, char *argv[]) {
         // flat priors, {M_c, epsilon, alpha, beta, gamma, z_break, log_10(m)}
         vector<vector<double> > priors;
         if (C.m22list.size() > 0) {
-            priors = {{4.6e11, 8.6e11}, {0.0096, 0.0118}, {0.75, 1.2}, {0.1, 0.5}, {0.0, 3.0}, {9.5, 11.0}, {log10(C.m22list.front()), log10(C.m22list.back())}};
+            priors = {{3.2e11, 5.4e11}, {0.043, 0.055}, {0.74, 1.1}, {0.2, 0.6}, {0.2, 2.0}, {9.5, 11.0}, {log10(C.m22list.front()), log10(C.m22list.back())}};
         } else {
-            priors = {{4.6e11, 8.6e11}, {0.0096, 0.0118}, {0.75, 1.2}, {0.1, 0.5}, {0.0, 3.0}, {9.5, 11.0}, {log10(C.m3list.front()), log10(C.m3list.back())}};
+            priors = {{3.2e11, 5.4e11}, {0.043, 0.055}, {0.74, 1.1}, {0.2, 0.6}, {0.2, 2.0}, {9.5, 11.0}, {log10(C.m3list.front()), log10(C.m3list.back())}};
         }
+        
         // random walk step sizes
         vector<double> steps(priors.size(),0.0);
         for (int j = 0; j < steps.size(); j++) {
@@ -202,6 +204,25 @@ int main (int argc, char *argv[]) {
             Phi2 = PhiUVlist[jZ][jM][4]; // dust + lensing
             
             outfile << z << "   " << MUV << "   " << M << "   " << max(1.0e-64,Phi0) << "   " << max(1.0e-64,Phi1) << "   " << max(1.0e-64,Phi2) << endl;
+        }
+    }
+    outfile.close();
+    
+    cout << "Evolving stellar masses and BH masses..." << endl;
+    
+    outfile.open("BHmassStellarmass.dat");
+    vector<vector<double> > MBHlist(C.Nz, vector<double> (C.NM,0.0));
+    vector<vector<double> > Mstlist = C.evolvestellarmass(bf[0], bf[1], bf[2], bf[3]);
+    
+    double MBH, Mst;
+    for (int jz = 0; jz < C.Nz; jz++) {
+        z = C.zlist[jz];
+        for (int jM = 0; jM < C.NM; jM++) {
+            M = C.sigmalist[jM][0];
+            MBH = MBHlist[jz][jM];
+            Mst = Mstlist[jz][jM];
+                        
+            outfile << z << "   " << M << "   " << MBH << "   " << Mst << endl;
         }
     }
     outfile.close();

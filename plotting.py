@@ -7,7 +7,7 @@ rcParams["font.size"] = 13
 rcParams["text.usetex"] = True
 
 # Load MCMC samples (each row is one sample, each column is a parameter)
-samples1 = np.loadtxt("MCMCchains.dat")
+samples1 = np.loadtxt("MCMCchainsF.dat")
 samples2 = np.loadtxt("MCMCchainsW.dat")
 
 # Find the index of the sample with the maximum likelihood
@@ -60,7 +60,7 @@ labels = [r'$M_c/10^{11}M_\odot$', r'$100\times\epsilon$', r'$\alpha$', r'$\beta
 
 figure = corner.corner(
     samples1,
-    range = [(4.6,8.6), (6,7.6), (0.75,1.2), (0.1,0.5), (0,3), (9.5,11), (-0.2,1.0)],
+    range = [(4.6,8.6), (6.4,7.6), (0.75,1.2), (0.1,0.5), (0,3), (9.5,11), (-0.2,1.0)],
     labels=labels,
     title_fmt=".2f",
     levels = [0.68, 0.95],
@@ -75,7 +75,7 @@ figure = corner.corner(
 
 corner.corner(
     samples2,
-    range = [(4.6,8.6), (6,7.6), (0.75,1.2), (0.1,0.5), (0,3), (9.5,11), (-0.2,1.0)],
+    range = [(4.6,8.6), (6.4,7.6), (0.75,1.2), (0.1,0.5), (0,3), (9.5,11), (-0.2,1.0)],
     labels=labels,
     title_fmt=".2f",
     levels = [0.68, 0.95],

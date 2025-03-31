@@ -17,6 +17,7 @@ public:
     // cosmological parameters
     double OmegaM;
     double OmegaB;
+    double fB;
     double zeq;
     double sigma8;
     double h;
@@ -53,8 +54,20 @@ public:
     double Dg(double z) {
         return 5.0/2.0*OmegaMz(z)/(pow(OmegaMz(z),4.0/7.0) - OmegaLz(z) + (1+OmegaMz(z)/2.0)*(1+OmegaLz(z)/70.0))/(1+z)/0.7869370293916;
     }
+    
+    // spherical collapse threshold
     double deltac(double z) {
         return 3.0/5.0*pow(3.0*PI/2.0,2.0/3.0)/Dg(z);
+    }
+    
+    // elliptical collapse threshold (Eq. (1) of MNRAS 329, 61–75 (2002)), S>0
+    double deltaell(double z, double S) {
+        double alpha = 0.615;
+        double beta = 0.485;
+        double a = 0.707;
+        double delta = deltac(z);
+
+        return sqrt(a)*delta*(1.0 + beta*pow(a*pow(delta,2.0)/S,-alpha));
     }
     
 private:
@@ -141,19 +154,18 @@ private:
     // NFW scale radius and density and their derivatives, {z, M, r_s, dr_s/dM, rho_s, drho_s/dM}
     vector<vector<vector<double> > > NFWlistf();
     
-    // first crossing probability (deltap>delta, Sp>S) with ellipsoidal collapse
+    // first crossing probability with ellipsoidal collapse
     double pFC(double delta, double S);
-    double lnpFC(double delta, double S);
+    double pFC(double deltap, double Sp, double delta, double S);
 
-    // Seth-Tormen HMF, {z,M,dndlnM}
+    // halo mass function, {z,M,dndlnM}
     vector<vector<vector<double> > > HMFlistf();
-    
-    double dPpdM(vector<double> &sigma, double z, vector<double> &sigmap, double zp, double Deltasigma2);
-    double DeltaM(vector<double> &sigmap, double z, double dz);
-    
+
     // growth rate of the halo through mergers with smaller halos, {z,M,dM/dt}
     vector<vector<vector<double> > > dotMlistf();
     
+    vector<double> growbymergers(vector<double> &MJ, double z, double zp);
+
     vector<vector<double> > dclist();
     vector<vector<double> > tlist();
     
@@ -161,6 +173,14 @@ private:
     vector<vector<double> > zt;
     
 public:
+    // star formation rate
+    double fstar(double z, double M, double Mc, double epsilon, double alpha, double beta, double gamma, double zc);
+
+    // derivative of the star formation rate, df_*/dM
+    double Dfstarperfstar(double M, double Mc, double epsilon, double alpha, double beta);
+    
+    vector<vector<double> > evolvestellarmass(double Mc, double epsilon, double alpha, double beta);
+    vector<vector<double> > evolveBHmass(double Mc, double epsilon, double alpha, double beta, double fEdd, double facc1, double facc2);
     
     // list of redshifts, same as for HMF and dotM lists
     vector<double> zlist;
@@ -189,6 +209,8 @@ public:
         OmegaR = OmegaM/(1+zeq);
         OmegaL = 1.0 - OmegaM - OmegaR;
         OmegaC = OmegaM - OmegaB;
+        fB = OmegaB/OmegaM;
+        
         H0 = 0.000102247*h;
         rhoc = 277.394*pow(h,2.0);
         rhoM0 = OmegaM*rhoc;

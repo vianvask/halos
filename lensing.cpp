@@ -215,16 +215,20 @@ vector<vector<double> > Plnmuf(cosmology &C, int Nx, double zs, double kappamax,
         lnmu[j] = lnmutot;
     }
     lnmumean = lnmumean/(1.0*Nreal);
-    
+        
     // binning
     dlnmu = (lnmumax-lnmumin)/(1.0*(Nbins-1));
     for (int j = 0; j < Nbins; j++) {
         Plnmu[j][0] = (lnmumin-lnmumean) + j*dlnmu;
     }
+    int jb;
     for (int j = 0; j < Nreal; j++) {
-        Plnmu[(int) round((Nbins-1)*(lnmu[j]-lnmumin)/(lnmumax-lnmumin))][1] += dP/dlnmu;
+        jb = (int) round((Nbins-1)*(lnmu[j]-lnmumin)/(lnmumax-lnmumin));
+        if (jb >= 0 && jb < Nbins) {
+            Plnmu[jb][1] += dP/dlnmu;
+        }
     }
-    
+        
     // cut off the high lnmu part
     int jmax = Nbins;
     for (int j = 0; j < Nbins; j++) {
