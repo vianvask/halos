@@ -6,7 +6,7 @@
 
 int main (int argc, char *argv[]) {
     clock_t time_req = clock(); // timing
-    cout << setprecision(4) << fixed;
+    cout << setprecision(6) << fixed;
     
     const int doUVfit = atoi(argv[1]);
     const int NmF = atoi(argv[2]);
@@ -28,14 +28,14 @@ int main (int argc, char *argv[]) {
     C.Nk = 1000;
     
     // halo masses
-    C.Mmin = 1.0e5;
+    C.Mmin = 1.0e6;
     C.Mmax = 1.0e17;
-    C.NM = 1200;
+    C.NM = 2000;
     
     // redshifts
     C.zmin = 0.01;
-    C.zmax = 20.01;
-    C.Nz = 100;
+    C.zmax = 40.01;
+    C.Nz = 160;
     
     // FDM masses in 10^-22 eV
     C.m22min = 0.8;
@@ -146,52 +146,53 @@ int main (int argc, char *argv[]) {
     cout << "Generating/reading lensing amplifications..." << endl;
     
     // number of bins in distribution of P^1(kappa)
-    int Nkappa = 40;
+    int Nkappa = 50;
     // number of realizations
-    int Nreal = 100000000;
+    int Nreal = 2e8;
     // number of lnmu bins
-    int Nbins = 200;
+    int Nbins = 400;
     // lensing source radius in kpc
     double rS = 10.0;
-    // list of redshift values at which P(lnmu) is computed
-    C.Zlist = {4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.5, 14.5};
+    // list of redshift values at which dP(lnmu)/dlnmu is computed
+    //C.Zlist = {1.0, 2.0, 4.0, 8.0, 16.0};
+    C.Zlist = {4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.5, 14.5, 17.0, 25.0};
     C.Plnmuz = getPlnmu(C, rS, Nkappa, Nreal, Nbins);
-
-    vector<double> bf = {4.3e11, 0.049, 0.93, 0.38, 1.1, 10.1};
+    
+    // parameters: (logMt, Mc, epsilon, alpha, beta, gamma, zc, fkappa, ze, z0, sigmaUV, logm)
+    vector<double> bf = {8.0, 4.1e11, 0.063, 0.94, 0.39, 0.17, 10.8, 0.33, 10.3, 30.4, 0.056, 0.0};
     
     if (doUVfit == 1) {
         cout << "Computing UV luminosity fit..." << endl;
         
         // max number of steps in each chain
-        int Nsteps = 2400;
+        int Nsteps = 2000;
         // burn-in
-        int Nbi = 1200;
+        int Nbi = 1000;
         // number of chains
-        int Nchains = 200;
-        // flat priors, {M_c, epsilon, alpha, beta, gamma, z_break, log_10(m)}
+        int Nchains = 100;
+        // flat priors
         vector<vector<double> > priors;
         if (C.m22list.size() > 0) {
-            priors = {{3.2e11, 5.4e11}, {0.043, 0.055}, {0.74, 1.1}, {0.2, 0.6}, {0.2, 2.0}, {9.5, 11.0}, {log10(C.m22list.front()), log10(C.m22list.back())}};
+            priors = {{6.0,9.0}, {3.2e11, 4.6e11}, {0.058, 0.068}, {0.76 , 1.1}, {0.24, 0.6}, {0.05, 0.7}, {9.5, 11.5}, {0.05,  1.0}, {8.0, 25.0}, {15.0, 40.0}, {0.05, 0.25}, {log10(C.m22list.front()), log10(C.m22list.back())}};
+        } else if (C.m3list.size() > 0) {
+            priors = {{6.0,9.0}, {3.2e11, 4.6e11}, {0.058, 0.068}, {0.76 , 1.1}, {0.24, 0.6}, {0.05, 0.7}, {9.5, 11.5}, {0.05,  1.0}, {8.0, 25.0}, {15.0, 40.0}, {0.05, 0.25}, {log10(C.m3list.front()), log10(C.m3list.back())}};
         } else {
-            priors = {{3.2e11, 5.4e11}, {0.043, 0.055}, {0.74, 1.1}, {0.2, 0.6}, {0.2, 2.0}, {9.5, 11.0}, {log10(C.m3list.front()), log10(C.m3list.back())}};
+            priors = {{6.0,9.0}, {3.2e11, 4.6e11}, {0.058, 0.068}, {0.76 , 1.1}, {0.24, 0.6}, {0.05, 0.7}, {9.5, 11.5}, {0.05,  1.0}, {8.0, 25.0}, {15.0, 40.0}, {0.05, 0.25}};
         }
         
         // random walk step sizes
         vector<double> steps(priors.size(),0.0);
         for (int j = 0; j < steps.size(); j++) {
-            steps[j] = (priors[j][1]-priors[j][0])/20.0;
+            steps[j] = (priors[j][1]-priors[j][0])/14.0;
         }
         
         bf = UFfit(C, priors, steps, Nsteps, Nbi, Nchains);
     }
     
     // output the UV luminosity function for the best fit
-    vector<vector<vector<double> > > PhiUVlist;
-    if (bf.size()==7) {
-        PhiUVlist = PhiUV(C, 1.0e9, bf[0], bf[1], bf[2], bf[3], bf[4], bf[5], pow(10.0,bf[6]));
-    } else {
-        PhiUVlist = PhiUV(C, 1.0e9, bf[0], bf[1], bf[2], bf[3], bf[4], bf[5]);
-    }
+    vector<vector<vector<double> > > PhiUVlist = PhiUV(C, bf[0], bf[1], bf[2], bf[3], bf[4], bf[5], bf[6], bf[7], bf[8], bf[9], bf[10], bf[11]);
+    cout << loglikelihood(C,bf) << endl;
+    
     outfile.open("UVluminosity.dat");
     double MUV, Phi0, Phi1, Phi2;
     for (int jZ = 0; jZ < C.Zlist.size(); jZ++) {
@@ -208,11 +209,12 @@ int main (int argc, char *argv[]) {
     }
     outfile.close();
     
+    /*
     cout << "Evolving stellar masses and BH masses..." << endl;
     
     outfile.open("BHmassStellarmass.dat");
     vector<vector<double> > MBHlist(C.Nz, vector<double> (C.NM,0.0));
-    vector<vector<double> > Mstlist = C.evolvestellarmass(bf[0], bf[1], bf[2], bf[3]);
+    vector<vector<double> > Mstlist = C.evolvestellarmass(bf[0], bf[1], bf[2], bf[3], bf[4]);
     
     double MBH, Mst;
     for (int jz = 0; jz < C.Nz; jz++) {
@@ -226,6 +228,7 @@ int main (int argc, char *argv[]) {
         }
     }
     outfile.close();
+    */
     
     time_req = clock() - time_req;
     cout << "Total evaluation time: " << ((double) time_req/CLOCKS_PER_SEC/60.0) << " min." << endl;

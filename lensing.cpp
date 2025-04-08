@@ -236,7 +236,7 @@ vector<vector<double> > Plnmuf(cosmology &C, int Nx, double zs, double kappamax,
             jmax = j;
             j = Nbins;
         }
-        if (Plnmu[j][0] > 6.0) {
+        else if (Plnmu[j][0] > 6.0) {
             jmax = j;
             j = Nbins;
         }

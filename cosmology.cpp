@@ -304,14 +304,18 @@ vector<vector<vector<double> > > cosmology::dotMlistf() {
 
 
 // star formation rate f_*(M) and its derivative df_*/dM
-double cosmology::fstar(double z, double M, double Mc, double epsilon, double alpha, double beta, double gamma, double zc) {
-    double kappa = 1.0/max(1.0,1.0+gamma*(z-zc));
-    return epsilon/kappa*(alpha+beta)/(beta*pow(M/Mc,-alpha) + alpha*pow(M/Mc,beta));
+double cosmology::fstar(double z, double M, double Mc, double Mt, double epsilon, double alpha, double beta) {
+    if (alpha>0.0 && beta>0.0) {
+        return epsilon*(alpha+beta)/(beta*pow(M/Mc,-alpha) + alpha*pow(M/Mc,beta))*exp(-Mt/M);
+    }
+    return epsilon;
 }
-double cosmology::Dfstarperfstar(double M, double Mc, double epsilon, double alpha, double beta) {
-    return beta*((alpha+beta)/(alpha*pow(M/Mc,alpha+beta)+beta) - 1.0)/M;
+double cosmology::Dfstarperfstar(double M, double Mc, double Mt, double epsilon, double alpha, double beta) {
+    if (alpha>0.0 && beta>0.0) {
+        return beta*((alpha+beta)/(alpha*pow(M/Mc,alpha+beta)+beta) - 1.0)/M + Mt/pow(M,2.0);
+    }
+    return 0.0;
 }
-
 
 // TODO: growth of stellar mass and BH mass by mergers
 vector<double> cosmology::growbymergers(vector<double> &MJ, double z, double zp) {
@@ -333,7 +337,7 @@ vector<double> cosmology::growbymergers(vector<double> &MJ, double z, double zp)
 }
 
 // growth of stellar mass by star formation
-vector<vector<double> > cosmology::evolvestellarmass(double Mc, double epsilon, double alpha, double beta) {
+vector<vector<double> > cosmology::evolvestellarmass(double Mc, double Mt, double epsilon, double alpha, double beta) {
     vector<vector<double> > Mst(Nz, vector<double> (NM, 0.0));
     
     double dt, M, dotM;
@@ -346,7 +350,7 @@ vector<vector<double> > cosmology::evolvestellarmass(double Mc, double epsilon, 
         for (int jM = 0; jM < NM; jM++) {
             M = dotMlist[jz][jM][1];
             dotM = dotMlist[jz][jM][2];
-            Mst[jz][jM] = Mst[jz+1][jM] + fstar(z,M,Mc,epsilon,alpha,beta,0.0,100.0)*dotM*(zp-z)/((1.0+z)*Hz(z));
+            Mst[jz][jM] = Mst[jz+1][jM] + fstar(z,M,Mc,Mt,epsilon,alpha,beta)*dotM*(zp-z)/((1.0+z)*Hz(z));
         }
         
         // mergers
@@ -358,7 +362,7 @@ vector<vector<double> > cosmology::evolvestellarmass(double Mc, double epsilon, 
 }
 
 // growth of the BH mass by accretion
-vector<vector<double> > cosmology::evolveBHmass(double Mc, double epsilon, double alpha, double beta, double fEdd, double facc1, double facc2) {
+vector<vector<double> > cosmology::evolveBHmass(double Mc, double Mt, double epsilon, double alpha, double beta, double fEdd, double facc1, double facc2) {
     vector<vector<double> > MBH(Nz, vector<double> (NM, 0.0));
     
     double dt, M, dotM, DeltaMEdd, frem;
@@ -377,7 +381,7 @@ vector<vector<double> > cosmology::evolveBHmass(double Mc, double epsilon, doubl
             if (M < Mc) {
                 frem = 0.0;
             } else {
-                frem = 1.0 - fstar(z,M,Mc,epsilon,alpha,beta,0.0,100.0)/epsilon;
+                frem = 1.0 - fstar(z,M,Mc,Mt,epsilon,alpha,beta)/epsilon;
             }
             MBH[jz][jM] = MBH[jz+1][jM] + min(frem*(facc1*dotM*dt + facc2*dt*M), fEdd*DeltaMEdd);
         }
@@ -388,7 +392,6 @@ vector<vector<double> > cosmology::evolveBHmass(double Mc, double epsilon, doubl
     }
     return MBH;
 }
-
 
 
 // halo consentration parameter (1601.02624)

@@ -174,10 +174,10 @@ private:
     
 public:
     // star formation rate
-    double fstar(double z, double M, double Mc, double epsilon, double alpha, double beta, double gamma, double zc);
+    double fstar(double z, double M, double Mc, double Mt, double epsilon, double alpha, double beta);
 
     // derivative of the star formation rate, df_*/dM
-    double Dfstarperfstar(double M, double Mc, double epsilon, double alpha, double beta);
+    double Dfstarperfstar(double M, double Mc, double Mt, double epsilon, double alpha, double beta);
     
     vector<vector<double> > evolvestellarmass(double Mc, double epsilon, double alpha, double beta);
     vector<vector<double> > evolveBHmass(double Mc, double epsilon, double alpha, double beta, double fEdd, double facc1, double facc2);
