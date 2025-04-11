@@ -130,7 +130,7 @@ vector<double> cosmology::sigmaF(double M, double deltaH, double m22) {
     
     // smooth k-space window, same as for WDM
     double c = 1.0/0.43;
-    double b = 7.0;
+    double b = 6.0;
     function<double(double)> WF = [&](double x) {
         return Ws(x,c,b);
     };
@@ -161,7 +161,7 @@ vector<double> cosmology::sigmaW(double M, double deltaH, double m3) {
     
     // smooth k-space window, same as for FDM
     double c = 1.0/0.43;
-    double b = 7.0;
+    double b = 6.0;
     function<double(double)> WW = [&](double x) {
         return Ws(x,c,b);
     };
@@ -208,7 +208,6 @@ vector<vector<double> > cosmology::sigmalistf(double m22, double m3) {
     return Ms;
 }
 
-
 // first crossing probability with ellipsoidal collapse
 double cosmology::pFC(double delta, double S) {
     double p = 0.3;
@@ -224,84 +223,53 @@ double cosmology::pFC(double delta, double S) {
     }
     return 0.0;
 }
-// TODO: update
-double cosmology::pFC(double deltap, double Sp, double delta, double S) {
-    double p = 0.3;
-    double q = 0.707;
-    double A = 1.0/(1.0+pow(q*pow(delta,2.0)/S,-p));
-    
-    double nu2 = 0.0;
-    if (S > 0.0) {
-        nu2 = pow(deltap-delta,2.0)/(Sp-S);
-    }
-    if (nu2 > 0.0) {
-        return A*(1.0+pow(q*pow(deltap,2.0)/Sp,-p))*sqrt(q*nu2/(2.0*PI))*exp(-q*nu2/2.0)/(Sp-S);
-    }
-    return 0.0;
-}
 
-
-// HMF, {z,M,dn/dlnM}
+// halo mass function and growth rate, {z, M, dn/dlnM, dotM, dotM/dM}
 vector<vector<vector<double> > > cosmology::HMFlistf() {
+    
+    double dz = 0.01; // z step over which DeltaM is computed
+    double q = 0.75; // for computation of dotM
+    
     double dlogz = (log(zmax)-log(zmin))/(1.0*(Nz-1));
-    vector<vector<vector<double> > > dndlnM(Nz, vector<vector<double> > (NM, vector<double> (3,0.0)));
-    double z, M, sigma, dsigma;
+    vector<vector<vector<double> > > dndlnM(Nz, vector<vector<double> > (NM, vector<double> (5,0.0)));
+    
+    double z, M, Mp1, S, S2, Ddeltac, dMdt, dMdtp1;
+    vector<double> sigma, sigma2;
     for (int jz = 0; jz < Nz; jz++) {
         z = zlist[jz];
+        
+        sigma = sigmalist[0];
+        S = pow(sigma[1],2.0);
+        Ddeltac = (deltaell(z+dz,S)-deltaell(z,S))/dz;
+        M = sigma[0];
+        sigma2 = interpolaten(2.0*M, sigmalist);
+        S2 = pow(sigma2[1],2.0);
+        dMdt = (1+z)*Hz(z)*sqrt(2.0/PI)*Ddeltac/abs(2.0*sigma[1]*sigma[2])*sqrt(S-S2);
+        
         for (int jM = 0; jM < NM; jM++) {
-            M = sigmalist[jM][0];
-            sigma = sigmalist[jM][1];
-            dsigma = sigmalist[jM][2];
-            
             dndlnM[jz][jM][0] = z;
             dndlnM[jz][jM][1] = M;
-            dndlnM[jz][jM][2] = -rhoM0*pFC(deltac(z),pow(sigma,2.0))*2.0*sigma*dsigma;
+            dndlnM[jz][jM][2] = -rhoM0*pFC(deltac(z),pow(sigma[1],2.0))*2.0*sigma[1]*sigma[2];
+            
+            sigma = sigmalist[jM+1];
+            S = pow(sigma[1],2.0);
+            
+            Ddeltac = (deltaell(z+dz,S)-deltaell(z,S))/dz;
+            
+            Mp1 = sigma[0];
+            sigma2 = interpolaten(2.0*Mp1, sigmalist);
+            S2 = pow(sigma2[1],2.0);
+            dMdtp1 = (1+z)*Hz(z)*sqrt(2.0/PI)*Ddeltac/abs(2.0*sigma[1]*sigma[2])*sqrt(S-S2);
+            
+            dndlnM[jz][jM][3] = dMdt;
+            dndlnM[jz][jM][4] = (dMdtp1 - dMdt)/(Mp1 - M);
+            
+            M = Mp1;
+            dMdt = dMdtp1;
         }
     }
     return dndlnM;
 }
-
-
-// growth rate of the halo through mergers with smaller halos, {z, M, dM/dt}
-vector<vector<vector<double> > > cosmology::dotMlistf() {
-    double dz = 0.01; // z step over which DeltaM is computed
-    double q = 0.75;
-    
-    double dlogz = (log(zmax)-log(zmin))/(1.0*(Nz-1));
-    vector<vector<vector<double> > > dMdt(Nz, vector<vector<double> > (NM, vector<double> (4,0.0)));
-    
-    double z, Ddeltac, Sj, Mj, Mjp1, dMdtj, dMdtjp1;
-    vector<double> sigmaj, sigmaj2;
-    for (int jz = 0; jz < Nz; jz++) {
-        z = zlist[jz];
-        sigmaj = sigmalist[0];
-        Sj = pow(sigmaj[1],2.0);
-        Ddeltac = (deltaell(z+dz,Sj)-deltaell(z,Sj))/dz;
-        Mj = sigmaj[0];
-        sigmaj2 = interpolaten(2.0*Mj, sigmalist);
-        dMdtj = (1+z)*Hz(z)*sqrt(2.0/PI)*Ddeltac/abs(2.0*sigmaj[1]*sigmaj[2])*sqrt(pow(sigmaj[1],2.0)-pow(sigmaj2[1],2.0));
-        
-        for (int jM = 0; jM < NM; jM++) {
-            sigmaj = sigmalist[jM+1];
-            Sj = pow(sigmaj[1],2.0);
-            Ddeltac = (deltaell(z+dz,Sj)-deltaell(z,Sj))/dz;
-            Mjp1 = sigmaj[0];
-            sigmaj2 = interpolaten(2.0*Mjp1, sigmalist);
-            dMdtjp1 = (1+z)*Hz(z)*sqrt(2.0/PI)*Ddeltac/abs(2.0*sigmaj[1]*sigmaj[2])*sqrt(Sj-pow(sigmaj2[1],2.0));
-            
-            dMdt[jz][jM][0] = z;
-            dMdt[jz][jM][1] = Mj;
-            dMdt[jz][jM][2] = dMdtj;
-            dMdt[jz][jM][3] = (dMdtjp1 - dMdtj)/(Mjp1 - Mj);
-            
-            Mj = Mjp1;
-            dMdtj = dMdtjp1;
-        }
-    }
-    
-    return dMdt;
-}
-
 
 // star formation rate f_*(M) and its derivative df_*/dM
 double cosmology::fstar(double z, double M, double Mc, double Mt, double epsilon, double alpha, double beta) {
@@ -322,7 +290,7 @@ vector<double> cosmology::growbymergers(vector<double> &MJ, double z, double zp)
     double M, Mp, dMp;
     vector<double> MJnew(NM, 0.0);
     vector<double> sigma, sigmap;
-    for (int jM = NM-1; jM > 0; jM--) {
+    /*for (int jM = NM-1; jM > 0; jM--) {
         sigma = sigmalist[jM];
         M = sigma[0];
         for (int jMp = 1; jMp < jM; jMp++) {
@@ -332,7 +300,7 @@ vector<double> cosmology::growbymergers(vector<double> &MJ, double z, double zp)
             
             MJnew[jM] += 2.0*sigmap[1]*abs(sigmap[2])*MJ[jMp]*M/Mp*pFC(deltac(zp),pow(sigmap[1],2.0),deltac(z),pow(sigma[1],2.0))*dMp;
         }
-    }
+    }*/
     return MJnew;
 }
 
@@ -348,8 +316,8 @@ vector<vector<double> > cosmology::evolvestellarmass(double Mc, double Mt, doubl
         
         // star formation
         for (int jM = 0; jM < NM; jM++) {
-            M = dotMlist[jz][jM][1];
-            dotM = dotMlist[jz][jM][2];
+            M = HMFlist[jz][jM][1];
+            dotM = HMFlist[jz][jM][3];
             Mst[jz][jM] = Mst[jz+1][jM] + fstar(z,M,Mc,Mt,epsilon,alpha,beta)*dotM*(zp-z)/((1.0+z)*Hz(z));
         }
         
@@ -375,8 +343,8 @@ vector<vector<double> > cosmology::evolveBHmass(double Mc, double Mt, double eps
         
         // accretion
         for (int jM = 0; jM < NM; jM++) {
-            M = dotMlist[jz][jM][1];
-            dotM = dotMlist[jz][jM][2];
+            M = HMFlist[jz][jM][1];
+            dotM = HMFlist[jz][jM][3];
             DeltaMEdd = 0.0022*MBH[jz][jM]*dt;
             if (M < Mc) {
                 frem = 0.0;

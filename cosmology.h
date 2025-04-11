@@ -158,12 +158,9 @@ private:
     double pFC(double delta, double S);
     double pFC(double deltap, double Sp, double delta, double S);
 
-    // halo mass function, {z,M,dndlnM}
+    // halo mass function and growth rate, {z, M, dn/dlnM, dotM, dotM/dM}
     vector<vector<vector<double> > > HMFlistf();
 
-    // growth rate of the halo through mergers with smaller halos, {z,M,dM/dt}
-    vector<vector<vector<double> > > dotMlistf();
-    
     vector<double> growbymergers(vector<double> &MJ, double z, double zp);
 
     vector<vector<double> > dclist();
@@ -179,14 +176,13 @@ public:
     // derivative of the star formation rate, df_*/dM
     double Dfstarperfstar(double M, double Mc, double Mt, double epsilon, double alpha, double beta);
     
-    vector<vector<double> > evolvestellarmass(double Mc, double epsilon, double alpha, double beta);
-    vector<vector<double> > evolveBHmass(double Mc, double epsilon, double alpha, double beta, double fEdd, double facc1, double facc2);
+    vector<vector<double> > evolvestellarmass(double Mc, double Mt, double epsilon, double alpha, double beta);
+    vector<vector<double> > evolveBHmass(double Mc, double Mt, double epsilon, double alpha, double beta, double fEdd, double facc1, double facc2);
     
     // list of redshifts, same as for HMF and dotM lists
     vector<double> zlist;
     vector<vector<double> > sigmalist;
     vector<vector<vector<double> > > HMFlist;
-    vector<vector<vector<double> > > dotMlist;
     vector<vector<vector<double> > > NFWlist;
     
     // list of redshifts, same as for P(lnmu,z) list
@@ -197,13 +193,11 @@ public:
     vector<double> m22list;
     vector<vector<vector<double> > > FDMsigmalist;
     vector<vector<vector<vector<double> > > > FDMHMFlist;
-    vector<vector<vector<vector<double> > > > FDMdotMlist;
     
     // list of WDM masses, same as for HMF_WDM and dotM_WDM lists
     vector<double> m3list;
     vector<vector<vector<double> > > WDMsigmalist;
     vector<vector<vector<vector<double> > > > WDMHMFlist;
-    vector<vector<vector<vector<double> > > > WDMdotMlist;
     
     void initialize() {
         OmegaR = OmegaM/(1+zeq);
@@ -231,7 +225,6 @@ public:
         // halo mass function and halo growth rate
         sigmalist = sigmalistf(0.0, 0.0);
         HMFlist = HMFlistf();
-        dotMlist = dotMlistf();
         
         // NFW halo parameters
         conslist = conslistf();
@@ -246,11 +239,9 @@ public:
             // halo mass function and halo growth rate
             sigmalist = sigmalistf(m22, 0.0);
             HMFlist = HMFlistf();
-            dotMlist = dotMlistf();
             
             FDMsigmalist.push_back(sigmalist);
             FDMHMFlist.push_back(HMFlist);
-            FDMdotMlist.push_back(dotMlist);
         }
     }
     
@@ -262,11 +253,9 @@ public:
             // halo mass function and halo growth rate
             sigmalist = sigmalistf(0.0, m3);
             HMFlist = HMFlistf();
-            dotMlist = dotMlistf();
             
             WDMsigmalist.push_back(sigmalist);
             WDMHMFlist.push_back(HMFlist);
-            WDMdotMlist.push_back(dotMlist);
         }
     }
     

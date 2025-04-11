@@ -78,8 +78,8 @@ vector<vector<vector<double> > > PhiUV(cosmology &C, double Mt, double Mc, doubl
             Mj = C.HMFlist[jzp][jM][1];
             dndlnMj = C.HMFlist[jzp][jM][2];
             
-            dotMj = C.dotMlist[jzp][jM][2];
-            DdotMj = C.dotMlist[jzp][jM][3];
+            dotMj = C.HMFlist[jzp][jM][3];
+            DdotMj = C.HMFlist[jzp][jM][4];
             
             MUVj = MUV(C, z, Mj, dotMj, Mc, Mt, epsilon, alpha, beta, gamma, zc, fkappa, ze, z0);
             
@@ -89,35 +89,36 @@ vector<vector<vector<double> > > PhiUV(cosmology &C, double Mt, double Mc, doubl
                 for (int iM = jM; iM < C.NM-1; iM++) { // values larger than the mean
                     Mi = C.HMFlist[jzp][iM][1];
                     dndlnMi = C.HMFlist[jzp][iM][2];
-                    dotMi = C.dotMlist[jzp][iM][2];
+                    dotMi = C.HMFlist[jzp][iM][3];
                     
                     Mi2 = C.HMFlist[jzp][iM+1][1];
                     dndlnMi2 = C.HMFlist[jzp][iM+1][2];
-                    dotMi2 = C.dotMlist[jzp][iM+1][2];
+                    dotMi2 = C.HMFlist[jzp][iM+1][3];
                     
                     MUVi = MUV(C, z, Mi, dotMi, Mc, Mt, epsilon, alpha, beta, gamma, zc, fkappa, ze, z0);
                     MUVi2 = MUV(C, z, Mi2, dotMi2, Mc, Mt, epsilon, alpha, beta, gamma, zc, fkappa, ze, z0);
                     
                     UVLFj += (dndlnMi*pMUV(MUVj,MUVi,sigmaUV) + dndlnMi2*pMUV(MUVj,MUVi2,sigmaUV))/2.0*(log(Mi2)-log(Mi));
                     
-                    if (abs(MUVi-MUVj) > 3.0*sigmaUV) { // stop at 3sigma
+                    if (abs(MUVi-MUVj) > 5.0*sigmaUV) { // stop at 5sigma
                         iM = C.NM;
                     }
                 }
                 for (int iM = jM; iM > 0; iM--) { // values smaller than the mean
                     Mi = C.HMFlist[jzp][iM][1];
                     dndlnMi = C.HMFlist[jzp][iM][2];
-                    dotMi = C.dotMlist[jzp][iM][2];
+                    dotMi = C.HMFlist[jzp][iM][3];
                     
                     Mi2 = C.HMFlist[jzp][iM-1][1];
                     dndlnMi2 = C.HMFlist[jzp][iM-1][2];
-                    dotMi2 = C.dotMlist[jzp][iM-1][2];
+                    dotMi2 = C.HMFlist[jzp][iM-1][3];
                     
                     MUVi = MUV(C, z, Mi, dotMi, Mc, Mt, epsilon, alpha, beta, gamma, zc, fkappa, ze, z0);
                     MUVi2 = MUV(C, z, Mi2, dotMi2, Mc, Mt, epsilon, alpha, beta, gamma, zc, fkappa, ze, z0);
                     
                     UVLFj += (dndlnMi*pMUV(MUVj,MUVi,sigmaUV) + dndlnMi2*pMUV(MUVj,MUVi2,sigmaUV))/2.0*(log(Mi)-log(Mi2));
-                    if (abs(MUVi-MUVj) > 3.0*sigmaUV) { // stop at 3sigma
+                    
+                    if (abs(MUVi-MUVj) > 5.0*sigmaUV) { // stop at 5sigma
                         iM = 0;
                     }
                 }
@@ -167,14 +168,13 @@ vector<vector<vector<double> > > PhiUV(cosmology &C, double logMt, double Mc, do
             jm--;
         }
         C.HMFlist = C.FDMHMFlist[jm];
-        C.dotMlist = C.FDMdotMlist[jm];
-    } else if (C.m3list.size() > 0) {
+    }
+    else if (C.m3list.size() > 0) {
         int jm = lower_bound(C.m3list.begin(), C.m3list.end(), m)- C.m3list.begin();
         if (jm > 0 && C.m3list[jm]-m > m-C.m3list[jm-1]) {
             jm--;
         }
         C.HMFlist = C.WDMHMFlist[jm];
-        C.dotMlist = C.WDMdotMlist[jm];
     }
     
     return PhiUV(C, Mt, Mc, epsilon, alpha, beta, gamma, zc, fkappa, ze, z0, sigmaUV);
@@ -212,11 +212,20 @@ vector<vector<double> > readUVdata(vector<string> filenames) {
 double logNPDF(double x, double mu, double sigma) {
     return (-pow((x-mu)/sigma,2.0) - log(2*PI) - 2.0*log(sigma))/2.0;
 }
+// linear uncertainties
 double logNPDF2(double x, double mu, double sigmap, double sigmam) {
     if (x < mu) {
         return logNPDF(x,mu,sigmam) + log(2*sigmam/(sigmam+sigmap));
     }
     return logNPDF(x,mu,sigmap) + log(2*sigmap/(sigmam+sigmap));
+}
+// logarighmic uncertainties
+double logNPDF3(double x, double mu, double sigmap, double sigmam) {
+    double lx = log10(x);
+    double lmu = log10(mu);
+    double lsigmap = log10(mu+sigmap) - log10(mu);
+    double lsigmam = log10(mu) - log10(max(1.0e-20,mu-sigmam));
+    return logNPDF2(lx, lmu, lsigmap, lsigmam);
 }
 
 // loglikelihood function
@@ -304,7 +313,7 @@ vector<vector<double> > mcmc_sampling(cosmology &C, vector<vector<double> > &dat
             paccept = randomreal(0.0,1.0,mt);
             
             // accept or reject the proposed sample
-            if (logLcurrent < 0.0 || logLproposed - logLcurrent - log(priorratio) > log(paccept)) {
+            if (logLproposed - logLcurrent - log(priorratio) > log(paccept)) {
                 
                 current = proposed;
                 logLcurrent = logLproposed;
@@ -315,7 +324,7 @@ vector<vector<double> > mcmc_sampling(cosmology &C, vector<vector<double> > &dat
                 }
                 cout << endl;
                 
-                if (i > Nbi && logLcurrent > 0.0) {
+                if (i > Nbi && logLcurrent > -1000.0) {
                     acceptanceratio += 1.0/(1.0*(Ns-Nbi));
                     
                     element.insert(element.end(), current.begin(), current.end());
@@ -332,7 +341,7 @@ vector<vector<double> > mcmc_sampling(cosmology &C, vector<vector<double> > &dat
 }
 
 // function to generate MCMC chains to fit the UV data
-vector<double> UFfit(cosmology &C, vector<vector<double> > &priors, vector<double> &steps, int Nsteps, int Nbi, int Nchains) {
+vector<double> UFfit(cosmology &C, vector<vector<double> > &priors, vector<double> &steps, int Nsteps, int Nbi, int Nchains, string filename) {
     // random number generator
     rgen mt(time(NULL));
     
@@ -342,7 +351,7 @@ vector<double> UFfit(cosmology &C, vector<vector<double> > &priors, vector<doubl
     
     // output the MCMC chains and find the best fit
     ofstream outfile;
-    outfile.open("MCMCchains.dat");
+    outfile.open(filename);
     int jmax = 0;
     double logLmax = 0.0;
     vector<double> initial(priors.size(),0.0);
