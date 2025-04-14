@@ -1,45 +1,14 @@
 #include "cosmology.h"
 
-// generates a list of redshifts
-vector<double> cosmology::zlistf() {
-    double dlogz = (log(zmax)-log(zmin))/(1.0*(Nz-1));
-    double z = zmin;
-    vector<double> tmp(Nz, 0.0);
-    for (int jz = 0; jz < Nz; jz++) {
-        tmp[jz] = z;
-        z = exp(log(z) + dlogz);
-    }
-    return tmp;
-}
-
-
-// generates a list of FDM masses
-vector<double> cosmology::m22listf() {
-    if (Nm22 > 1) {
-        double dlogm22 = (log(m22max)-log(m22min))/(1.0*(Nm22-1));
-        double m22 = m22min;
-        vector<double> tmp(Nm22,0.0);
-        for (int jm = 0; jm < Nm22; jm++) {
-            tmp[jm] = m22;
-            m22 = exp(log(m22) + dlogm22);
-        }
-        return tmp;
-    } else {
-        vector<double> tmp;
-        return tmp;
-    }
-}
-
-
-// generates a list of WDM masses
-vector<double> cosmology::m3listf() {
-    if (Nm3 > 1) {
-        double dlogm3 = (log(m3max)-log(m3min))/(1.0*(Nm3-1));
-        double m3 = m3min;
-        vector<double> tmp(Nm3,0.0);
-        for (int jm = 0; jm < Nm3; jm++) {
-            tmp[jm] = m3;
-            m3 = exp(log(m3) + dlogm3);
+// generates a list in log scale
+vector<double> cosmology::loglist(double xmin, double xmax, int Nx) {
+    if (Nx > 1) {
+        double dlogx = (log(xmax)-log(xmin))/(1.0*(Nx-1));
+        double x = xmin;
+        vector<double> tmp(Nx,0.0);
+        for (int j = 0; j < Nx; j++) {
+            tmp[j] = x;
+            x = exp(log(x) + dlogx);
         }
         return tmp;
     } else {
@@ -112,8 +81,8 @@ vector<double> cosmology::sigmaC(double M, double deltaH) {
     for (int jk = 0; jk < Nk; jk++) {
         k1 = k2;
         k2 = exp(log(k2)+dlogk);
-        sigma2 += (k2-k1)*(pow(W(k1*RM)*Deltak(k1,deltaH),2.0)/k1 + pow(W(k2*RM)*Deltak(k2,deltaH),2.0)/k2)/2.0;
-        dsigma2 += (k2-k1)*(2.0*k2*DRM*DW(k2*RM)*W(k2*RM)*pow(Deltak(k2,deltaH),2.0)/k2 + 2.0*k1*DRM*DW(k1*RM)*W(k1*RM)*pow(Deltak(k1,deltaH),2.0)/k1)/2.0;
+        sigma2 += (k2-k1)*(pow(Ws(k1*RM)*Deltak(k1,deltaH),2.0)/k1 + pow(Ws(k2*RM)*Deltak(k2,deltaH),2.0)/k2)/2.0;
+        dsigma2 += (k2-k1)*(2.0*k2*DRM*DWs(k2*RM)*Ws(k2*RM)*pow(Deltak(k2,deltaH),2.0)/k2 + 2.0*k1*DRM*DWs(k1*RM)*Ws(k1*RM)*pow(Deltak(k1,deltaH),2.0)/k1)/2.0;
     }
     return {sqrt(sigma2), dsigma2/(2.0*sqrt(sigma2))};
 }
@@ -128,23 +97,13 @@ vector<double> cosmology::sigmaF(double M, double deltaH, double m22) {
     double kmin = 1.0e-6*kmax;
     double dlogk = (log(kmax)-log(kmin))/(1.0*(Nk-1));
     
-    // smooth k-space window, same as for WDM
-    double c = 1.0/0.43;
-    double b = 6.0;
-    function<double(double)> WF = [&](double x) {
-        return Ws(x,c,b);
-    };
-    function<double(double)> DWF = [&](double x) {
-        return DWs(x,c,b);
-    };
-    
     double sigma2 = 0.0, dsigma2 = 0.0;
     double k1, k2 = kmin;
     for (int jk = 0; jk < Nk; jk++) {
         k1 = k2;
         k2 = exp(log(k2)+dlogk);
-        sigma2 += (k2-k1)*(pow(WF(k1*RM)*DeltakF(k1,deltaH,m22),2.0)/k1 + pow(WF(k2*RM)*DeltakF(k2,deltaH,m22),2.0)/k2)/2.0;
-        dsigma2 += (k2-k1)*(2.0*k2*DRM*DWF(k2*RM)*WF(k2*RM)*pow(DeltakF(k2,deltaH,m22),2.0)/k2 + 2.0*k1*DRM*DWF(k1*RM)*WF(k1*RM)*pow(DeltakF(k1,deltaH,m22),2.0)/k1)/2.0;
+        sigma2 += (k2-k1)*(pow(Ws(k1*RM)*DeltakF(k1,deltaH,m22),2.0)/k1 + pow(Ws(k2*RM)*DeltakF(k2,deltaH,m22),2.0)/k2)/2.0;
+        dsigma2 += (k2-k1)*(2.0*k2*DRM*DWs(k2*RM)*Ws(k2*RM)*pow(DeltakF(k2,deltaH,m22),2.0)/k2 + 2.0*k1*DRM*DWs(k1*RM)*Ws(k1*RM)*pow(DeltakF(k1,deltaH,m22),2.0)/k1)/2.0;
     }
     return {sqrt(sigma2), dsigma2/(2.0*sqrt(sigma2))};
 }
@@ -159,30 +118,40 @@ vector<double> cosmology::sigmaW(double M, double deltaH, double m3) {
     double kmin = 1.0e-6*kmax;
     double dlogk = (log(kmax)-log(kmin))/(1.0*(Nk-1));
     
-    // smooth k-space window, same as for FDM
-    double c = 1.0/0.43;
-    double b = 6.0;
-    function<double(double)> WW = [&](double x) {
-        return Ws(x,c,b);
-    };
-    function<double(double)> DWW = [&](double x) {
-        return DWs(x,c,b);
-    };
+    double sigma2 = 0.0, dsigma2 = 0.0;
+    double k1, k2 = kmin;
+    for (int jk = 0; jk < Nk; jk++) {
+        k1 = k2;
+        k2 = exp(log(k2)+dlogk);
+        sigma2 += (k2-k1)*(pow(Ws(k1*RM)*DeltakW(k1,deltaH,m3),2.0)/k1 + pow(Ws(k2*RM)*DeltakW(k2,deltaH,m3),2.0)/k2)/2.0;
+        dsigma2 += (k2-k1)*(2.0*k2*DRM*DWs(k2*RM)*Ws(k2*RM)*pow(DeltakW(k2,deltaH,m3),2.0)/k2 + 2.0*k1*DRM*DWs(k1*RM)*Ws(k1*RM)*pow(DeltakW(k1,deltaH,m3),2.0)/k1)/2.0;
+    }
+    return {sqrt(sigma2), dsigma2/(2.0*sqrt(sigma2))};
+}
+
+// variance of the enhanced matter fluctuations
+vector<double> cosmology::sigmaE(double M, double deltaH, double kc) {
+    double RM = pow(3.0*M/(4.0*PI*rhoM0),1.0/3.0);
+    double DRM = RM/(3.0*M);
+    
+    double kmax = 1000.0/RM;
+    double kmin = 1.0e-6*kmax;
+    double dlogk = (log(kmax)-log(kmin))/(1.0*(Nk-1));
     
     double sigma2 = 0.0, dsigma2 = 0.0;
     double k1, k2 = kmin;
     for (int jk = 0; jk < Nk; jk++) {
         k1 = k2;
         k2 = exp(log(k2)+dlogk);
-        sigma2 += (k2-k1)*(pow(WW(k1*RM)*DeltakW(k1,deltaH,m3),2.0)/k1 + pow(WW(k2*RM)*DeltakW(k2,deltaH,m3),2.0)/k2)/2.0;
-        dsigma2 += (k2-k1)*(2.0*k2*DRM*DWW(k2*RM)*WW(k2*RM)*pow(DeltakW(k2,deltaH,m3),2.0)/k2 + 2.0*k1*DRM*DWW(k1*RM)*WW(k1*RM)*pow(DeltakW(k1,deltaH,m3),2.0)/k1)/2.0;
+        sigma2 += (k2-k1)*(pow(Ws(k1*RM)*DeltakE(k1,deltaH,kc),2.0)/k1 + pow(Ws(k2*RM)*DeltakE(k2,deltaH,kc),2.0)/k2)/2.0;
+        dsigma2 += (k2-k1)*(2.0*k2*DRM*DWs(k2*RM)*Ws(k2*RM)*pow(DeltakE(k2,deltaH,kc),2.0)/k2 + 2.0*k1*DRM*DWs(k1*RM)*Ws(k1*RM)*pow(DeltakE(k1,deltaH,kc),2.0)/k1)/2.0;
     }
     return {sqrt(sigma2), dsigma2/(2.0*sqrt(sigma2))};
 }
 
 
 // list of matter fluctuation variances, {M, sigma, dsigma/dM}
-vector<vector<double> > cosmology::sigmalistf(double m22, double m3) {
+vector<vector<double> > cosmology::sigmalistf(double m22, double m3, double kc) {
     int Nextra = (int) ceil((NM-1)*log(3.0)/log(Mmax/Mmin)); // extend the M range for computation of dotM
     vector<vector<double> > Ms(NM+Nextra, vector<double> (3,0.0));
     
@@ -200,6 +169,9 @@ vector<vector<double> > cosmology::sigmalistf(double m22, double m3) {
         }
         if (m3 > 0.0) {
             sigma = sigmaW(M, deltaH8, m3);
+        }
+        if (kc > 0.0) {
+            sigma = sigmaE(M, deltaH8, kc);
         }
         Ms[jM][0] = M;
         Ms[jM][1] = sigma[0];

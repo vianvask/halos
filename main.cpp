@@ -34,7 +34,7 @@ int main (int argc, char *argv[]) {
     // redshifts
     C.zmin = 0.01;
     C.zmax = 36.01;
-    C.Nz = 360;
+    C.Nz = 180;
     
     if (dm == 1) {
         // FDM masses in 10^-22 eV
@@ -48,19 +48,25 @@ int main (int argc, char *argv[]) {
         C.m3max = 20.0;
         C.Nm3 = 32;
     }
+    if (dm == 3) {
+        // kc values in 1/kpc
+        C.kcmin = 0.003;
+        C.kcmax = 0.3;
+        C.Nkc = 32;
+    }
     
     C.initialize();
     ofstream outfile;
    
     cout << "Computing halo mass functions..." << endl;
     
-    double m22, m3, z, M, sigma, dsigma, HMF, dotM;
+    double m22, m3, kc, z, M, sigma, dsigma, HMF, dotM;
     
     if (dm == 0) {
         C.CDM_halos();
         
         outfile.open("sigma_CDM.dat");
-        for (int jM = 0; jM < C.NM; jM++) {
+        for (int jM = 0; jM < C.NM; jM+=10) {
             M = C.sigmalist[jM][0];
             sigma = C.sigmalist[jM][1];
             dsigma = C.sigmalist[jM][2];
@@ -72,7 +78,7 @@ int main (int argc, char *argv[]) {
         outfile.open("HMF_CDM.dat");
         for (int jz = 0; jz < C.Nz; jz++) {
             z = C.zlist[jz];
-            for (int jM = 0; jM < C.NM; jM++) {
+            for (int jM = 0; jM < C.NM; jM+=10) {
                 M = C.HMFlist[jz][jM][1];
                 HMF = C.HMFlist[jz][jM][2];
                 dotM = C.HMFlist[jz][jM][3];
@@ -89,7 +95,7 @@ int main (int argc, char *argv[]) {
         outfile.open("sigma_FDM.dat");
         for (int jm = 0; jm < C.m22list.size(); jm++) {
             m22 = C.m22list[jm];
-            for (int jM = 0; jM < C.NM; jM++) {
+            for (int jM = 0; jM < C.NM; jM+=10) {
                 M = C.FDMsigmalist[jm][jM][0];
                 sigma = C.FDMsigmalist[jm][jM][1];
                 dsigma = C.FDMsigmalist[jm][jM][2];
@@ -104,7 +110,7 @@ int main (int argc, char *argv[]) {
             m22 = C.m22list[jm];
             for (int jz = 0; jz < C.Nz; jz++) {
                 z = C.zlist[jz];
-                for (int jM = 0; jM < C.NM; jM++) {
+                for (int jM = 0; jM < C.NM; jM+=10) {
                     M = C.FDMHMFlist[jm][jz][jM][1];
                     HMF = C.FDMHMFlist[jm][jz][jM][2];
                     dotM = C.FDMHMFlist[jm][jz][jM][3];
@@ -122,7 +128,7 @@ int main (int argc, char *argv[]) {
         outfile.open("sigma_WDM.dat");
         for (int jm = 0; jm < C.m3list.size(); jm++) {
             m3 = C.m3list[jm];
-            for (int jM = 0; jM < C.NM; jM++) {
+            for (int jM = 0; jM < C.NM; jM+=10) {
                 M = C.WDMsigmalist[jm][jM][0];
                 sigma = C.WDMsigmalist[jm][jM][1];
                 dsigma = C.WDMsigmalist[jm][jM][2];
@@ -137,12 +143,45 @@ int main (int argc, char *argv[]) {
             m3 = C.m3list[jm];
             for (int jz = 0; jz < C.Nz; jz++) {
                 z = C.zlist[jz];
-                for (int jM = 0; jM < C.NM; jM++) {
+                for (int jM = 0; jM < C.NM; jM+=10) {
                     M = C.WDMHMFlist[jm][jz][jM][1];
                     HMF = C.WDMHMFlist[jm][jz][jM][2];
                     dotM = C.WDMHMFlist[jm][jz][jM][3];
                     
                     outfile << m3 << "   " << z << "   " << M << "   " << max(1.0e-99,HMF) << "   " << dotM << endl;
+                }
+            }
+        }
+        outfile.close();
+    }
+    
+    if (dm == 3) {
+        C.EDM_halos();
+        
+        outfile.open("sigma_EDM.dat");
+        for (int jm = 0; jm < C.kclist.size(); jm++) {
+            kc = C.kclist[jm];
+            for (int jM = 0; jM < C.NM; jM+=10) {
+                M = C.EDMsigmalist[jm][jM][0];
+                sigma = C.EDMsigmalist[jm][jM][1];
+                dsigma = C.EDMsigmalist[jm][jM][2];
+                
+                outfile << kc << "   " << M << "   " << sigma << "   " << dsigma << endl;
+            }
+        }
+        outfile.close();
+        
+        outfile.open("HMF_EDM.dat");
+        for (int jm = 0; jm < C.kclist.size(); jm++) {
+            kc = C.kclist[jm];
+            for (int jz = 0; jz < C.Nz; jz++) {
+                z = C.zlist[jz];
+                for (int jM = 0; jM < C.NM; jM+=10) {
+                    M = C.EDMHMFlist[jm][jz][jM][1];
+                    HMF = C.EDMHMFlist[jm][jz][jM][2];
+                    dotM = C.EDMHMFlist[jm][jz][jM][3];
+                    
+                    outfile << kc << "   " << z << "   " << M << "   " << max(1.0e-99,HMF) << "   " << dotM << endl;
                 }
             }
         }
@@ -165,9 +204,9 @@ int main (int argc, char *argv[]) {
     C.Plnmuz = getPlnmu(C, rS, Nkappa, Nreal, Nbins);
     
     // parameters: (logMt, Mc, epsilon, alpha, beta, gamma, zc, fkappa, ze, z0, sigmaUV, logm)
-    vector<double> bf = {7.25, 3.86e11, 0.0633, 0.935, 0.389, 0.158, 10.69, 0.350, 11.15, 27.38, 0.054, log10(2.0)};
-    //vector<double> bf = {7.75, 3.76e11, 0.0621, 0.731, 0.447, 0.233, 10.71, 0.297, 10.20, 24.80, 0.059, log10(1.0)};
-
+    vector<double> bf = {7.62, 3.94e11, 0.0618, 0.878, 0.406, 0.158, 10.77, 0.332, 12.03, 25.21, 0.061, log10(0.3)};
+    //vector<double> bf = {7.50, 3.78e11, 0.0614, 0.735, 0.451, 0.180, 10.83, 0.264, 11.74, 23.16, 0.059, 0.08};
+    
     string filename;
     
     if (doUVfit == 1) {
@@ -182,6 +221,9 @@ int main (int argc, char *argv[]) {
         if (dm == 2) {
             filename = "MCMCchains_WDM.dat";
         }
+        if (dm == 3) {
+            filename = "MCMCchains_EDM.dat";
+        }
         
         // max number of steps in each chain
         int Nsteps = 2000;
@@ -192,17 +234,19 @@ int main (int argc, char *argv[]) {
         // flat priors
         vector<vector<double> > priors;
         if (C.m22list.size() > 0) {
-            priors = {{6.0,10.0}, {3.0e11, 5.0e11}, {0.057, 0.069}, {0.6, 1.1}, {0.2, 0.6}, {0.05, 0.6}, {9.8, 11.4}, {0.05, 0.7}, {7.0, 25.0}, {20.0, 36.0}, {0.05, 0.2}, {log10(C.m22list.front()), log10(C.m22list.back())}};
+            priors = {{6.0,10.0}, {3.0e11, 5.0e11}, {0.0578, 0.0658}, {0.6, 1.1}, {0.2, 0.6}, {0.05, 0.6}, {9.8, 11.4}, {0.05, 0.7}, {7.0, 25.0}, {20.0, 36.0}, {0.05, 0.2}, {log10(C.m22list.front()), log10(C.m22list.back())}};
         } else if (C.m3list.size() > 0) {
-            priors = {{6.0,10.0}, {3.0e11, 5.0e11}, {0.057, 0.069}, {0.6, 1.1}, {0.2, 0.6}, {0.05, 0.6}, {9.8, 11.4}, {0.05, 0.7}, {7.0, 25.0}, {20.0, 36.0}, {0.05, 0.2}, {log10(C.m3list.front()), log10(C.m3list.back())}};
+            priors = {{6.0,10.0}, {3.0e11, 5.0e11}, {0.0578, 0.0658}, {0.6, 1.1}, {0.2, 0.6}, {0.05, 0.6}, {9.8, 11.4}, {0.05, 0.7}, {7.0, 25.0}, {20.0, 36.0}, {0.05, 0.2}, {log10(C.m3list.front()), log10(C.m3list.back())}};
+        } else if (C.kclist.size() > 0) {
+            priors = {{6.0,10.0}, {3.0e11, 5.0e11}, {0.0578, 0.0658}, {0.6, 1.1}, {0.2, 0.6}, {0.05, 0.6}, {9.8, 11.4}, {0.05, 0.7}, {7.0, 25.0}, {20.0, 36.0}, {0.05, 0.2}, {log10(C.kclist.front()), log10(C.kclist.back())}};
         } else {
-            priors = {{6.0,10.0}, {3.0e11, 5.0e11}, {0.057, 0.069}, {0.6, 1.1}, {0.2, 0.6}, {0.05, 0.6}, {9.8, 11.4}, {0.05, 0.7}, {7.0, 25.0}, {20.0, 36.0}, {0.05, 0.2}};
+            priors = {{6.0,10.0}, {3.0e11, 5.0e11}, {0.0578, 0.0658}, {0.6, 1.1}, {0.2, 0.6}, {0.05, 0.6}, {9.8, 11.4}, {0.05, 0.7}, {7.0, 25.0}, {20.0, 36.0}, {0.05, 0.2}};
         }
         
         // random walk step sizes
         vector<double> steps(priors.size(),0.0);
         for (int j = 0; j < steps.size(); j++) {
-            steps[j] = (priors[j][1]-priors[j][0])/12.0;
+            steps[j] = (priors[j][1]-priors[j][0])/14.0;
         }
         
         bf = UFfit(C, priors, steps, Nsteps, Nbi, Nchains, filename);
@@ -221,8 +265,13 @@ int main (int argc, char *argv[]) {
     if (dm == 2) {
         filename = "UVluminosity_WDM.dat";
     }
+    if (dm == 3) {
+        filename = "UVluminosity_EDM.dat";
+    }
     
     outfile.open(filename);
+    outfile << scientific << setprecision(12);
+
     double MUV, Phi0, Phi1, Phi2;
     for (int jZ = 0; jZ < C.Zlist.size(); jZ++) {
         z = C.Zlist[jZ];

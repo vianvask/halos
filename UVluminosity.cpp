@@ -23,12 +23,12 @@ double enh(double z, double ze, double z0) {
 double MUV(cosmology &C, double z, double M, double dotM, double Mc, double Mt, double epsilon, double alpha, double beta, double gamma, double zc, double fkappa, double ze, double z0) {
     double alphaz = alpha*enh(z, ze, z0);
     double betaz = beta*enh(z, ze, z0);
-    return 51.63 - 1.08574*log(C.fstar(z,M,Mc,Mt,epsilon,alphaz,betaz)*dotM/kappaUV(z,gamma,zc,fkappa));
+    return 51.63 - 1.08574*log(C.fstar(z,M,Mc,Mt,epsilon,alphaz,betaz)*max(1.0e-99,dotM)/kappaUV(z,gamma,zc,fkappa));
 }
 
 // derivative of the UV magnitude, dM_UV/dM
 double DMUV(cosmology &C, double M, double dotM, double DdotM, double Mc, double Mt, double epsilon, double alpha, double beta) {
-    return -1.08574*(DdotM/dotM + C.Dfstarperfstar(M,Mc,Mt,epsilon,alpha,beta));
+    return -1.08574*(DdotM/max(1.0e-99,dotM) + C.Dfstarperfstar(M,Mc,Mt,epsilon,alpha,beta));
 }
 
 // dust extinction, MUV -> MUV - AUV (see 1406.1503 and Table 3 of 1306.2950)
@@ -176,6 +176,13 @@ vector<vector<vector<double> > > PhiUV(cosmology &C, double logMt, double Mc, do
         }
         C.HMFlist = C.WDMHMFlist[jm];
     }
+    else if (C.kclist.size() > 0) {
+        int jm = lower_bound(C.kclist.begin(), C.kclist.end(), m)- C.kclist.begin();
+        if (jm > 0 && C.kclist[jm]-m > m-C.kclist[jm-1]) {
+            jm--;
+        }
+        C.HMFlist = C.EDMHMFlist[jm];
+    }
     
     return PhiUV(C, Mt, Mc, epsilon, alpha, beta, gamma, zc, fkappa, ze, z0, sigmaUV);
 }
@@ -254,7 +261,7 @@ double loglikelihood(cosmology &C, vector<vector<double> > &data, vector<double>
 }
 double loglikelihood(cosmology &C, vector<double> &params) {
     // read UV luminosity data files, {MUV, Phi, +sigmaPhi, -sigmaPhi}
-    vector<string> datafiles {"UVLF_2102.07775.txt", "UVLF_2108.01090.txt", "UVLF_2403.03171.txt", "UVLF_2503.15594.txt"};
+    vector<string> datafiles {"UVLF_2102.07775.txt", "UVLF_2108.01090.txt", "UVLF_2403.03171.txt", "UVLF_2503.15594.txt", "UVLF_2504.05893.txt"};
     vector<vector<double> > data = readUVdata(datafiles);
     return loglikelihood(C,data,params);
 }
@@ -346,7 +353,7 @@ vector<double> UFfit(cosmology &C, vector<vector<double> > &priors, vector<doubl
     rgen mt(time(NULL));
     
     // read UV luminosity data files, {MUV, Phi, +sigmaPhi, -sigmaPhi}
-    vector<string> datafiles {"UVLF_2102.07775.txt", "UVLF_2108.01090.txt", "UVLF_2403.03171.txt", "UVLF_2503.15594.txt"};
+    vector<string> datafiles {"UVLF_2102.07775.txt", "UVLF_2108.01090.txt", "UVLF_2403.03171.txt", "UVLF_2503.15594.txt", "UVLF_2504.05893.txt"};
     vector<vector<double> > data = readUVdata(datafiles);
     
     // output the MCMC chains and find the best fit
