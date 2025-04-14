@@ -14,6 +14,9 @@ public:
     int Nm3 = 0;
     double m3min, m3max;
     
+    int Nkc = 0;
+    double kcmin, kcmax;
+    
     // cosmological parameters
     double OmegaM;
     double OmegaB;
@@ -118,6 +121,11 @@ private:
         return sqrt(pow(306.535*k/H0,3.0+ns)*pow(deltaH*TMW(k,m3),2.0));
     }
     
+    // white noise enhanced matter power spectrum
+    double DeltakE(double k, double deltaH, double kc) {
+        return Deltak(k, deltaH) + pow(k/kc,3.0)*Deltak(kc, deltaH);
+    }
+    
     // real space top hat window function
     double W(double x) {
         return 3.0*(x*cos(x)-sin(x))/pow(x,3.0);
@@ -127,10 +135,14 @@ private:
     }
     
     // smooth k space window function
-    double Ws(double x, double c, double b) {
+    double Ws(double x) {
+        double c = 1.0/0.43;
+        double b = 6.0;
         return 1.0/(1.0+pow(x/c,b));
     }
-    double DWs(double x, double c, double b) {
+    double DWs(double x) {
+        double c = 1.0/0.43;
+        double b = 6.0;
         return -b*pow(x/c,b)/(x*pow(1.0+pow(x/c,b),2.0));
     }
     
@@ -138,14 +150,14 @@ private:
     vector<double> sigmaC(double M, double deltaH);
     vector<double> sigmaF(double M, double deltaH, double m22);
     vector<double> sigmaW(double M, double deltaH, double m3);
+    vector<double> sigmaE(double M, double deltaH, double kc);
 
     // variance of matter fluctuations, {M,sigma(M),sigma'(M)}
-    vector<vector<double> > sigmalistf(double m22, double m3);
+    vector<vector<double> > sigmalistf(double m22, double m3, double kc);
     
-    vector<double> zlistf();
-    vector<double> m22listf();
-    vector<double> m3listf();
-    
+    // generates a list in log scale
+    vector<double> loglist(double xmin, double xmax, int Nx);
+
     // CDM halo consentration parameter (1601.02624)
     double cons(double M, double z);
     vector<vector<vector<double> > > conslistf();
@@ -181,6 +193,7 @@ public:
     
     // list of redshifts, same as for HMF and dotM lists
     vector<double> zlist;
+    
     vector<vector<double> > sigmalist;
     vector<vector<vector<double> > > HMFlist;
     vector<vector<vector<double> > > NFWlist;
@@ -189,15 +202,17 @@ public:
     vector<double> Zlist;
     vector<vector<vector<double> > > Plnmuz;
     
-    // list of FDM masses, same as for HMF_FDM and dotM_FDM lists
     vector<double> m22list;
     vector<vector<vector<double> > > FDMsigmalist;
     vector<vector<vector<vector<double> > > > FDMHMFlist;
     
-    // list of WDM masses, same as for HMF_WDM and dotM_WDM lists
     vector<double> m3list;
     vector<vector<vector<double> > > WDMsigmalist;
     vector<vector<vector<vector<double> > > > WDMHMFlist;
+    
+    vector<double> kclist;
+    vector<vector<vector<double> > > EDMsigmalist;
+    vector<vector<vector<vector<double> > > > EDMHMFlist;
     
     void initialize() {
         OmegaR = OmegaM/(1+zeq);
@@ -210,9 +225,10 @@ public:
         rhoM0 = OmegaM*rhoc;
         M8 = 4.0*PI/3.0*pow(8000.0/h,3.0)*rhoM0;
         
-        zlist = zlistf();
-        m22list = m22listf();
-        m3list = m3listf();
+        zlist = loglist(zmin,zmax,Nz);
+        m22list = loglist(m22min,m22max,Nm22);
+        m3list = loglist(m3min,m3max,Nm3);
+        kclist = loglist(kcmin,kcmax,Nkc);
         
         zdc = dclist();
         zt = tlist();
@@ -223,7 +239,7 @@ public:
         deltaH8 = sigma8/sigmaC(M8, 1.0)[0];
         
         // halo mass function and halo growth rate
-        sigmalist = sigmalistf(0.0, 0.0);
+        sigmalist = sigmalistf(0.0, 0.0, 0.0);
         HMFlist = HMFlistf();
         
         // NFW halo parameters
@@ -237,7 +253,7 @@ public:
             deltaH8 = sigma8/sigmaF(M8, 1.0, m22)[0];
                         
             // halo mass function and halo growth rate
-            sigmalist = sigmalistf(m22, 0.0);
+            sigmalist = sigmalistf(m22, 0.0, 0.0);
             HMFlist = HMFlistf();
             
             FDMsigmalist.push_back(sigmalist);
@@ -251,11 +267,25 @@ public:
             deltaH8 = sigma8/sigmaW(M8, 1.0, m3)[0];
                         
             // halo mass function and halo growth rate
-            sigmalist = sigmalistf(0.0, m3);
+            sigmalist = sigmalistf(0.0, m3, 0.0);
             HMFlist = HMFlistf();
             
             WDMsigmalist.push_back(sigmalist);
             WDMHMFlist.push_back(HMFlist);
+        }
+    }
+    
+    void EDM_halos() {
+        for (double kc : kclist) {
+            // fix deltaH to match the input sigma8
+            deltaH8 = sigma8/sigmaE(M8, 1.0, kc)[0];
+                        
+            // halo mass function and halo growth rate
+            sigmalist = sigmalistf(0.0, 0.0, kc);
+            HMFlist = HMFlistf();
+            
+            EDMsigmalist.push_back(sigmalist);
+            EDMHMFlist.push_back(HMFlist);
         }
     }
     
