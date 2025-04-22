@@ -1,2 +1,2 @@
 # HMF
- C++ code that computes the halo mass function
+ C++ code that computes the halo mass function etc.
