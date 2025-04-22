@@ -78,15 +78,21 @@ private:
     // CDM matter transfer function (astro-ph/9709112)
     double TM(double k);
     
-    // FDM matter transfer function (astro-ph/0003365)
+    // FDM matter transfer function (2201.10238, old from astro-ph/0003365)
     double kJ(double m22) {
-        return 69.1e-3*pow(OmegaM*h*h/0.14/(1+zeq),1.0/4.0)*sqrt(m22);
+        return 66.5e-3*pow(OmegaC*h*h/0.12/(1+zeq),1.0/4.0)*sqrt(m22);
     }
     double km22(double m22) {
-        return 1.0/1.61*pow(m22,-1.0/18.0)*kJ(m22);
+        double A = 2.22*pow(m22,1.0/25.0 - 0.001*log(m22));
+        return kJ(m22)/A;
+        //return 1.0/1.61*pow(m22,-1.0/18.0)*kJ(m22);
     }
     double TF(double k, double m22) {
-        return cos(pow(k/km22(m22),3.0))/(1+pow(k/km22(m22),8.0));
+        double n = 5.0/2.0;
+        double x = k/km22(m22);
+        double B = 0.16*pow(m22,-1.0/20.0);
+        return sin(pow(x,n))/pow(x,n)/(1+B*pow(x,6-n));
+        //return cos(pow(k/km22(m22),3.0))/(1+pow(k/km22(m22),8.0));
     }
     double TMF(double k, double m22) {
         return TF(k,m22)*TM(k);

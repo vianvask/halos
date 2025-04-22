@@ -38,21 +38,21 @@ int main (int argc, char *argv[]) {
     
     if (dm == 1) {
         // FDM masses in 10^-22 eV
-        C.m22min = 0.7;
-        C.m22max = 20.0;
-        C.Nm22 = 32;
+        C.m22min = 1.0;
+        C.m22max = 2000.0;
+        C.Nm22 = 50;
     }
     if (dm == 2) {
         // WDM masses in keV
         C.m3min = 0.7;
-        C.m3max = 20.0;
-        C.Nm3 = 32;
+        C.m3max = 40.0;
+        C.Nm3 = 50;
     }
     if (dm == 3) {
         // kc values in 1/kpc
-        C.kcmin = 0.003;
-        C.kcmax = 0.3;
-        C.Nkc = 32;
+        C.kcmin = 0.006;
+        C.kcmax = 2.0;
+        C.Nkc = 50;
     }
     
     C.initialize();
@@ -204,11 +204,11 @@ int main (int argc, char *argv[]) {
     C.Plnmuz = getPlnmu(C, rS, Nkappa, Nreal, Nbins);
     
     // parameters: (logMt, Mc, epsilon, alpha, beta, gamma, zc, fkappa, ze, z0, sigmaUV, logm)
-    vector<double> bf = {7.62, 3.94e11, 0.0618, 0.878, 0.406, 0.158, 10.77, 0.332, 12.03, 25.21, 0.061, log10(0.3)};
-    //vector<double> bf = {7.50, 3.78e11, 0.0614, 0.735, 0.451, 0.180, 10.83, 0.264, 11.74, 23.16, 0.059, 0.08};
+    vector<double> bf = {7.89, 3.68e11, 0.0616, 0.915, 0.398, 0.222, 10.75, 0.353, 11.41, 25.25, 0.058, 0.7};
+    //vector<double> bf = {6.02, 3.94e11, 0.0620, 0.737, 0.452, 0.201, 10.77, 0.355, 10.44, 24.74, 0.060, 0.08};
+    //vector<double> bf = {7.89, 3.68e11, 0.0616, 0.915, 0.398, 0.222, 10.75, 0.353, 11.41, 25.25, 0.058, -1.6};
     
     string filename;
-    
     if (doUVfit == 1) {
         cout << "Computing UV luminosity fit..." << endl;
         
@@ -230,7 +230,7 @@ int main (int argc, char *argv[]) {
         // burn-in
         int Nbi = 1000;
         // number of chains
-        int Nchains = 100;
+        int Nchains = 200;
         // flat priors
         vector<vector<double> > priors;
         if (C.m22list.size() > 0) {
@@ -286,27 +286,6 @@ int main (int argc, char *argv[]) {
         }
     }
     outfile.close();
-    
-    /*
-    cout << "Evolving stellar masses and BH masses..." << endl;
-    
-    outfile.open("BHmassStellarmass.dat");
-    vector<vector<double> > MBHlist(C.Nz, vector<double> (C.NM,0.0));
-    vector<vector<double> > Mstlist = C.evolvestellarmass(bf[0], bf[1], bf[2], bf[3], bf[4]);
-    
-    double MBH, Mst;
-    for (int jz = 0; jz < C.Nz; jz++) {
-        z = C.zlist[jz];
-        for (int jM = 0; jM < C.NM; jM++) {
-            M = C.sigmalist[jM][0];
-            MBH = MBHlist[jz][jM];
-            Mst = Mstlist[jz][jM];
-                        
-            outfile << z << "   " << M << "   " << MBH << "   " << Mst << endl;
-        }
-    }
-    outfile.close();
-    */
     
     time_req = clock() - time_req;
     cout << "Total evaluation time: " << ((double) time_req/CLOCKS_PER_SEC/60.0) << " min." << endl;

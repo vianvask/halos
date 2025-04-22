@@ -259,24 +259,12 @@ double cosmology::Dfstarperfstar(double M, double Mc, double Mt, double epsilon,
 
 // TODO: growth of stellar mass and BH mass by mergers
 vector<double> cosmology::growbymergers(vector<double> &MJ, double z, double zp) {
-    double M, Mp, dMp;
     vector<double> MJnew(NM, 0.0);
-    vector<double> sigma, sigmap;
-    /*for (int jM = NM-1; jM > 0; jM--) {
-        sigma = sigmalist[jM];
-        M = sigma[0];
-        for (int jMp = 1; jMp < jM; jMp++) {
-            sigmap = sigmalist[jMp];
-            Mp = sigmap[0];
-            dMp = Mp - sigmalist[jMp-1][0];
-            
-            MJnew[jM] += 2.0*sigmap[1]*abs(sigmap[2])*MJ[jMp]*M/Mp*pFC(deltac(zp),pow(sigmap[1],2.0),deltac(z),pow(sigma[1],2.0))*dMp;
-        }
-    }*/
+    
     return MJnew;
 }
 
-// growth of stellar mass by star formation
+// stellar mass growth
 vector<vector<double> > cosmology::evolvestellarmass(double Mc, double Mt, double epsilon, double alpha, double beta) {
     vector<vector<double> > Mst(Nz, vector<double> (NM, 0.0));
     
@@ -301,7 +289,7 @@ vector<vector<double> > cosmology::evolvestellarmass(double Mc, double Mt, doubl
     return Mst;
 }
 
-// growth of the BH mass by accretion
+// BH mass growth
 vector<vector<double> > cosmology::evolveBHmass(double Mc, double Mt, double epsilon, double alpha, double beta, double fEdd, double facc1, double facc2) {
     vector<vector<double> > MBH(Nz, vector<double> (NM, 0.0));
     
