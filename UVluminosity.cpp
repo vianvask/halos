@@ -390,6 +390,7 @@ vector<double> UFfit(cosmology &C, vector<vector<double> > &priors, vector<doubl
                 }
                 outfile << endl;
             }
+            outfile << "#" << endl;
         }
     }
     outfile.close();

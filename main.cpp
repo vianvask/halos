@@ -9,7 +9,7 @@ int main (int argc, char *argv[]) {
     cout << setprecision(6) << fixed;
     
     const int doUVfit = atoi(argv[1]);
-    const int dm = atoi(argv[2]); // 0: CDM, 1: FDM, 2: WDM
+    const int dm = atoi(argv[2]); // 0: cold DM, 1: fuzzy DM, 2: warm DM, 3: white noise
     
     cout << "Preparing..." << endl;
     cosmology C;
@@ -60,187 +60,57 @@ int main (int argc, char *argv[]) {
    
     cout << "Computing halo mass functions..." << endl;
     
-    double m22, m3, kc, z, M, sigma, dsigma, HMF, dotM;
-    
     if (dm == 0) {
         C.CDM_halos();
-        
-        outfile.open("sigma_CDM.dat");
-        for (int jM = 0; jM < C.NM; jM+=10) {
-            M = C.sigmalist[jM][0];
-            sigma = C.sigmalist[jM][1];
-            dsigma = C.sigmalist[jM][2];
-            
-            outfile << M << "   " << sigma << "   " << dsigma << endl;
-        }
-        outfile.close();
-        
-        outfile.open("HMF_CDM.dat");
-        for (int jz = 0; jz < C.Nz; jz++) {
-            z = C.zlist[jz];
-            for (int jM = 0; jM < C.NM; jM+=10) {
-                M = C.HMFlist[jz][jM][1];
-                HMF = C.HMFlist[jz][jM][2];
-                dotM = C.HMFlist[jz][jM][3];
-                
-                outfile << z << "   " << M << "   " << max(1.0e-99,HMF) << "   " << dotM << endl;
-            }
-        }
-        outfile.close();
     }
-        
     if (dm == 1) {
         C.FDM_halos();
-        
-        outfile.open("sigma_FDM.dat");
-        for (int jm = 0; jm < C.m22list.size(); jm++) {
-            m22 = C.m22list[jm];
-            for (int jM = 0; jM < C.NM; jM+=10) {
-                M = C.FDMsigmalist[jm][jM][0];
-                sigma = C.FDMsigmalist[jm][jM][1];
-                dsigma = C.FDMsigmalist[jm][jM][2];
-                
-                outfile << m22 << "   " << M << "   " << sigma << "   " << dsigma << endl;
-            }
-        }
-        outfile.close();
-        
-        outfile.open("HMF_FDM.dat");
-        for (int jm = 0; jm < C.m22list.size(); jm++) {
-            m22 = C.m22list[jm];
-            for (int jz = 0; jz < C.Nz; jz++) {
-                z = C.zlist[jz];
-                for (int jM = 0; jM < C.NM; jM+=10) {
-                    M = C.FDMHMFlist[jm][jz][jM][1];
-                    HMF = C.FDMHMFlist[jm][jz][jM][2];
-                    dotM = C.FDMHMFlist[jm][jz][jM][3];
-                    
-                    outfile << m22 << "   " << z << "   " << M << "   " << max(1.0e-99,HMF) << "   " << dotM << endl;
-                }
-            }
-        }
-        outfile.close();
     }
-    
     if (dm == 2) {
         C.WDM_halos();
-        
-        outfile.open("sigma_WDM.dat");
-        for (int jm = 0; jm < C.m3list.size(); jm++) {
-            m3 = C.m3list[jm];
-            for (int jM = 0; jM < C.NM; jM+=10) {
-                M = C.WDMsigmalist[jm][jM][0];
-                sigma = C.WDMsigmalist[jm][jM][1];
-                dsigma = C.WDMsigmalist[jm][jM][2];
-                
-                outfile << m3 << "   " << M << "   " << sigma << "   " << dsigma << endl;
-            }
-        }
-        outfile.close();
-        
-        outfile.open("HMF_WDM.dat");
-        for (int jm = 0; jm < C.m3list.size(); jm++) {
-            m3 = C.m3list[jm];
-            for (int jz = 0; jz < C.Nz; jz++) {
-                z = C.zlist[jz];
-                for (int jM = 0; jM < C.NM; jM+=10) {
-                    M = C.WDMHMFlist[jm][jz][jM][1];
-                    HMF = C.WDMHMFlist[jm][jz][jM][2];
-                    dotM = C.WDMHMFlist[jm][jz][jM][3];
-                    
-                    outfile << m3 << "   " << z << "   " << M << "   " << max(1.0e-99,HMF) << "   " << dotM << endl;
-                }
-            }
-        }
-        outfile.close();
     }
-    
     if (dm == 3) {
         C.EDM_halos();
-        
-        outfile.open("sigma_EDM.dat");
-        for (int jm = 0; jm < C.kclist.size(); jm++) {
-            kc = C.kclist[jm];
-            for (int jM = 0; jM < C.NM; jM+=10) {
-                M = C.EDMsigmalist[jm][jM][0];
-                sigma = C.EDMsigmalist[jm][jM][1];
-                dsigma = C.EDMsigmalist[jm][jM][2];
-                
-                outfile << kc << "   " << M << "   " << sigma << "   " << dsigma << endl;
-            }
-        }
-        outfile.close();
-        
-        outfile.open("HMF_EDM.dat");
-        for (int jm = 0; jm < C.kclist.size(); jm++) {
-            kc = C.kclist[jm];
-            for (int jz = 0; jz < C.Nz; jz++) {
-                z = C.zlist[jz];
-                for (int jM = 0; jM < C.NM; jM+=10) {
-                    M = C.EDMHMFlist[jm][jz][jM][1];
-                    HMF = C.EDMHMFlist[jm][jz][jM][2];
-                    dotM = C.EDMHMFlist[jm][jz][jM][3];
-                    
-                    outfile << kc << "   " << z << "   " << M << "   " << max(1.0e-99,HMF) << "   " << dotM << endl;
-                }
-            }
-        }
-        outfile.close();
     }
     
     cout << "Generating/reading lensing amplifications..." << endl;
     
-    // number of bins in distribution of P^1(kappa)
-    int Nkappa = 50;
-    // number of realizations
-    int Nreal = 2e8;
-    // number of lnmu bins
-    int Nbins = 400;
-    // lensing source radius in kpc
-    double rS = 10.0;
+    int Nkappa = 50; // number of bins in distribution of P^1(kappa)
+    int Nreal = 2e8; // number of realizations
+    int Nbins = 400; // number of lnmu bins
+    double rS = 10.0; // lensing source radius in kpc
+    
     // list of redshift values at which dP(lnmu)/dlnmu is computed
-    //C.Zlist = {1.0, 2.0, 4.0, 8.0, 16.0};
     C.Zlist = {4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.5, 14.5, 17.0, 25.0};
     C.Plnmuz = getPlnmu(C, rS, Nkappa, Nreal, Nbins);
     
     // parameters: (logMt, Mc, epsilon, alpha, beta, gamma, zc, fkappa, ze, z0, sigmaUV, logm)
-    vector<double> bf = {7.89, 3.68e11, 0.0616, 0.915, 0.398, 0.222, 10.75, 0.353, 11.41, 25.25, 0.058, 0.7};
-    //vector<double> bf = {6.02, 3.94e11, 0.0620, 0.737, 0.452, 0.201, 10.77, 0.355, 10.44, 24.74, 0.060, 0.08};
-    //vector<double> bf = {7.89, 3.68e11, 0.0616, 0.915, 0.398, 0.222, 10.75, 0.353, 11.41, 25.25, 0.058, -1.6};
-    
+    vector<double> bf = {7.35, 3.92e11, 0.0613, 0.877, 0.405, 0.214, 10.64, 0.426, 10.45, 26.18, 0.055, 0.65};
+
     string filename;
     if (doUVfit == 1) {
         cout << "Computing UV luminosity fit..." << endl;
+        
+        int Nsteps = 40000; // max number of steps in each chain
+        int Nbi = 10000; // burn-in
+        int Nchains = 10; // number of chains
+        
+        vector<vector<double> > priors = {{6.0,10.0}, {3.0e11, 5.0e11}, {0.0578, 0.0658}, {0.6, 1.1}, {0.2, 0.6}, {0.05, 0.6}, {9.8, 11.4}, {0.05, 0.7}, {7.0, 25.0}, {20.0, 36.0}, {0.05, 0.2}};
         
         if (dm == 0) {
             filename = "MCMCchains_CDM.dat";
         }
         if (dm == 1) {
             filename = "MCMCchains_FDM.dat";
+            priors.push_back({log10(C.m22list.front()), log10(C.m22list.back())});
         }
         if (dm == 2) {
             filename = "MCMCchains_WDM.dat";
+            priors.push_back({log10(C.m3list.front()), log10(C.m3list.back())});
         }
         if (dm == 3) {
             filename = "MCMCchains_EDM.dat";
-        }
-        
-        // max number of steps in each chain
-        int Nsteps = 2000;
-        // burn-in
-        int Nbi = 1000;
-        // number of chains
-        int Nchains = 200;
-        // flat priors
-        vector<vector<double> > priors;
-        if (C.m22list.size() > 0) {
-            priors = {{6.0,10.0}, {3.0e11, 5.0e11}, {0.0578, 0.0658}, {0.6, 1.1}, {0.2, 0.6}, {0.05, 0.6}, {9.8, 11.4}, {0.05, 0.7}, {7.0, 25.0}, {20.0, 36.0}, {0.05, 0.2}, {log10(C.m22list.front()), log10(C.m22list.back())}};
-        } else if (C.m3list.size() > 0) {
-            priors = {{6.0,10.0}, {3.0e11, 5.0e11}, {0.0578, 0.0658}, {0.6, 1.1}, {0.2, 0.6}, {0.05, 0.6}, {9.8, 11.4}, {0.05, 0.7}, {7.0, 25.0}, {20.0, 36.0}, {0.05, 0.2}, {log10(C.m3list.front()), log10(C.m3list.back())}};
-        } else if (C.kclist.size() > 0) {
-            priors = {{6.0,10.0}, {3.0e11, 5.0e11}, {0.0578, 0.0658}, {0.6, 1.1}, {0.2, 0.6}, {0.05, 0.6}, {9.8, 11.4}, {0.05, 0.7}, {7.0, 25.0}, {20.0, 36.0}, {0.05, 0.2}, {log10(C.kclist.front()), log10(C.kclist.back())}};
-        } else {
-            priors = {{6.0,10.0}, {3.0e11, 5.0e11}, {0.0578, 0.0658}, {0.6, 1.1}, {0.2, 0.6}, {0.05, 0.6}, {9.8, 11.4}, {0.05, 0.7}, {7.0, 25.0}, {20.0, 36.0}, {0.05, 0.2}};
+            priors.push_back({log10(C.kclist.front()), log10(C.kclist.back())});
         }
         
         // random walk step sizes
@@ -272,7 +142,7 @@ int main (int argc, char *argv[]) {
     outfile.open(filename);
     outfile << scientific << setprecision(12);
 
-    double MUV, Phi0, Phi1, Phi2;
+    double z, M, MUV, Phi0, Phi1, Phi2;
     for (int jZ = 0; jZ < C.Zlist.size(); jZ++) {
         z = C.Zlist[jZ];
         for (int jM = 0; jM < C.NM; jM++) {

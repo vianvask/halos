@@ -4,6 +4,7 @@
 #include <ctime>
 #include <iostream>
 #include <fstream>
+#include <iomanip>
 
 using namespace std;
 
@@ -18,4 +19,15 @@ double randomreal(double x1, double x2);
 
 double interpolate(double X, vector<vector<double> > &xy);
 vector<double> interpolaten(double X, vector<vector<double> > &xy);
+
+void writeToFile(vector<vector<double> > &matrix, const string &filename);
+void writeToFile(vector<vector<vector<double> > > &cubic, const string &filename);
+void writeToFile(vector<vector<vector<vector<double> > > > &quat, const string &filename);
+void writeToFile(vector<vector<vector<vector<vector<double> > > > > &cinq, const string &filename);
+
+void writeToFile(vector<vector<double> > &matrix, vector<double> x, const string &filename);
+void writeToFile(vector<vector<vector<double> > > &cubic, vector<double> x, const string &filename);
+void writeToFile(vector<vector<vector<vector<double> > > > &quat, vector<double> x, const string &filename);
+void writeToFile(vector<vector<vector<vector<vector<double> > > > > &cinq, vector<double> x, const string &filename);
+void writeToFile(vector<vector<vector<vector<vector<vector<double> > > > > > &sei, vector<double> x, const string &filename);
 

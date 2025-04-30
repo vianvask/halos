@@ -75,3 +75,145 @@ vector<double> interpolaten(double X, vector<vector<double> > &xy) {
     return tmp;
 }
 
+
+void writeToFile(vector<vector<double> > &matrix, const string &filename) {
+    ofstream outFile(filename);
+    for (auto& row : matrix) {
+        for (int j = 0; j < row.size(); j++) {
+            outFile << row[j];
+            if (j < row.size() - 1) {
+                outFile << "   ";
+            }
+        }
+        outFile << endl;
+    }
+    outFile.close();
+}
+void writeToFile(vector<vector<vector<double> > > &cubic, const string &filename) {
+    ofstream outFile(filename);
+    for (auto& matrix : cubic) {
+        for (auto& row : matrix) {
+            for (int j = 0; j < row.size(); j++) {
+                outFile << row[j];
+                if (j < row.size() - 1) {
+                    outFile << "   ";
+                }
+            }
+            outFile << endl;
+        }
+    }
+    outFile.close();
+}
+void writeToFile(vector<vector<vector<vector<double> > > > &quat, const string &filename) {
+    ofstream outFile(filename);
+    for (auto& cubic : quat) {
+        for (auto& matrix : cubic) {
+            for (auto& row : matrix) {
+                for (int j = 0; j < row.size(); j++) {
+                    outFile << row[j];
+                    if (j < row.size() - 1) {
+                        outFile << "   ";
+                    }
+                }
+                outFile << endl;
+            }
+        }
+    }
+    outFile.close();
+}
+void writeToFile(vector<vector<vector<vector<vector<double> > > > > &cinq, const string &filename) {
+    ofstream outFile(filename);
+    for (auto& quat : cinq) {
+        for (auto& cubic : quat) {
+            for (auto& matrix : cubic) {
+                for (auto& row : matrix) {
+                    for (int j = 0; j < row.size(); j++) {
+                        outFile << row[j];
+                        if (j < row.size() - 1) {
+                            outFile << "   ";
+                        }
+                    }
+                    outFile << endl;
+                }
+            }
+        }
+    }
+    outFile.close();
+}
+
+void writeToFile(vector<vector<double> > &matrix, vector<double> x, const string &filename) {
+    ofstream outFile(filename);
+    vector<double> row;
+    for (int jx = 0; jx < x.size(); jx++) {
+        row = matrix[jx];
+        outFile << x[jx] << "   ";
+        for (int j = 0; j < row.size(); j++) {
+            outFile << row[j];
+            if (j < row.size() - 1) {
+                outFile << "   ";
+            }
+        }
+        outFile << endl;
+    }
+    outFile.close();
+}
+void writeToFile(vector<vector<vector<double> > > &cubic, vector<double> x, const string &filename) {
+    ofstream outFile(filename);
+    vector<vector<double> > matrix;
+    for (int jx = 0; jx < x.size(); jx++) {
+        matrix = cubic[jx];
+        for (auto& row : matrix) {
+            outFile << x[jx] << "   ";
+            for (int j = 0; j < row.size(); j++) {
+                outFile << row[j];
+                if (j < row.size() - 1) {
+                    outFile << "   ";
+                }
+            }
+            outFile << endl;
+        }
+    }
+    outFile.close();
+}
+void writeToFile(vector<vector<vector<vector<double> > > > &quat, vector<double> x, const string &filename) {
+    ofstream outFile(filename);
+    vector<vector<vector<double> > > cubic;
+    for (int jx = 0; jx < x.size(); jx++) {
+        cubic = quat[jx];
+        for (auto& matrix : cubic) {
+            for (auto& row : matrix) {
+                outFile << x[jx] << "   ";
+                for (int j = 0; j < row.size(); j++) {
+                    outFile << row[j];
+                    if (j < row.size() - 1) {
+                        outFile << "   ";
+                    }
+                }
+                outFile << endl;
+            }
+        }
+    }
+    outFile.close();
+}
+void writeToFile(vector<vector<vector<vector<vector<double> > > > > &cinq, vector<double> x, const string &filename) {
+    ofstream outFile(filename);
+    vector<vector<vector<vector<double> > > > quat;
+    for (int jx = 0; jx < x.size(); jx++) {
+        quat = cinq[jx];
+        for (auto& cubic : quat) {
+            for (auto& matrix : cubic) {
+                for (auto& row : matrix) {
+                    outFile << x[jx] << "   ";
+                    for (int j = 0; j < row.size(); j++) {
+                        outFile << row[j];
+                        if (j < row.size() - 1) {
+                            outFile << "   ";
+                        }
+                    }
+                    outFile << endl;
+                }
+            }
+        }
+    }
+    outFile.close();
+}

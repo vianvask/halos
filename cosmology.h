@@ -100,7 +100,8 @@ private:
     
     // WDM matter transfer function (astro-ph/0501562)
     double km3(double m3) {
-        return 1.0/(49.0/h*pow(OmegaC/0.25,0.11)*pow(h/0.7,1.22)*pow(m3,-1.11));
+        double fix = 3.3*0.43; // fixes the problem with M_hm (see 1801.02547)
+        return 1.0/(fix*49.0/h*pow(OmegaC/0.25,0.11)*pow(h/0.7,1.22)*pow(m3,-1.11));
     }
     double TW(double k, double m3) {
         double mu = 1.12;
@@ -248,6 +249,9 @@ public:
         sigmalist = sigmalistf(0.0, 0.0, 0.0);
         HMFlist = HMFlistf();
         
+        writeToFile(sigmalist, "sigma_CDM.dat");
+        writeToFile(HMFlist, "HMF_CDM.dat");
+        
         // NFW halo parameters
         conslist = conslistf();
         NFWlist = NFWlistf();
@@ -265,6 +269,9 @@ public:
             FDMsigmalist.push_back(sigmalist);
             FDMHMFlist.push_back(HMFlist);
         }
+        
+        writeToFile(FDMsigmalist, m22list, "sigma_FDM.dat");
+        writeToFile(FDMHMFlist, m22list, "HMF_FDM.dat");
     }
     
     void WDM_halos() {
@@ -279,6 +286,9 @@ public:
             WDMsigmalist.push_back(sigmalist);
             WDMHMFlist.push_back(HMFlist);
         }
+        
+        writeToFile(WDMsigmalist, m3list, "sigma_WDM.dat");
+        writeToFile(WDMHMFlist, m3list, "HMF_WDM.dat");
     }
     
     void EDM_halos() {
@@ -293,6 +303,9 @@ public:
             EDMsigmalist.push_back(sigmalist);
             EDMHMFlist.push_back(HMFlist);
         }
+        
+        writeToFile(EDMsigmalist, kclist, "sigma_EDM.dat");
+        writeToFile(EDMHMFlist, kclist, "HMF_EDM.dat");
     }
     
     // luminosity distance

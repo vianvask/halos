@@ -256,7 +256,7 @@ vector<vector<vector<double> > > getPlnmu(cosmology &C, double rS, int Nkappa, i
     
     ifstream infile;
     infile.open("Plnmu.dat");
-    if (infile) {        
+    if (infile) {
         C.Zlist.clear();
         vector<double> tmp(2,0.0);
         int jA = 0;
