@@ -221,26 +221,6 @@ public:
     vector<double> kclist;
     vector<vector<vector<double> > > EDMsigmalist;
     vector<vector<vector<vector<double> > > > EDMHMFlist;
-    
-    void initialize() {
-        OmegaR = OmegaM/(1+zeq);
-        OmegaL = 1.0 - OmegaM - OmegaR;
-        OmegaC = OmegaM - OmegaB;
-        fB = OmegaB/OmegaM;
-        
-        H0 = 0.000102247*h;
-        rhoc = 277.394*pow(h,2.0);
-        rhoM0 = OmegaM*rhoc;
-        M8 = 4.0*PI/3.0*pow(8000.0/h,3.0)*rhoM0;
-        
-        zlist = loglist(zmin,zmax,Nz);
-        m22list = loglist(m22min,m22max,Nm22);
-        m3list = loglist(m3min,m3max,Nm3);
-        kclist = loglist(kcmin,kcmax,Nkc);
-        
-        zdc = dclist();
-        zt = tlist();
-    }
        
     void CDM_halos() {
         // fix deltaH to match the input sigma8
@@ -307,6 +287,39 @@ public:
         
         writeToFile(EDMsigmalist, kclist, "sigma_EDM.dat");
         writeToFile(EDMHMFlist, kclist, "HMF_EDM.dat");
+    }
+    
+    void initialize(int dm) {
+        OmegaR = OmegaM/(1+zeq);
+        OmegaL = 1.0 - OmegaM - OmegaR;
+        OmegaC = OmegaM - OmegaB;
+        fB = OmegaB/OmegaM;
+        
+        H0 = 0.000102247*h;
+        rhoc = 277.394*pow(h,2.0);
+        rhoM0 = OmegaM*rhoc;
+        M8 = 4.0*PI/3.0*pow(8000.0/h,3.0)*rhoM0;
+        
+        zlist = loglist(zmin,zmax,Nz);
+        
+        zdc = dclist();
+        zt = tlist();
+        
+        if (dm == 0) {
+            CDM_halos();
+        }
+        if (dm == 1) {
+            m22list = loglist(m22min,m22max,Nm22);
+            FDM_halos();
+        }
+        if (dm == 2) {
+            m3list = loglist(m3min,m3max,Nm3);
+            WDM_halos();
+        }
+        if (dm == 3) {
+            kclist = loglist(kcmin,kcmax,Nkc);
+            EDM_halos();
+        }
     }
     
     // luminosity distance
