@@ -5,7 +5,8 @@ vector<vector<double> > comovingdistance(function<double(double)> Hz, const int 
 class cosmology {
 
 public:
-    int Nk, NM, Nz;
+    int Nk = 1000;
+    int NM, Nz;
     double Mmin, Mmax, zmin, zmax;
     
     int Nm22 = 0;

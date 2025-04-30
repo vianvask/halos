@@ -23,9 +23,6 @@ int main (int argc, char *argv[]) {
     C.T0 = 2.7255;
     C.ns = 0.965;
     
-    // integral over k in computation of sigma
-    C.Nk = 1000;
-    
     // halo masses
     C.Mmin = 1.0e6;
     C.Mmax = 1.0e17;
@@ -75,57 +72,36 @@ int main (int argc, char *argv[]) {
     
     cout << "Generating/reading lensing amplifications..." << endl;
     
-    int Nkappa = 50; // number of bins in distribution of P^1(kappa)
-    int Nreal = 2e8; // number of realizations
-    int Nbins = 400; // number of lnmu bins
+    int Nkappa = 50; // P^1(kappa) bins
+    int Nreal = 2e8; // realizations
+    int Nbins = 400; // P(lnmu) bins
     double rS = 10.0; // lensing source radius in kpc
     
-    // list of redshift values at which dP(lnmu)/dlnmu is computed
+    // list of redshift values at which P(lnmu) is computed
     C.Zlist = {4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.5, 14.5, 17.0, 25.0};
     C.Plnmuz = getPlnmu(C, rS, Nkappa, Nreal, Nbins);
     
     // parameters: (logMt, Mc, epsilon, alpha, beta, gamma, zc, fkappa, ze, z0, sigmaUV, logm)
     vector<double> bf = {7.35, 3.92e11, 0.0613, 0.877, 0.405, 0.214, 10.64, 0.426, 10.45, 26.18, 0.055, 0.65};
 
-    string filename;
     if (doUVfit == 1) {
         cout << "Computing UV luminosity fit..." << endl;
         
         int Nsteps = 40000; // max number of steps in each chain
         int Nbi = 10000; // burn-in
         int Nchains = 10; // number of chains
+        double xstep = 14.0; // step size = prior range/xstep
         
         vector<vector<double> > priors = {{6.0,10.0}, {3.0e11, 5.0e11}, {0.0578, 0.0658}, {0.6, 1.1}, {0.2, 0.6}, {0.05, 0.6}, {9.8, 11.4}, {0.05, 0.7}, {7.0, 25.0}, {20.0, 36.0}, {0.05, 0.2}};
         
-        if (dm == 0) {
-            filename = "MCMCchains_CDM.dat";
-        }
-        if (dm == 1) {
-            filename = "MCMCchains_FDM.dat";
-            priors.push_back({log10(C.m22list.front()), log10(C.m22list.back())});
-        }
-        if (dm == 2) {
-            filename = "MCMCchains_WDM.dat";
-            priors.push_back({log10(C.m3list.front()), log10(C.m3list.back())});
-        }
-        if (dm == 3) {
-            filename = "MCMCchains_EDM.dat";
-            priors.push_back({log10(C.kclist.front()), log10(C.kclist.back())});
-        }
-        
-        // random walk step sizes
-        vector<double> steps(priors.size(),0.0);
-        for (int j = 0; j < steps.size(); j++) {
-            steps[j] = (priors[j][1]-priors[j][0])/14.0;
-        }
-        
-        bf = UFfit(C, priors, steps, Nsteps, Nbi, Nchains, filename);
+        bf = UFfit(C, priors, Nsteps, Nbi, Nchains, xstep, dm);
     }
     
     // output the UV luminosity function for the best fit
     vector<vector<vector<double> > > PhiUVlist = PhiUV(C, bf[0], bf[1], bf[2], bf[3], bf[4], bf[5], bf[6], bf[7], bf[8], bf[9], bf[10], bf[11]);
     cout << loglikelihood(C,bf) << endl;
     
+    string filename;
     if (dm == 0) {
         filename = "UVluminosity_CDM.dat";
     }
@@ -138,7 +114,6 @@ int main (int argc, char *argv[]) {
     if (dm == 3) {
         filename = "UVluminosity_EDM.dat";
     }
-    
     outfile.open(filename);
     outfile << scientific << setprecision(12);
 

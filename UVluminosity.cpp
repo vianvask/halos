@@ -348,13 +348,36 @@ vector<vector<double> > mcmc_sampling(cosmology &C, vector<vector<double> > &dat
 }
 
 // function to generate MCMC chains to fit the UV data
-vector<double> UFfit(cosmology &C, vector<vector<double> > &priors, vector<double> &steps, int Nsteps, int Nbi, int Nchains, string filename) {
+vector<double> UFfit(cosmology &C, vector<vector<double> > &priors, int Nsteps, int Nbi, int Nchains, double xstep, int dm) {
     // random number generator
     rgen mt(time(NULL));
     
     // read UV luminosity data files, {MUV, Phi, +sigmaPhi, -sigmaPhi}
     vector<string> datafiles {"UVLF_2102.07775.txt", "UVLF_2108.01090.txt", "UVLF_2403.03171.txt", "UVLF_2503.15594.txt", "UVLF_2504.05893.txt"};
     vector<vector<double> > data = readUVdata(datafiles);
+    
+    string filename;
+    if (dm == 0) {
+        filename = "MCMCchains_CDM.dat";
+    }
+    if (dm == 1) {
+        filename = "MCMCchains_FDM.dat";
+        priors.push_back({log10(C.m22list.front()), log10(C.m22list.back())});
+    }
+    if (dm == 2) {
+        filename = "MCMCchains_WDM.dat";
+        priors.push_back({log10(C.m3list.front()), log10(C.m3list.back())});
+    }
+    if (dm == 3) {
+        filename = "MCMCchains_EDM.dat";
+        priors.push_back({log10(C.kclist.front()), log10(C.kclist.back())});
+    }
+    
+    // random walk step sizes
+    vector<double> steps(priors.size(),0.0);
+    for (int j = 0; j < steps.size(); j++) {
+        steps[j] = (priors[j][1]-priors[j][0])/xstep;
+    }
     
     // output the MCMC chains and find the best fit
     ofstream outfile;
