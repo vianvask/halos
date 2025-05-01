@@ -116,15 +116,18 @@ double Nhf(cosmology &C, double zs, double kappathr, double rS) {
 
 
 // single lens probability distribution normalized to number of haloes, {kappa, dN/dkappa}
-vector<vector<double> > dNdkappa(cosmology &C, int Nx, double zs, double kappamax, double rS) {
+vector<vector<double> > dNdkappa(cosmology &C, int Nx, double zs, double rS) {
     vector<vector<double> > N1(Nx, vector<double> (3, 0.0));
     
-    // find threshold kappa that gives N_h = 50
+    cout << kappa(C, zs, zs/2.0, 1.0e-12, C.Mmax, rS)[0] << endl;
+    double kappamax = min(1.0, kappa(C, zs, zs/2.0, 1.0e-12, C.Mmax, rS)[0]);
+    
+    // find threshold kappa that gives N_h = 100
     double kappathr;
-    double kappa1 = 1.0e-6, kappa2 = 1.0;
-    while (log10(kappa2)-log10(kappa1) > 0.02) {
+    double kappa1 = 1.0e-12, kappa2 = 1.0;
+    while (log10(kappa2)-log10(kappa1) > 0.01) {
         kappathr = pow(10.0, (log10(kappa1)+log10(kappa2))/2.0);
-        if (Nhf(C, zs, kappathr, rS) > 50) {
+        if (Nhf(C, zs, kappathr, rS) > 100) {
             kappa1 = kappathr;
         } else {
             kappa2 = kappathr;
@@ -161,7 +164,7 @@ vector<vector<double> > dNdkappa(cosmology &C, int Nx, double zs, double kappama
         }
         
         Nhcum += exp((log(Nh) + log(Nhp))/2.0)*(x - xp);
-
+        
         N1[jx][0] = x;
         N1[jx][1] = Nh;
         N1[jx][2] = Nhcum;
@@ -172,21 +175,22 @@ vector<vector<double> > dNdkappa(cosmology &C, int Nx, double zs, double kappama
         Nhp = Nh;
         Nh = 0.0;
     }
+    //writeToFile(N1,"P1.dat");
 
     return N1;
 }
 
 
 // probability distribution of lnmu, {lnmu, dP/dlnmu}
-vector<vector<double> > Plnmuf(cosmology &C, int Nx, double zs, double kappamax, double rS, int Nreal, int Nbins, rgen &mt) {
+vector<vector<double> > Plnmuf(cosmology &C, int Nx, double zs, double rS, int Nreal, int Nbins, rgen &mt) {
 
-    vector<vector<double> > N1list = dNdkappa(C, Nx, zs, kappamax, rS);
+    vector<vector<double> > N1list = dNdkappa(C, Nx, zs, rS);
     double Nh = N1list[N1list.size()-1][2];
     
-    vector<vector<double> > Fm1(Nx,vector<double> (2,0.0));
+    vector<vector<double> > lnFm1(Nx,vector<double> (2,0.0));
     for (int j = 0; j < Nx; j++) {
-        Fm1[j][0] = N1list[j][2]/Nh;
-        Fm1[j][1] = log(N1list[j][0]);
+        lnFm1[j][0] = log(1.0 - N1list[j][2]/Nh);
+        lnFm1[j][1] = log(N1list[j][0]);
     }
     
     vector<double> lnmu(Nreal, 0.0);
@@ -201,7 +205,7 @@ vector<vector<double> > Plnmuf(cosmology &C, int Nx, double zs, double kappamax,
         kappatot = 0.0;
         for (int jh = 0; jh < Nh; jh++) {
             x = randomreal(0.0,1.0,mt);
-            kappatot += exp(interpolate(x,Fm1));
+            kappatot += exp(interpolate(log(1.0 - x),lnFm1));
         }
         
         lnmutot = log(pow(1.0-kappatot,-2.0)); // mu ≈ (1-kappa)^-2 (see 1106.3823)
@@ -296,7 +300,7 @@ vector<vector<vector<double> > > getPlnmu(cosmology &C, double rS, int Nkappa, i
         for (int jz = 0; jz < C.Zlist.size(); jz++) {
             z = C.Zlist[jz];
             cout << "z = " << z << endl;
-            Plnmu = Plnmuf(C, Nkappa, z, 1.0, rS, Nreal, Nbins, mt);
+            Plnmu = Plnmuf(C, Nkappa, z, rS, Nreal, Nbins, mt);
             
             // output dP/dlnmu
             for (int jb = 0; jb < Plnmu.size(); jb++) {
