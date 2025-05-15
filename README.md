@@ -1,2 +1,2 @@
 # halos
- C++ code that computes the halo mass function etc.
+ C++ code used in https://arxiv.org/abs/2504.20043 to compute the UV luminosity function fit. 
