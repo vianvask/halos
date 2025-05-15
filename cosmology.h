@@ -180,9 +180,7 @@ private:
 
     // halo mass function and growth rate, {z, M, dn/dlnM, dotM, dotM/dM}
     vector<vector<vector<double> > > HMFlistf();
-
-    vector<double> growbymergers(vector<double> &MJ, double z, double zp);
-
+    
     vector<vector<double> > dclist();
     vector<vector<double> > tlist();
     
