@@ -19,15 +19,10 @@ double randomreal(double x1, double x2);
 
 double interpolate(double X, vector<vector<double> > &xy);
 vector<double> interpolaten(double X, vector<vector<double> > &xy);
+vector<double> interpolate2(double x0, double y0, vector<double> &x, vector<double> &y, vector<vector<vector<double> > > &f);
 
+void writeToFile(vector<double> &row, const string &filename);
 void writeToFile(vector<vector<double> > &matrix, const string &filename);
-void writeToFile(vector<vector<vector<double> > > &cubic, const string &filename);
-void writeToFile(vector<vector<vector<vector<double> > > > &quat, const string &filename);
-void writeToFile(vector<vector<vector<vector<vector<double> > > > > &cinq, const string &filename);
-
-void writeToFile(vector<vector<double> > &matrix, vector<double> x, const string &filename);
-void writeToFile(vector<vector<vector<double> > > &cubic, vector<double> x, const string &filename);
-void writeToFile(vector<vector<vector<vector<double> > > > &quat, vector<double> x, const string &filename);
-void writeToFile(vector<vector<vector<vector<vector<double> > > > > &cinq, vector<double> x, const string &filename);
-void writeToFile(vector<vector<vector<vector<vector<vector<double> > > > > > &sei, vector<double> x, const string &filename);
-
+void writeToFile(vector<double> &x, vector<vector<vector<double> > > &cubic, const string &filename);
+void writeToFile(vector<double> &x, vector<double> &y, vector<vector<vector<double> > > &f, const string &filename);
+void writeToFile(vector<double> &x, vector<double> &y, vector<double> &z, vector<vector<vector<vector<double> > > > &f, const string &filename);

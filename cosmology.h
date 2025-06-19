@@ -166,19 +166,19 @@ private:
     // generates a list in log scale
     vector<double> loglist(double xmin, double xmax, int Nx);
 
-    // CDM halo consentration parameter (1601.02624)
+    // CDM halo consentration parameter (1601.02624), {jz,jM} -> {c, dc/dM}
     double cons(double M, double z);
     vector<vector<vector<double> > > conslistf();
     vector<vector<vector<double> > > conslist;
     
-    // NFW scale radius and density and their derivatives, {z, M, r_s, dr_s/dM, rho_s, drho_s/dM}
+    // NFW scale radius and density and their derivatives, {jz,jM} -> {r_s, dr_s/dM, rho_s, drho_s/dM}
     vector<vector<vector<double> > > NFWlistf();
     
     // first crossing probability with ellipsoidal collapse
     double pFC(double delta, double S);
     double pFC(double deltap, double Sp, double delta, double S);
 
-    // halo mass function and growth rate, {z, M, dn/dlnM, dotM, dotM/dM}
+    // halo mass function and growth rate, {jz,jM} -> {dn/dlnM, dotM, dotM/dM}
     vector<vector<vector<double> > > HMFlistf();
     
     vector<vector<double> > dclist();
@@ -189,7 +189,7 @@ private:
     
 public:
     // star formation rate
-    double fstar(double z, double M, double Mc, double Mt, double epsilon, double alpha, double beta);
+    double fstar(double M, double Mc, double Mt, double epsilon, double alpha, double beta);
 
     // derivative of the star formation rate, df_*/dM
     double Dfstarperfstar(double M, double Mc, double Mt, double epsilon, double alpha, double beta);
@@ -197,8 +197,9 @@ public:
     vector<vector<double> > evolvestellarmass(double Mc, double Mt, double epsilon, double alpha, double beta);
     vector<vector<double> > evolveBHmass(double Mc, double Mt, double epsilon, double alpha, double beta, double fEdd, double facc1, double facc2);
     
-    // list of redshifts, same as for HMF and dotM lists
+    // list of redshifts and halo masses
     vector<double> zlist;
+    vector<double>  Mlist;
     
     vector<vector<double> > sigmalist;
     vector<vector<vector<double> > > HMFlist;
@@ -229,7 +230,7 @@ public:
         HMFlist = HMFlistf();
         
         writeToFile(sigmalist, "sigma_CDM.dat");
-        writeToFile(HMFlist, "HMF_CDM.dat");
+        writeToFile(zlist, Mlist, HMFlist, "HMF_CDM.dat");
         
         // NFW halo parameters
         conslist = conslistf();
@@ -248,9 +249,8 @@ public:
             FDMsigmalist.push_back(sigmalist);
             FDMHMFlist.push_back(HMFlist);
         }
-        
-        writeToFile(FDMsigmalist, m22list, "sigma_FDM.dat");
-        writeToFile(FDMHMFlist, m22list, "HMF_FDM.dat");
+        writeToFile(m22list, FDMsigmalist, "sigma_FDM.dat");
+        writeToFile(m22list, zlist, Mlist, FDMHMFlist, "HMF_FDM.dat");
     }
     
     void WDM_halos() {
@@ -266,8 +266,8 @@ public:
             WDMHMFlist.push_back(HMFlist);
         }
         
-        writeToFile(WDMsigmalist, m3list, "sigma_WDM.dat");
-        writeToFile(WDMHMFlist, m3list, "HMF_WDM.dat");
+        writeToFile(m3list, WDMsigmalist, "sigma_WDM.dat");
+        writeToFile(m3list, zlist, Mlist, WDMHMFlist, "HMF_WDM.dat");
     }
     
     void EDM_halos() {
@@ -283,8 +283,8 @@ public:
             EDMHMFlist.push_back(HMFlist);
         }
         
-        writeToFile(EDMsigmalist, kclist, "sigma_EDM.dat");
-        writeToFile(EDMHMFlist, kclist, "HMF_EDM.dat");
+        writeToFile(kclist, EDMsigmalist, "sigma_EDM.dat");
+        writeToFile(kclist, zlist, Mlist, EDMHMFlist, "HMF_EDM.dat");
     }
     
     void initialize(int dm) {
@@ -299,7 +299,8 @@ public:
         M8 = 4.0*PI/3.0*pow(8000.0/h,3.0)*rhoM0;
         
         zlist = loglist(zmin,zmax,Nz);
-        
+        Mlist = loglist(Mmin,Mmax,NM);
+                
         zdc = dclist();
         zt = tlist();
         

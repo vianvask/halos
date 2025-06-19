@@ -1,11 +1,34 @@
 #include "cosmology.h"
 #include "lensing.h"
 
-double acot(double x) {
-    return PI/2.0 - atan(x);
+
+// NFW lens surface density at radius x
+double Sigmaf(double rs, double rhos, double x) {
+    double f = 1.0/3.0;
+    if (x > 1) {
+        f = (1 - 2*atan(sqrt((x-1)/(1+x)))/sqrt(pow(x,2)-1))/(pow(x,2)-1);
+    }
+    if (x < 1) {
+        f = (1 - 2*atanh(sqrt((1-x)/(1+x)))/sqrt(1-pow(x,2)))/(pow(x,2)-1);
+    }
+    return 2*rs*rhos*f;
 }
 
-// NFW lensing amplification and its derivative, {kappa, dkappa/dr}
+
+// average of the NFW lens surface density within radius x
+double barSigmaf(double rs, double rhos, double x) {
+    double g = 1 + log(1.0/2.0);
+    if (x > 1) {
+        g = 2*atan(sqrt((x-1)/(1+x)))/sqrt(pow(x,2)-1) + log(x/2);
+    }
+    if (x < 1) {
+        g = 2*atanh(sqrt((1-x)/(1+x)))/sqrt(1.0-pow(x,2)) + log(x/2);
+    }
+    return 4*rs*rhos*g/pow(x,2);
+}
+
+
+// lensing convergence and its average, {kappa(r), bar{kappa}(<r)}
 // r_S = source size, r = impact parameter
 vector<double> kappa(cosmology &C, double zs, double zl, double r, double M, double rS) {
     
@@ -17,65 +40,49 @@ vector<double> kappa(cosmology &C, double zs, double zl, double r, double M, dou
     double Sigmac = 2.08871e16*DsA/(4.0*PI*DlA*DlsA);
     
     // NFW scale radius and density
-    int jz = (int) round((C.Nz-1)*log(zl/C.zmin)/log(C.zmax/C.zmin));
-    int jM = (int) round((C.NM-1)*log(M/C.Mmin)/log(C.Mmax/C.Mmin));
-    vector<double> zMNFW = C.NFWlist[jz][jM];
-    double rs = zMNFW[2];
-    double Drs = zMNFW[3];
-    double rhos = zMNFW[4];
-    double Drhos = zMNFW[5];
+    vector<double> NFWparams = interpolate2(zl, M, C.zlist, C.Mlist, C.NFWlist);
+    double rs = NFWparams[0];
+    double rhos = NFWparams[1];
     
-    double Sigma = 0.0, dSigmapdr = 0.0;
-    double X, Y;
+    double x, Sigma = 0.0, barSigma = 0.0;
     if (rS > 0.0) {
-        // average over the source projection
-        int Navg = 32;
+        // projection of the source to the lens plane
         double rSproj = rS*DlA/DsA;
+        double Aproj = PI*pow(rSproj,2.0)/2.0;
+        
+        // average over the source projection
+        int NR = 10, Ntheta = 10;
+        double dR = rSproj/(1.0*(NR-1));
+        double dtheta = PI/(1.0*(Ntheta-1));
         double R, theta;
-        for (int j = 0; j < Navg; j++) {
-            // generate random point inside the projection of the source in the lens plane
-            R = rSproj*sqrt(randomreal(0.0,1.0));
-            theta = randomreal(0.0,PI);
-            
-            X = sqrt(pow(r,2.0) + pow(R,2.0) - 2.0*r*R*cos(theta))/rs;
-            if (X > 1.0) {
-                Y = X*X-1;
-                Sigma += 2*rs*rhos*(sqrt(Y) + 2*acot(sqrt(Y)) - 2*atan((X+1)/sqrt(Y)))/pow(Y,3.0/2.0);
-                dSigmapdr += 2*rhos*(2 - 2*pow(X,4.0) + Y + 6*sqrt(Y)*(Y+1)*(-acot(sqrt(Y)) + atan((X+1)/sqrt(Y))))/(X*pow(Y,3.0));
-            } else {
-                Y = 1-X*X;
-                Sigma += 2*rs*rhos*(-sqrt(Y) + log((1+sqrt(Y))/X))/pow(Y,3.0/2.0);
-                dSigmapdr += 2*rhos*(-2 + 2*pow(X,4.0) + Y - 3*sqrt(Y)*(Y-1)*log((1+sqrt(Y))/X))/(X*pow(Y,3.0));
+        for (int jR = 0; jR < NR; jR++) {
+            R = jR*dR;
+            for (int jtheta = 0; jtheta < Ntheta; jtheta++) {
+                theta = jtheta*dtheta;
+                x = sqrt(pow(r,2.0) + pow(R,2.0) - 2.0*r*R*cos(theta))/rs;
+                Sigma += Sigmaf(rs, rhos, x)*R*dR*dtheta;
+                barSigma += barSigmaf(rs, rhos, x)*R*dR*dtheta;
             }
         }
-        Sigma = Sigma/(1.0*Navg);
-        dSigmapdr = dSigmapdr/(1.0*Navg);
-    } else {
-        X = r/rs;
-        if (X > 1.0) {
-            Y = X*X-1;
-            Sigma = 2*rs*rhos*(sqrt(Y) + 2*acot(sqrt(Y)) - 2*atan((X+1)/sqrt(Y)))/pow(Y,3.0/2.0);
-            dSigmapdr = 2*rhos*(2 - 2*pow(X,4.0) + Y + 6*sqrt(Y)*(Y+1)*(-acot(sqrt(Y)) + atan((X+1)/sqrt(Y))))/(X*pow(Y,3.0));
-        } else {
-            Y = 1-X*X;
-            Sigma = 2*rs*rhos*(-sqrt(Y) + log((1+sqrt(Y))/X))/pow(Y,3.0/2.0);
-            dSigmapdr = 2*rhos*(-2 + 2*pow(X,4.0) + Y - 3*sqrt(Y)*(Y-1)*log((1+sqrt(Y))/X))/(X*pow(Y,3.0));
-        }
+        Sigma = Sigma/Aproj;
+        barSigma = barSigma/Aproj;
+    }
+    else {
+        x = r/rs;
+        Sigma = Sigmaf(rs, rhos, x);
+        barSigma = barSigmaf(rs, rhos, x);
     }
     
-    vector<double> kappa2 {Sigma/Sigmac, dSigmapdr/Sigmac};
-    
-    return kappa2;
+    return {Sigma/Sigmac, barSigma/Sigmac};
 }
 
 
-// maximal r so that kappa(r) > kappathr
-double rmaxf(cosmology &C, double zs, double zl, double M, double kappathr, double rS) {
+// maximal r so that kappa^(1) > kappa_thr
+double rmaxf(cosmology &C, double zs, double zl, double M, double rS, double kappathr) {
     double rmax;
-    double logr1 = log(1.0e-3), logr2 = log(1.0e5);
-        
+    double logr1 = log(1.0e-6), logr2 = log(1.0e6);
     if (kappa(C, zs, zl, exp(logr1), M, rS)[0] > kappathr) {
-        while (logr2-logr1 > 0.1) {
+        while (logr2-logr1 > 0.02) {
             rmax = exp((logr2+logr1)/2.0);
             if (kappa(C, zs, zl, rmax, M, rS)[0] > kappathr) {
                 logr1 = log(rmax);
@@ -87,27 +94,24 @@ double rmaxf(cosmology &C, double zs, double zl, double M, double kappathr, doub
     } else {
         rmax = 0.0;
     }
-    
     return rmax;
 }
 
 
-// number of halos withing radius rmax
-double Nhf(cosmology &C, double zs, double kappathr, double rS) {
+// number of halos with kappa^(1) > kappa_thr
+double Nhf(cosmology &C, double zs, double rS, double kappathr) {
     double Nh = 0.0;
-    double rmax, M, zl, dz, dlnM, dndlnM;
-    
+    double zl, dz, M, dlnM, dndlnM, rmax;
     for (int jz = 1; jz < C.Nz; jz++) {
-        for (int jM = 1; jM < C.NM; jM++) {
-            zl = C.HMFlist[jz][jM][0];
-            if(zl < zs) {
-                dz = zl - C.HMFlist[jz-1][jM][0];
-                M = C.HMFlist[jz][jM][1];
-                dlnM = log(M) - log(C.HMFlist[jz][jM-1][1]);
-                dndlnM = C.HMFlist[jz][jM][2];
-                
-                rmax = rmaxf(C, zs, zl, M, kappathr, rS);
-                Nh += 306.535*PI*pow((1+zl)*rmax,2.0)/C.Hz(zl)*dndlnM*dlnM*dz;
+        zl = C.zlist[jz];
+        dz = zl - C.zlist[jz-1];
+        if(zl < zs) {
+            for (int jM = 1; jM < C.NM; jM++) {
+                M = C.Mlist[jM];
+                dlnM = log(M) - log(C.Mlist[jM-1]);
+                dndlnM = C.HMFlist[jz][jM][0];
+                rmax = rmaxf(C, zs, zl, M, rS, kappathr);
+                Nh += 306.535*PI*pow((1.0+zl)*rmax,2.0)/C.Hz(zl)*dndlnM*dlnM*dz;
             }
         }
     }
@@ -115,202 +119,256 @@ double Nhf(cosmology &C, double zs, double kappathr, double rS) {
 }
 
 
-// single lens probability distribution normalized to number of haloes, {kappa, dN/dkappa}
-vector<vector<double> > dNdkappa(cosmology &C, int Nx, double zs, double rS) {
-    vector<vector<double> > N1(Nx, vector<double> (3, 0.0));
+// flat priors
+double prior(double x, vector<double> &bounds) {
+    double lower = bounds[0], upper = bounds[1];
+    if (lower == upper) {
+        return 1.0;
+    }
+    if (x < lower || x > upper) {
+        return 0.0;
+    }
+    return 1.0/(upper-lower);
+}
+
+
+// MCMC sampling function
+vector<vector<double> > MH2D(int N, int burnin, function<double(vector<double>&)> pdf, vector<double> &initial, vector<double> &steps, vector<vector<double> > &priors, function<double(vector<double>&)> cut, rgen &mt) {
     
-    cout << kappa(C, zs, zs/2.0, 1.0e-12, C.Mmax, rS)[0] << endl;
-    double kappamax = min(1.0, kappa(C, zs, zs/2.0, 1.0e-12, C.Mmax, rS)[0]);
+    vector<vector<double> > samples(N);
     
-    // find threshold kappa that gives N_h = 100
-    double kappathr;
-    double kappa1 = 1.0e-12, kappa2 = 1.0;
-    while (log10(kappa2)-log10(kappa1) > 0.01) {
-        kappathr = pow(10.0, (log10(kappa1)+log10(kappa2))/2.0);
-        if (Nhf(C, zs, kappathr, rS) > 100) {
-            kappa1 = kappathr;
-        } else {
-            kappa2 = kappathr;
-        }
+    int Npar = initial.size();
+    
+    // create normal distributions for each parameter based on its proposal width
+    vector<normal_distribution<>> proposal_distributions;
+    for (double step : steps) {
+        proposal_distributions.push_back(normal_distribution<>(0.0, step));
     }
     
-    double zl, M, dz, dlnM, dndlnM, rmax, dkappadr;
-    double dlnkappa = (log(kappamax) - log(kappathr))/(1.0*(Nx-1));
-    double x = kappathr, xp = x;
+    // current point
+    vector<double> current = initial;
+    double pcurrent = pdf(current);
     
-    // compute the PDF and CDF of kappa 
-    double Nhcum = 0.0;
-    double Nh = 0.0, Nhp = 0.0;
-    for (int jx = 0; jx < Nx; jx++) {
-        for (int jz = 1; jz < C.Nz; jz++) {
-            for (int jM = 1; jM < C.NM; jM++) {
-                zl = C.HMFlist[jz][jM][0];
-                if(zl < zs) {
-                    dz = zl - C.HMFlist[jz-1][jM][0];
-                    M = C.HMFlist[jz][jM][1];
-                    dlnM = log(M) - log(C.HMFlist[jz][jM-1][1]);
-                    dndlnM = C.HMFlist[jz][jM][2];
-                    
-                    rmax = rmaxf(C, zs, zl, M, x, rS);
-                    if (rmax > 0.0) {
-                        dkappadr = kappa(C, zs, zl, rmax, M, rS)[1];
-                    } else {
-                        dkappadr = 1.0;
-                    }
-                    
-                    Nh += 306.535*2.0*PI*pow(1+zl,2.0)*rmax/C.Hz(zl)/abs(dkappadr)*dndlnM*dlnM*dz;
+    vector<double> prop;
+    double pprop, priorratio, paccept;
+    for (int j = -burnin; j < N;) {
+                
+        // propose new point
+        prop = current;
+        for (int i = 0; i < Npar; i++) {
+            prop[i] += proposal_distributions[i](mt);
+        }
+        
+        // compute prior ratio (0 or 1, flat priors)
+        priorratio = 1.0;
+        for (int i = 0; i < Npar; i++) {
+            priorratio *= prior(prop[i], priors[i]);
+        }
+        if (priorratio > 0.0) {
+            priorratio = cut(prop);
+        }
+        
+        // accept/reject
+        if (priorratio > 0.0) {
+            pprop = pdf(prop);
+            paccept = randomreal(0.0,1.0,mt);
+                                    
+            if (paccept < min(1.0, pprop/pcurrent)) {
+                current = prop;
+                pcurrent = pprop;
+                if (j >= 0) {
+                    samples[j] = current;
                 }
+                j++;
             }
         }
-        
-        Nhcum += exp((log(Nh) + log(Nhp))/2.0)*(x - xp);
-        
-        N1[jx][0] = x;
-        N1[jx][1] = Nh;
-        N1[jx][2] = Nhcum;
-        
-        xp = x;
-        x = exp(log(x) + dlnkappa);
-        
-        Nhp = Nh;
-        Nh = 0.0;
     }
-    //writeToFile(N1,"P1.dat");
-
-    return N1;
+    
+    // shuffle the samples
+    shuffle(samples.begin(), samples.end(), mt);
+    return samples;
 }
 
 
 // probability distribution of lnmu, {lnmu, dP/dlnmu}
-vector<vector<double> > Plnmuf(cosmology &C, int Nx, double zs, double rS, int Nreal, int Nbins, rgen &mt) {
-
-    vector<vector<double> > N1list = dNdkappa(C, Nx, zs, rS);
-    double Nh = N1list[N1list.size()-1][2];
-    
-    vector<vector<double> > lnFm1(Nx,vector<double> (2,0.0));
-    for (int j = 0; j < Nx; j++) {
-        lnFm1[j][0] = log(1.0 - N1list[j][2]/Nh);
-        lnFm1[j][1] = log(N1list[j][0]);
-    }
-    
-    vector<double> lnmu(Nreal, 0.0);
+vector<vector<double> > Plnmuf(cosmology &C, double zs, double rS, int Nreal, int Nbins, rgen &mt) {
     vector<vector<double> > Plnmu(Nbins, vector<double> (2, 0.0));
-    double x, kappatot, lnmutot, lnmumin, lnmumax, lnmumean, dlnmu, dP = 1.0/(1.0*Nreal);
     
-    // generate realizations of kappa
-    lnmumin = 1.0;
-    lnmumax = 0.0;
-    lnmumean = 0.0;
-    for (int j = 0; j<Nreal; j++) {
-        kappatot = 0.0;
-        for (int jh = 0; jh < Nh; jh++) {
-            x = randomreal(0.0,1.0,mt);
-            kappatot += exp(interpolate(log(1.0 - x),lnFm1));
+    // find threshold kappa that gives N_h = 10
+    double kappa1 = 1.0e-12, kappa2 = 1.0;
+    double kappathr = pow(10.0, (log10(kappa1) + log10(kappa2))/2.0);
+    while (log10(kappa2) - log10(kappa1) > 0.01) {
+        if (Nhf(C, zs, rS, kappathr) > 10) {
+            kappa1 = kappathr;
+        } else {
+            kappa2 = kappathr;
         }
-        
-        lnmutot = log(pow(1.0-kappatot,-2.0)); // mu ≈ (1-kappa)^-2 (see 1106.3823)
-        if (lnmutot > lnmumax) {
-            lnmumax = lnmutot;
-        }
-        if (lnmutot < lnmumin) {
-            lnmumin = lnmutot;
-        }
-        lnmumean += lnmutot;
-        lnmu[j] = lnmutot;
+        kappathr = pow(10.0, (log10(kappa1) + log10(kappa2))/2.0);
     }
-    lnmumean = lnmumean/(1.0*Nreal);
         
+    double Nbar = Nhf(C, zs, rS, kappathr);
+    poisson_distribution<int> PN(Nbar);
+    
+    cout << kappathr << "   " << Nbar << endl;
+    
+    // 2D PDF of z_l and ln M_l
+    function<double(vector<double>&)> pdf = [&C, zs, rS, kappathr](vector<double> &zlnM) {
+        double zl = zlnM[0];
+        double M = exp(zlnM[1]);
+        double rmax = rmaxf(C, zs, zl, M, rS, kappathr);
+        return pow((1.0+zl)*rmax,2.0)/C.Hz(zl)*interpolate2(zl, M, C.zlist, C.Mlist, C.HMFlist)[0];
+    };
+    
+    // prior in z_l - M_l plane so that kappa > kappa_thr
+    function<double(vector<double>&)> cut = [&C, zs, rS, kappathr](vector<double> &zlnM) {
+        double zl = zlnM[0];
+        double M = exp(zlnM[1]);
+        double kappa0 = kappa(C, zs, zl, 1.0e-6, M, rS)[0];
+        if (kappa0 > kappathr) {
+            return 1.0;
+        }
+        return 0.0;
+    };
+    
+    // priors for z_l and ln M
+    vector<vector<double> > priors = {{C.zmin, zs}, {log(C.Mmin), log(C.Mmax)}};
+    vector<double> steps(priors.size());
+    for (int j = 0; j < steps.size(); j++) {
+        steps[j] = (priors[j][1] - priors[j][0])/10.0;
+    }
+        
+    vector<double> kappalist(Nreal, 0.0);
+    vector<double> gamma1list(Nreal, 0.0);
+    vector<double> gamma2list(Nreal, 0.0);
+    vector<double> gammalist(Nreal, 0.0);
+    vector<double> lnmu;
+    
+    // generate the first list of z_l and M values
+    int burnin = 1e4;
+    int Nrand = 1e5;
+    vector<double> initial = {zs/2.0, log(1.0e12)};
+    vector<vector<double> > zlnMlist = MH2D(Nrand, burnin, pdf, initial, steps, priors, cut, mt);
+    //writeToFile(zlnMlist, "zlnMlist.dat");
+    
+    int Nh, idx = 0;
+    vector<double> kappa3;
+    double zl, M, rmax, r, phi, kappaj, gamma1j, gamma2j, muj = 1.0, lnmumax = 0.0, lnmumin = 0.0;
+    double meankappa = 0.0, meangamma1 = 0.0, meangamma2 = 0.0;
+    for (int j = 0; j < Nreal; j++) {
+        kappaj = 0.0;
+        gamma1j = 0.0;
+        gamma2j = 0.0;
+        
+        // pick number of halos from Poisson distribution
+        Nh = PN(mt);
+        
+        // generate N_h halos
+        for (int i = 0; i < Nh; i++) {
+            zl = zlnMlist[idx][0];
+            M = exp(zlnMlist[idx][1]);
+            idx++;
+            
+            if (idx >= Nrand) {
+                // generate new set of z_l and M values
+                initial = {zl, log(M)};
+                zlnMlist = MH2D(Nrand, burnin, pdf, initial, steps, priors, cut, mt);
+                idx = 0;
+            }
+            
+            // find r_max so that kappa(r_max) = kappa_thr
+            rmax = rmaxf(C, zs, zl, M, rS, kappathr);
+            
+            r = sqrt(randomreal(0.0,1.0,mt))*rmax;
+            phi = randomreal(0.0,2*PI,mt);
+            
+            kappa3 = kappa(C, zs, zl, r, M, rS);
+            
+            kappaj += kappa3[0];
+            gamma1j += -cos(2*phi)*(kappa3[1]-kappa3[0]);
+            gamma2j += -sin(2*phi)*(kappa3[1]-kappa3[0]);
+        }
+        
+        meankappa += kappaj;
+        meangamma1 += gamma1j;
+        meangamma2 += gamma2j;
+        
+        kappalist[j] = kappaj;
+        gamma1list[j] = gamma1j;
+        gamma2list[j] = gamma2j;
+    }
+    meankappa = meankappa/(1.0*Nreal);
+    meangamma1 = meangamma1/(1.0*Nreal);
+    meangamma2 = meangamma2/(1.0*Nreal);
+        
+    for (int j = 0; j < Nreal; j++) {
+        kappalist[j] = kappalist[j] - meankappa;
+        //gamma1list[j] = gamma1list[j] - meangamma1;
+        //gamma2list[j] = gamma2list[j] - meangamma2;
+        
+        gammalist[j] = sqrt(pow(gamma1list[j], 2.0) + pow(gamma2list[j], 2.0));
+        
+        muj = 1.0/(pow(1.0-kappalist[j], 2.0) - pow(gammalist[j], 2.0));
+        if (muj > 0.0) {
+            lnmumin = min(log(muj), lnmumin);
+            lnmumax = max(log(muj), lnmumax);
+            
+            lnmu.push_back(log(muj));
+        }
+    }
+    // writeToFile(kappalist,"kappalist.dat");
+    // writeToFile(gammalist,"gammalist.dat");
+    
     // binning
-    dlnmu = (lnmumax-lnmumin)/(1.0*(Nbins-1));
+    double dlnmu = (lnmumax-lnmumin)/(1.0*(Nbins-1));
     for (int j = 0; j < Nbins; j++) {
-        Plnmu[j][0] = (lnmumin-lnmumean) + j*dlnmu;
+        Plnmu[j][0] = lnmumin + j*dlnmu;
     }
     int jb;
-    for (int j = 0; j < Nreal; j++) {
+    for (int j = 0; j < lnmu.size(); j++) {
         jb = (int) round((Nbins-1)*(lnmu[j]-lnmumin)/(lnmumax-lnmumin));
         if (jb >= 0 && jb < Nbins) {
-            Plnmu[jb][1] += dP/dlnmu;
+            Plnmu[jb][1] += 1.0;
         }
     }
-        
-    // cut off the high lnmu part
-    int jmax = Nbins;
-    for (int j = 0; j < Nbins; j++) {
-        if (Plnmu[j][0] > 0.0 && Plnmu[j][1] < 3.0*dP/dlnmu) {
-            jmax = j;
-            j = Nbins;
-        }
-        else if (Plnmu[j][0] > 6.0) {
-            jmax = j;
-            j = Nbins;
-        }
+    
+    // convert from image plane to source plane (P_S ~ P_I/mu) and normalize
+    double norm = 0.0;
+    for (int j = 0; j < Plnmu.size(); j++) {
+        Plnmu[j][1] *= exp(-Plnmu[j][0]);
+        norm += Plnmu[j][1]*dlnmu;
     }
-    Plnmu.resize(jmax);
+    for (int j = 0; j < Plnmu.size(); j++) {
+        Plnmu[j][1] *= 1.0/norm;
+    }
     
     return Plnmu;
 }
 
 
 // read or generate lensing amplification distribution
-vector<vector<vector<double> > > getPlnmu(cosmology &C, double rS, int Nkappa, int Nreal, int Nbins) {
+vector<vector<vector<double> > > getPlnmu(cosmology &C, double rS, int Nreal, int Nbins) {
     vector<vector<double> > Plnmu;
     vector<vector<vector<double> > > Plnmuz;
     
-    double z;
+    rgen mt(time(NULL)); // random number generator
     
-    ifstream infile;
-    infile.open("Plnmu.dat");
-    if (infile) {
-        C.Zlist.clear();
-        vector<double> tmp(2,0.0);
-        int jA = 0;
-        double A;
-        z = 0;
-        while (infile >> A) {
-            if (jA == 0) {
-                if (A > z) {
-                    if (z > 0) {
-                        Plnmuz.push_back(Plnmu);
-                        Plnmu.clear();
-                    }
-                    z = A;
-                    C.Zlist.push_back(z);
-                }
-                jA++;
-            } else {
-                tmp[jA-1] = A;
-                jA++;
-            }
-            if (jA == 3) {
-                Plnmu.push_back(tmp);
-                jA = 0;
-            }
+    ofstream outfile;
+    outfile.open("Plnmu.dat");
+    
+    int Nkappa = 40;
+    double z;
+    for (int jz = 0; jz < C.Zlist.size(); jz++) {
+        z = C.Zlist[jz];
+        cout << "z = " << z << endl;
+        Plnmu = Plnmuf(C, z, rS, Nreal, Nbins, mt);
+        
+        // output dP/dlnmu
+        for (int jb = 0; jb < Plnmu.size(); jb++) {
+            outfile << z << "   " << Plnmu[jb][0] << "   " << Plnmu[jb][1] << endl;
         }
         Plnmuz.push_back(Plnmu);
-        Plnmu.clear();
     }
-    else {
-        ofstream outfile;
-        outfile.open("Plnmu.dat");
-        
-        int Nkappa = 40;
-        
-        rgen mt(time(NULL)); // random number generator
-        
-        for (int jz = 0; jz < C.Zlist.size(); jz++) {
-            z = C.Zlist[jz];
-            cout << "z = " << z << endl;
-            Plnmu = Plnmuf(C, Nkappa, z, rS, Nreal, Nbins, mt);
-            
-            // output dP/dlnmu
-            for (int jb = 0; jb < Plnmu.size(); jb++) {
-                outfile << z << "   " << Plnmu[jb][0] << "   " << Plnmu[jb][1] << endl;
-            }
-            Plnmuz.push_back(Plnmu);
-        }
-        outfile.close();
-    }
-    infile.close();
+    outfile.close();
     
     return Plnmuz;
 }

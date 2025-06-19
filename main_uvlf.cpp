@@ -1,6 +1,5 @@
 #include "cosmology.h"
-#include "lensing.h"
-#include "UVluminosity.h"
+#include "UVluminosity0.h"
 
 // units: masses in solar masses, time in Myr, length in kpc
 
@@ -49,16 +48,13 @@ int main (int argc, char *argv[]) {
     cout << "Computing halo mass functions..." << endl;
     C.initialize(dm);
     
-    cout << "Generating/reading lensing amplifications..." << endl;
-    
-    int Nkappa = 50; // P^1(kappa) bins
-    int Nreal = 2e8; // realizations
-    int Nbins = 400; // P(lnmu) bins
-    double rS = 10.0; // lensing source radius in kpc
-    
-    // list of redshift values at which P(lnmu) is computed
+    cout << "Reading lensing amplifications..." << endl;
     C.Zlist = {4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.5, 14.5, 17.0, 25.0};
-    C.Plnmuz = getPlnmu(C, rS, Nkappa, Nreal, Nbins);
+    C.Plnmuz = getPlnmu();    
+    if (C.Plnmuz.size() != C.Zlist.size()) {
+        cout << "Wrong Plnmu.dat file." << endl;
+        return 0;
+    }
     
     cout << "Computing UV luminosity functions..." << endl;
     
@@ -67,8 +63,8 @@ int main (int argc, char *argv[]) {
 
     if (doUVfit == 1) {
         
-        int Nsteps = 40000; // max number of steps in each chain
-        int Nbi = 10000; // burn-in
+        int Nsteps = 4000; // max number of steps in each chain
+        int Nbi = 1000; // burn-in
         int Nchains = 10; // number of chains
         double xstep = 14.0; // step size = prior range/xstep
         
@@ -79,7 +75,7 @@ int main (int argc, char *argv[]) {
     
     // output the UV luminosity function for the best fit
     writeUVLF(C, bf[0], bf[1], bf[2], bf[3], bf[4], bf[5], bf[6], bf[7], bf[8], bf[9], bf[10], bf[11], dm);
-    
+
     time_req = clock() - time_req;
     cout << "Total evaluation time: " << ((double) time_req/CLOCKS_PER_SEC/60.0) << " min." << endl;
     

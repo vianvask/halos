@@ -196,14 +196,14 @@ double cosmology::pFC(double delta, double S) {
     return 0.0;
 }
 
-// halo mass function and growth rate, {z, M, dn/dlnM, dotM, dotM/dM}
+// halo mass function and growth rate, {jz,jM} -> {dn/dlnM, dotM, dotM/dM}
 vector<vector<vector<double> > > cosmology::HMFlistf() {
     
     double dz = 0.01; // z step over which DeltaM is computed
     double q = 0.75; // for computation of dotM
     
     double dlogz = (log(zmax)-log(zmin))/(1.0*(Nz-1));
-    vector<vector<vector<double> > > dndlnM(Nz, vector<vector<double> > (NM, vector<double> (5,0.0)));
+    vector<vector<vector<double> > > dndlnM(Nz, vector<vector<double> > (NM, vector<double> (3,0.0)));
     
     double z, M, Mp1, S, S2, Ddeltac, dMdt, dMdtp1;
     vector<double> sigma, sigma2;
@@ -219,9 +219,7 @@ vector<vector<vector<double> > > cosmology::HMFlistf() {
         dMdt = (1+z)*Hz(z)*sqrt(2.0/PI)*Ddeltac/abs(2.0*sigma[1]*sigma[2])*sqrt(S-S2);
         
         for (int jM = 0; jM < NM; jM++) {
-            dndlnM[jz][jM][0] = z;
-            dndlnM[jz][jM][1] = M;
-            dndlnM[jz][jM][2] = -rhoM0*pFC(deltac(z),pow(sigma[1],2.0))*2.0*sigma[1]*sigma[2];
+            dndlnM[jz][jM][0] = -rhoM0*pFC(deltac(z),pow(sigma[1],2.0))*2.0*sigma[1]*sigma[2];
             
             sigma = sigmalist[jM+1];
             S = pow(sigma[1],2.0);
@@ -233,8 +231,8 @@ vector<vector<vector<double> > > cosmology::HMFlistf() {
             S2 = pow(sigma2[1],2.0);
             dMdtp1 = (1+z)*Hz(z)*sqrt(2.0/PI)*Ddeltac/abs(2.0*sigma[1]*sigma[2])*sqrt(S-S2);
             
-            dndlnM[jz][jM][3] = dMdt;
-            dndlnM[jz][jM][4] = (dMdtp1 - dMdt)/(Mp1 - M);
+            dndlnM[jz][jM][1] = dMdt;
+            dndlnM[jz][jM][2] = (dMdtp1 - dMdt)/(Mp1 - M);
             
             M = Mp1;
             dMdt = dMdtp1;
@@ -244,17 +242,17 @@ vector<vector<vector<double> > > cosmology::HMFlistf() {
 }
 
 // star formation rate f_*(M) and its derivative df_*/dM
-double cosmology::fstar(double z, double M, double Mc, double Mt, double epsilon, double alpha, double beta) {
+double cosmology::fstar(double M, double Mc, double Mt, double epsilon, double alpha, double beta) {
     if (alpha>0.0 && beta>0.0) {
         return epsilon*(alpha+beta)/(beta*pow(M/Mc,-alpha) + alpha*pow(M/Mc,beta))*exp(-Mt/M);
     }
-    return epsilon;
+    return epsilon*exp(-Mt/M);
 }
 double cosmology::Dfstarperfstar(double M, double Mc, double Mt, double epsilon, double alpha, double beta) {
     if (alpha>0.0 && beta>0.0) {
         return beta*((alpha+beta)/(alpha*pow(M/Mc,alpha+beta)+beta) - 1.0)/M + Mt/pow(M,2.0);
     }
-    return 0.0;
+    return Mt/pow(M,2.0);
 }
 
 // halo consentration parameter (1601.02624)
@@ -270,9 +268,9 @@ double cosmology::cons(double sigma, double z) {
     return c0*pow(nu/nu0,-gamma1)*pow(1+pow(nu/nu0,1.0/beta),-beta*(gamma2-gamma1));
 }
 
-// halo consentration parameter, {z, M, c, dc/dM}
+// halo consentration parameter, {jz,jM} -> {c, dc/dM}
 vector<vector<vector<double> > > cosmology::conslistf() {
-    vector<vector<vector<double> > > zMc(Nz, vector<vector<double> > (NM, vector<double> (4,0.0)));
+    vector<vector<vector<double> > > zMc(Nz, vector<vector<double> > (NM, vector<double> (2,0.0)));
     double z, c, cn, M, Mn;
     for (int jz = 0; jz < Nz; jz++) {
         z = zlist[jz];
@@ -281,11 +279,9 @@ vector<vector<vector<double> > > cosmology::conslistf() {
         for (int jM = 0; jM < NM; jM++) {
             Mn = sigmalist[jM+1][0];
             cn = cons(sigmalist[jM+1][1],z);
-            
-            zMc[jz][jM][0] = z;
-            zMc[jz][jM][1] = M;
-            zMc[jz][jM][2] = c;
-            zMc[jz][jM][3] = (cn - c)/(Mn - M);
+
+            zMc[jz][jM][0] = c;
+            zMc[jz][jM][1] = (cn - c)/(Mn - M);
             
             M = Mn;
             c = cn;
@@ -295,39 +291,35 @@ vector<vector<vector<double> > > cosmology::conslistf() {
 }
 
 
-// NFW scale radius and density and their derivatives, {r_s, dr_s/dM, rho_s, drho_s/dM}
+// NFW scale radius and density and their derivatives, {jz, jM} -> {r_s, rho_s}
 vector<vector<vector<double> > > cosmology::NFWlistf() {
-    vector<vector<vector<double> > > zMNFW(Nz, vector<vector<double> > (NM, vector<double> (6,0.0)));
+    vector<vector<vector<double> > > NFWparams(Nz, vector<vector<double> > (NM, vector<double> (2,0.0)));
     
-    double z, M, c, Dc, r200, Dr200, rs, Drs, rhos, Drhos;
-    vector<double> zMc(4,0.0);
+    double z, M, c, Dc, r200, rs, rhos;
+    vector<double> zMc(2,0.0);
     for (int jz = 0; jz < Nz; jz++) {
+        z = zlist[jz];
         for (int jM = 0; jM < NM; jM++) {
+            M = Mlist[jM];
             
             zMc = conslist[jz][jM];
-            z = zMc[0];
-            M = zMc[1];
-            c = zMc[2];
-            Dc = zMc[3];
+            c = zMc[0];
+            //Dc = zMc[1];
             
             r200 = pow(3.0*M/(4.0*PI*200*rhoc),1.0/3.0);
-            Dr200 = 3.0/(4.0*PI*200*rhoc)*pow(3.0*M/(4.0*PI*200*rhoc),-2.0/3.0);
+            //Dr200 = 3.0/(4.0*PI*200*rhoc)*pow(3.0*M/(4.0*PI*200*rhoc),-2.0/3.0);
             
             rs =  r200/c;
-            Drs =  Dr200/c - r200*Dc/pow(c,2.0);
+            //Drs =  Dr200/c - r200*Dc/pow(c,2.0);
             
             rhos = 200*rhoc*pow(c,3.0)*(1+c)/(3.0*((1+c)*log(1+c) - c));
-            Drhos = Dc*pow(c,2.0)*(-c*(3+4*c) + 3*pow(1+c,2.0)*log(1+c))/(3.0*pow(c-(1+c)*log(1+c),2.0));
+            //Drhos = Dc*pow(c,2.0)*(-c*(3+4*c) + 3*pow(1+c,2.0)*log(1+c))/(3.0*pow(c-(1+c)*log(1+c),2.0));
             
-            zMNFW[jz][jM][0] = z;
-            zMNFW[jz][jM][1] = M;
-            zMNFW[jz][jM][2] = rs;
-            zMNFW[jz][jM][3] = Drs;
-            zMNFW[jz][jM][4] = rhos;
-            zMNFW[jz][jM][5] = Drhos;
+            NFWparams[jz][jM][0] = rs;
+            NFWparams[jz][jM][1] = rhos;
         }
     }
-    return zMNFW;
+    return NFWparams;
 }
 
 
