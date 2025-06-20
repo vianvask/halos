@@ -1,6 +1,7 @@
 #include "cosmology.h"
 #include "UVluminosity.h"
 
+
 // read lensing amplification distribution
 vector<vector<vector<double> > > getPlnmu() {
     vector<vector<double> > Plnmu;
@@ -46,15 +47,37 @@ vector<vector<vector<double> > > getPlnmu() {
 }
 
 
-// the UV magnitude
-double MUV(cosmology &C, double z, double M, double dotM, double Mm, double Mt, double Mc, double epsilon2, double epsilon3, double alpha, double beta, double gamma, double fkappa) {
-    double kappa2 = 1.15e-22; // Msun s erg^-1 Myr^-1
-    double kappa3 = fkappa*kappa2;
-    double Mtz = max(Mt*pow(1.0+z,-3.0/2.0), Mm*exp(gamma*z));
-    double Mmz = 1.0e6;
-    // add together Pop II and III
-    return 51.63 - 1.08574*log((C.fstar(M,Mc,Mtz,epsilon2,alpha,beta)/kappa2 + (1.0-exp(-Mtz/M))*C.fstar(M,Mc,Mmz,epsilon3,0.0,0.0)/kappa3)*max(1.0e-99,dotM));
+// UV luminosity conversion factor
+double kappaUV(double z, double gamma, double zc, double fkappa) {
+    double kappaUV0 = 1.15e-22; // Msun s erg^-1 Myr^-1
+    return kappaUV0*((1.0+fkappa)-(1.0-fkappa)*tanh((z-zc)/gamma))/2.0;
 }
+
+
+// change alpha and beta at z>ze
+double enh(double z, double ze, double z0) {
+    if (z>ze && z<z0) {
+        return (z-z0)/(ze-z0);
+    }
+    if (z>=z0) {
+        return 0.0;
+    }
+    return 1.0;
+}
+
+
+// the UV magnitude
+double MUV(cosmology &C, double z, double M, double dotM, double Mc, double Mt, double epsilon, double alpha, double beta, double gamma, double zc, double fkappa, double ze, double z0) {
+    double alphaz = alpha*enh(z, ze, z0);
+    double betaz = beta*enh(z, ze, z0);
+    return 51.63 - 1.08574*log(C.fstar(M,Mc,Mt,epsilon,alphaz,betaz)*max(1.0e-99,dotM)/kappaUV(z,gamma,zc,fkappa));
+}
+
+// derivative of the UV magnitude, dM_UV/dM
+double DMUV(cosmology &C, double M, double dotM, double DdotM, double Mc, double Mt, double epsilon, double alpha, double beta) {
+    return -1.08574*(DdotM/max(1.0e-99,dotM) + C.Dfstarperfstar(M,Mc,Mt,epsilon,alpha,beta));
+}
+
 
 // dust extinction, MUV -> MUV - AUV (see 1406.1503 and Table 3 of 1306.2950)
 double AUV(double MUV, double z) {
@@ -65,13 +88,23 @@ double AUV(double MUV, double z) {
     return log(exp(s*AUV0) + 1.0)/s;
 }
 
+
+// UV luminosity function as a function of halo mass M, dP(MUV|M)/dMUV = delta(MUV - MUV(M)) (see e.g. 1906.06296)
+double UVLF(cosmology &C, double z, double M, double dotM, double DdotM, double dndlnM, double Mc, double Mt, double epsilon, double alpha, double beta, double ze, double z0) {
+    double alphaz = alpha*enh(z, ze, z0);
+    double betaz = beta*enh(z, ze, z0);
+    return -dndlnM/M/DMUV(C,M,dotM,DdotM,Mc,Mt,epsilon,alphaz,betaz);
+}
+
+
 // distribution of emitted UV magnitudes
 double pMUV(double MUV, double MUVbar, double sigmaUV) {
     return 1.0/(sqrt(2.0*PI)*sigmaUV)*exp(-pow(MUV-MUVbar,2.0)/(2.0*pow(sigmaUV,2.0)));
 }
 
+
 // UV luminosity function, {z, M_UV, Phi(no dust + no lensing), Phi(dust + no lensing), Phi(dust + lensing)}
-vector<vector<vector<double> > > PhiUV(cosmology &C, double Mm, double Mt, double Mc, double epsilon2, double epsilon3, double alpha, double beta, double gamma, double fkappa, double sigmaUV) {
+vector<vector<vector<double> > > PhiUV(cosmology &C, double Mt, double Mc, double epsilon, double alpha, double beta, double gamma, double zc, double fkappa, double ze, double z0, double sigmaUV) {
     
     vector<vector<vector<double> > > PhiUVlensed(C.Zlist.size(), vector<vector<double> > (C.NM, vector<double> (5,0.0)));
     vector<vector<double> > PhiUVlist(C.NM, vector<double> (4,0.0));
@@ -79,13 +112,12 @@ vector<vector<vector<double> > > PhiUV(cosmology &C, double Mm, double Mt, doubl
     double z, dlnmu, Mj, dotMj, DdotMj, dndlnMj, MUVj, UVLFj, AUVj, PhiUVj;
     double Mi, dotMi, dndlnMi, MUVi, Mi2, dotMi2, dndlnMi2, MUVi2;
     vector<vector<double> > Plnmu(C.Plnmuz[0].size(), vector<double> (2,0.0));
-        
+    
     int jzp;
     for (int jZ = 0; jZ < C.Zlist.size(); jZ++) {
-                
         z = C.Zlist[jZ];
         Plnmu = C.Plnmuz[jZ];
-                
+        
         // find index of z in the longer list of z values
         jzp = lower_bound(C.zlist.begin(), C.zlist.end(), z)- C.zlist.begin();
         if (jzp > 0 && C.zlist[jzp]-z > z-C.zlist[jzp-1]) {
@@ -100,46 +132,50 @@ vector<vector<vector<double> > > PhiUV(cosmology &C, double Mm, double Mt, doubl
             dotMj = C.HMFlist[jzp][jM][1];
             DdotMj = C.HMFlist[jzp][jM][2];
             
-            MUVj = MUV(C, z, Mj, dotMj, Mm, Mt, Mc, epsilon2, epsilon3, alpha, beta, gamma, fkappa);
+            MUVj = MUV(C, z, Mj, dotMj, Mc, Mt, epsilon, alpha, beta, gamma, zc, fkappa, ze, z0);
             
             // integral over halo masses to account for the distribution of emitted UV magnitudes
             UVLFj = 0.0;
-
-            for (int iM = jM; iM < C.NM-1; iM++) { // values larger than the mean
-                Mi = C.Mlist[iM];
-                dndlnMi = C.HMFlist[jzp][iM][0];
-                dotMi = C.HMFlist[jzp][iM][1];
-                
-                Mi2 = C.Mlist[iM+1];
-                dndlnMi2 = C.HMFlist[jzp][iM+1][0];
-                dotMi2 = C.HMFlist[jzp][iM+1][1];
-                
-                MUVi = MUV(C, z, Mi, dotMi, Mm, Mt, Mc, epsilon2, epsilon3, alpha, beta, gamma, fkappa);
-                MUVi2 = MUV(C, z, Mi2, dotMi2, Mm, Mt, Mc, epsilon2, epsilon3, alpha, beta, gamma, fkappa);
-                
-                UVLFj += (dndlnMi*pMUV(MUVj,MUVi,sigmaUV) + dndlnMi2*pMUV(MUVj,MUVi2,sigmaUV))/2.0*(log(Mi2)-log(Mi));
-                
-                if (abs(MUVi-MUVj) > 5.0*sigmaUV) { // stop at 5sigma
-                    iM = C.NM;
+            if (sigmaUV > 0.0) {
+                for (int iM = jM; iM < C.NM-1; iM++) { // values larger than the mean
+                    Mi = C.Mlist[iM];
+                    dndlnMi = C.HMFlist[jzp][iM][0];
+                    dotMi = C.HMFlist[jzp][iM][1];
+                    
+                    Mi2 = C.Mlist[iM+1];
+                    dndlnMi2 = C.HMFlist[jzp][iM+1][0];
+                    dotMi2 = C.HMFlist[jzp][iM+1][1];
+                    
+                    MUVi = MUV(C, z, Mi, dotMi, Mc, Mt, epsilon, alpha, beta, gamma, zc, fkappa, ze, z0);
+                    MUVi2 = MUV(C, z, Mi2, dotMi2, Mc, Mt, epsilon, alpha, beta, gamma, zc, fkappa, ze, z0);
+                    
+                    UVLFj += (dndlnMi*pMUV(MUVj,MUVi,sigmaUV) + dndlnMi2*pMUV(MUVj,MUVi2,sigmaUV))/2.0*(log(Mi2)-log(Mi));
+                    
+                    if (abs(MUVi-MUVj) > 5.0*sigmaUV) { // stop at 5sigma
+                        iM = C.NM;
+                    }
+                }
+                for (int iM = jM; iM > 0; iM--) { // values smaller than the mean
+                    Mi = C.Mlist[iM];
+                    dndlnMi = C.HMFlist[jzp][iM][0];
+                    dotMi = C.HMFlist[jzp][iM][1];
+                    
+                    Mi2 = C.Mlist[iM-1];
+                    dndlnMi2 = C.HMFlist[jzp][iM-1][0];
+                    dotMi2 = C.HMFlist[jzp][iM-1][1];
+                    
+                    MUVi = MUV(C, z, Mi, dotMi, Mc, Mt, epsilon, alpha, beta, gamma, zc, fkappa, ze, z0);
+                    MUVi2 = MUV(C, z, Mi2, dotMi2, Mc, Mt, epsilon, alpha, beta, gamma, zc, fkappa, ze, z0);
+                    
+                    UVLFj += (dndlnMi*pMUV(MUVj,MUVi,sigmaUV) + dndlnMi2*pMUV(MUVj,MUVi2,sigmaUV))/2.0*(log(Mi)-log(Mi2));
+                    
+                    if (abs(MUVi-MUVj) > 5.0*sigmaUV) { // stop at 5sigma
+                        iM = 0;
+                    }
                 }
             }
-            for (int iM = jM; iM > 0; iM--) { // values smaller than the mean
-                Mi = C.Mlist[iM];
-                dndlnMi = C.HMFlist[jzp][iM][0];
-                dotMi = C.HMFlist[jzp][iM][1];
-                
-                Mi2 = C.Mlist[iM-1];
-                dndlnMi2 = C.HMFlist[jzp][iM-1][0];
-                dotMi2 = C.HMFlist[jzp][iM-1][1];
-                
-                MUVi = MUV(C, z, Mi, dotMi, Mm, Mt, Mc, epsilon2, epsilon3, alpha, beta, gamma, fkappa);
-                MUVi2 = MUV(C, z, Mi2, dotMi2, Mm, Mt, Mc, epsilon2, epsilon3, alpha, beta, gamma, fkappa);
-                
-                UVLFj += (dndlnMi*pMUV(MUVj,MUVi,sigmaUV) + dndlnMi2*pMUV(MUVj,MUVi2,sigmaUV))/2.0*(log(Mi)-log(Mi2));
-                
-                if (abs(MUVi-MUVj) > 5.0*sigmaUV) { // stop at 5sigma
-                    iM = 0;
-                }
+            else { // dP(MUV|M)/dMUV = delta(MUV - MUV(M))
+                UVLFj = UVLF(C, z, Mj, dotMj, DdotMj, dndlnMj, Mc, Mt, epsilon, alpha, beta, ze, z0);
             }
             
             PhiUVlist[jM][0] = MUVj;
@@ -171,10 +207,10 @@ vector<vector<vector<double> > > PhiUV(cosmology &C, double Mm, double Mt, doubl
     return PhiUVlensed;
 }
 
+
 // generalization of the PhiUV function to different DM models
-vector<vector<vector<double> > > PhiUV(cosmology &C, double logMm, double logMt, double Mc, double epsilon2, double epsilon3, double alpha, double beta, double gamma, double fkappa, double sigmaUV, double logm, int dm) {
+vector<vector<vector<double> > > PhiUV(cosmology &C, double logMt, double Mc, double epsilon, double alpha, double beta, double gamma, double zc, double fkappa, double ze, double z0, double sigmaUV, double logm, int dm) {
     
-    double Mm = pow(10.0, logMm);
     double Mt = pow(10.0, logMt);
     double m = pow(10.0, logm);
     
@@ -201,13 +237,14 @@ vector<vector<vector<double> > > PhiUV(cosmology &C, double logMm, double logMt,
         C.HMFlist = C.EDMHMFlist[jm];
     }
     
-    return PhiUV(C, Mm, Mt, Mc, epsilon2, epsilon3, alpha, beta, gamma, fkappa, sigmaUV);
+    return PhiUV(C, Mt, Mc, epsilon, alpha, beta, gamma, zc, fkappa, ze, z0, sigmaUV);
 }
 
+
 // write UV luminosity functions to a file for a benchmark case
-void writeUVLF(cosmology &C, double logMm, double logMt, double Mc, double epsilon2, double epsilon3, double alpha, double beta, double gamma, double fkappa, double sigmaUV, double logm, int dm) {
-        
-    vector<vector<vector<double> > > PhiUVlist = PhiUV(C, logMm, logMt, Mc, epsilon2, epsilon3, alpha, beta, gamma, fkappa, sigmaUV, logm, dm);
+void writeUVLF(cosmology &C, double logMt, double Mc, double epsilon, double alpha, double beta, double gamma, double zc, double fkappa, double ze, double z0, double sigmaUV, double logm, int dm) {
+    
+    vector<vector<vector<double> > > PhiUVlist = PhiUV(C, logMt, Mc, epsilon, alpha, beta, gamma, zc, fkappa, ze, z0, sigmaUV, logm, dm);
     
     string filename;
     if (dm == 0) {
@@ -243,6 +280,7 @@ void writeUVLF(cosmology &C, double logMm, double logMt, double Mc, double epsil
     outfile.close();
 }
 
+
 // read UV luminosity data, {z, MUV, Phi, +sigmaPhi, -sigmaPhi}
 vector<vector<double> > readUVdata(vector<string> filenames) {
     vector<vector<double> > data;
@@ -271,10 +309,12 @@ vector<vector<double> > readUVdata(vector<string> filenames) {
     return data;
 }
 
+
 // logarithm of a normal distribution
 double logNPDF(double x, double mu, double sigma) {
     return (-pow((x-mu)/sigma,2.0) - log(2*PI) - 2.0*log(sigma))/2.0;
 }
+
 
 // linear uncertainties
 double logNPDF2(double x, double mu, double sigmap, double sigmam) {
@@ -284,11 +324,12 @@ double logNPDF2(double x, double mu, double sigmap, double sigmam) {
     return logNPDF(x,mu,sigmap) + log(2*sigmap/(sigmam+sigmap));
 }
 
+
 // loglikelihood function
 double loglikelihood(cosmology &C, vector<vector<double> > &data, vector<double> &params, int dm) {
     
     // compute the UV luminosity function
-    vector<vector<vector<double> > > PhiUVlist = PhiUV(C, params[0], params[1], params[2], params[3], params[4], params[5], params[6], params[7], params[8], params[9], params[10], dm);
+    vector<vector<vector<double> > > PhiUVlist = PhiUV(C, params[0], params[1], params[2], params[3], params[4], params[5], params[6], params[7], params[8], params[9], params[10], params[11], dm);
     
     vector<vector<double> > PhiUVz;
     double z, MUV, meanPhi, sigmaPhip, sigmaPhim, Phi, logL = 0.0;
@@ -309,6 +350,7 @@ double loglikelihood(cosmology &C, vector<vector<double> > &data, vector<double>
     return logL;
 }
 
+
 // uniform distributions as priors
 double prior(double x, const vector<double> &bounds) {
     double lower = bounds[0], upper = bounds[1];
@@ -321,13 +363,14 @@ double prior(double x, const vector<double> &bounds) {
     return 1.0/(upper-lower);
 }
 
+
 // Metropolis-Hastings MCMC sampler of the UV luminosity fit likelihood
-vector<vector<double> > mcmc_sampling(cosmology &C, vector<vector<double> > &data, vector<double> &initial, vector<double> &steps, vector<vector<double> > &priors, int Ns, int Nbi, int dm, rgen &mt) {
+vector<vector<double> > mcmc_sampling(cosmology &C, vector<vector<double> > &data, vector<double> &initial, vector<double> &steps , vector<vector<double> > &priors, int Ns, int Nbi, int dm, rgen &mt) {
     
     vector<vector<double> > chain;
     vector<double> element;
     
-    // create normal distributions for each parameter based on its proposal width
+    // Create normal distributions for each parameter based on its proposal width
     vector<normal_distribution<>> proposal_distributions;
     for (double step : steps) {
         proposal_distributions.push_back(normal_distribution<>(0.0, step));
@@ -345,7 +388,8 @@ vector<vector<double> > mcmc_sampling(cosmology &C, vector<vector<double> > &dat
     
     double logLproposed, paccept, acceptanceratio = 0.0;
     vector<double> proposed;
-    for (int i = 0; i < Ns; i++) {
+    int ntry = -Nbi, ns = 0;
+    while(ns < Ns) {
         // generate new point by modifying the current sample
         proposed = current;
         for (int j = 0; j < proposed.size(); j++) {
@@ -374,21 +418,23 @@ vector<vector<double> > mcmc_sampling(cosmology &C, vector<vector<double> > &dat
                 }
                 cout << endl;
                 
-                if (i > Nbi && logLcurrent > -1000.0) {
-                    acceptanceratio += 1.0/(1.0*(Ns-Nbi));
-                    
+                if (ntry >= 0 && logLcurrent > -1000.0) {
                     element.insert(element.end(), current.begin(), current.end());
                     element.push_back(logLcurrent);
                     chain.push_back(element);
                     element.clear();
+                    
+                    ns++;
                 }
             }
         }
+        ntry++;
     }
-    cout << "acceptance ratio = " << acceptanceratio << endl;
+    cout << "acceptance ratio = " << ns/(1.0*ntry) << endl;
     
     return chain;
 }
+
 
 // function to generate MCMC chains to fit the UV data
 vector<double> UVLFfit(cosmology &C, vector<vector<double> > &priors, int Nsteps, int Nbi, int Nchains, double xstep, int dm) {
@@ -416,9 +462,11 @@ vector<double> UVLFfit(cosmology &C, vector<vector<double> > &priors, int Nsteps
         priors.push_back({log10(C.kclist.front()), log10(C.kclist.back())});
     }
     
+    int Npar = priors.size();
+    
     // random walk step sizes
-    vector<double> steps(priors.size(),0.0);
-    for (int j = 0; j < steps.size(); j++) {
+    vector<double> steps(Npar,0.0);
+    for (int j = 0; j < Npar; j++) {
         steps[j] = (priors[j][1]-priors[j][0])/xstep;
     }
     
@@ -427,9 +475,11 @@ vector<double> UVLFfit(cosmology &C, vector<vector<double> > &priors, int Nsteps
     outfile.open(filename);
     int jmax = 0;
     double logLmax = 0.0;
-    vector<double> initial(priors.size(),0.0);
+    vector<double> initial(Npar,0.0);
     vector<double> bf = initial;
     vector<vector<double> > chain;
+    vector<vector<double> > means(Nchains, vector<double> (Npar, 0.0)), vars(Nchains, vector<double> (Npar, 0.0));
+    vector<double> mean(Npar, 0.0), var(Npar, 0.0);
     for (int j = 0; j < Nchains; j++) {
         cout << j << endl;
         
@@ -441,25 +491,68 @@ vector<double> UVLFfit(cosmology &C, vector<vector<double> > &priors, int Nsteps
         // generate an MCMC chain
         chain = mcmc_sampling(C, data, initial, steps, priors, Nsteps, Nbi, dm, mt);
         
-        if (chain.size() > 0) {
-            // find the best fit
-            jmax = max_element(chain.begin(), chain.end(), [](const vector<double> &a, const vector<double> &b) { return a.back() < b.back(); }) - chain.begin();
-            if (chain[jmax].back() > logLmax) {
-                logLmax = chain[jmax].back();
-                bf = chain[jmax];
-            }
-            
-            // output the MCMC chain
-            for (int j = 0; j < chain.size(); j++) {
-                for (int jp = 0; jp < chain[0].size(); jp++) {
-                    outfile << chain[j][jp] << "   ";
-                }
-                outfile << endl;
-            }
-            outfile << "#" << endl;
+        // find the best fit
+        jmax = max_element(chain.begin(), chain.end(), [](const vector<double> &a, const vector<double> &b) { return a.back() < b.back(); }) - chain.begin();
+        if (chain[jmax].back() > logLmax) {
+            logLmax = chain[jmax].back();
+            bf = chain[jmax];
         }
+        
+        // output the MCMC chain
+        for (int js = 0; js < Nsteps; js++) {
+            for (int jp = 0; jp < Npar+1; jp++) {
+                outfile << chain[js][jp] << "   ";
+            }
+            outfile << endl;
+        }
+        
+        // compute mean of each parameter
+        for (int jp = 0; jp < Npar; jp++) {
+            mean[jp] = 0.0;
+            for (int js = 0; js < Nsteps; js++) {
+                mean[jp] += chain[js][jp];
+            }
+            mean[jp] = mean[jp]/(1.0*Nsteps);
+        }
+        means[j] = mean;
+        
+        // compute variance of each parameter
+        for (int jp = 0; jp < Npar; jp++) {
+            var[jp] = 0.0;
+            for (int js = 0; js < Nsteps; js++) {
+                var[jp] += pow(chain[js][jp] - mean[jp], 2.0);
+            }
+            var[jp] = var[jp]/(1.0*Nsteps);
+        }
+        vars[j] = var;
     }
     outfile.close();
+    
+    // compute mean of means
+    vector<double> grandMean(Npar, 0.0);
+    for (int jp = 0; jp < Npar; jp++) {
+        for (int jc = 0; jc < Nchains; jc++) {
+            grandMean[jp] += means[jc][jp];
+        }
+        grandMean[jp] = grandMean[jp]/(1.0*Nchains);
+    }
+    
+    // compute variance of means and averaged variance
+    vector<double> Bs(Npar, 0.0), Ws(Npar, 0.0);
+    for (int jp = 0; jp < Npar; jp++) {
+        for (int jc = 0; jc < Nchains; jc++) {
+            Bs[jp] += pow(means[jc][jp] - grandMean[jp], 2.0);
+            Ws[jp] += vars[jc][jp];
+        }
+        Bs[jp] = Bs[jp]*Nsteps/(1.0*(Nchains-1));
+        Ws[jp] = Ws[jp]/(1.0*Nchains);
+    }
+    
+    cout << "Gelman-Rubin statistic:" << endl;
+    for (int jp = 0; jp < Npar; jp++) {
+        cout << ((Nsteps-1)/(1.0*Nsteps)*Ws[jp] + 1.0/(1.0*Nsteps)*Bs[jp])/Ws[jp] << "   ";
+    }
+    cout << endl;
     
     // return the best fit point
     return bf;

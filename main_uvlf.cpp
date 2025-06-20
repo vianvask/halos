@@ -1,5 +1,5 @@
 #include "cosmology.h"
-#include "UVluminosity0.h"
+#include "UVluminosity.h"
 
 // units: masses in solar masses, time in Myr, length in kpc
 
@@ -63,7 +63,7 @@ int main (int argc, char *argv[]) {
 
     if (doUVfit == 1) {
         
-        int Nsteps = 4000; // max number of steps in each chain
+        int Nsteps = 4000; // chain length (without burn-in)
         int Nbi = 1000; // burn-in
         int Nchains = 10; // number of chains
         double xstep = 14.0; // step size = prior range/xstep
