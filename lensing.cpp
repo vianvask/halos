@@ -22,7 +22,7 @@ double barSigmaf(double rs, double rhos, double x) {
         g = 2*atan(sqrt((x-1)/(1+x)))/sqrt(pow(x,2)-1) + log(x/2);
     }
     if (x < 1) {
-        g = 2*atanh(sqrt((1-x)/(1+x)))/sqrt(1.0-pow(x,2)) + log(x/2);
+        g = 2*atanh(sqrt((1-x)/(1+x)))/sqrt(1-pow(x,2)) + log(x/2);
     }
     return 4*rs*rhos*g/pow(x,2);
 }
@@ -72,7 +72,6 @@ vector<double> kappa(cosmology &C, double zs, double zl, double r, double M, dou
         Sigma = Sigmaf(rs, rhos, x);
         barSigma = barSigmaf(rs, rhos, x);
     }
-    
     return {Sigma/Sigmac, barSigma/Sigmac};
 }
 
@@ -145,7 +144,6 @@ vector<vector<double> > MH2D(int N, int burnin, function<double(vector<double>&)
         proposal_distributions.push_back(normal_distribution<>(0.0, step));
     }
     
-    // current point
     vector<double> current = initial;
     double pcurrent = pdf(current);
     
@@ -191,21 +189,21 @@ vector<vector<double> > MH2D(int N, int burnin, function<double(vector<double>&)
 
 
 // probability distribution of lnmu, {lnmu, dP/dlnmu}
-vector<vector<double> > Plnmuf(cosmology &C, double zs, double rS, int Nreal, int Nbins, rgen &mt) {
+vector<vector<double> > Plnmuf(cosmology &C, double zs, double rS, int Nhalos, int Nreal, int Nbins, rgen &mt) {
     vector<vector<double> > Plnmu(Nbins, vector<double> (2, 0.0));
     
-    // find threshold kappa that gives N_h = 10
+    // find threshold kappa that gives N_halos halos
     double kappa1 = 1.0e-12, kappa2 = 1.0;
     double kappathr = pow(10.0, (log10(kappa1) + log10(kappa2))/2.0);
     while (log10(kappa2) - log10(kappa1) > 0.01) {
-        if (Nhf(C, zs, rS, kappathr) > 10) {
+        if (Nhf(C, zs, rS, kappathr) > Nhalos) {
             kappa1 = kappathr;
         } else {
             kappa2 = kappathr;
         }
         kappathr = pow(10.0, (log10(kappa1) + log10(kappa2))/2.0);
     }
-        
+    
     double Nbar = Nhf(C, zs, rS, kappathr);
     poisson_distribution<int> PN(Nbar);
     
@@ -236,7 +234,7 @@ vector<vector<double> > Plnmuf(cosmology &C, double zs, double rS, int Nreal, in
     for (int j = 0; j < steps.size(); j++) {
         steps[j] = (priors[j][1] - priors[j][0])/10.0;
     }
-        
+    
     vector<double> kappalist(Nreal, 0.0);
     vector<double> gamma1list(Nreal, 0.0);
     vector<double> gamma2list(Nreal, 0.0);
@@ -251,7 +249,7 @@ vector<vector<double> > Plnmuf(cosmology &C, double zs, double rS, int Nreal, in
     //writeToFile(zlnMlist, "zlnMlist.dat");
     
     int Nh, idx = 0;
-    vector<double> kappa3;
+    vector<double> kappav;
     double zl, M, rmax, r, phi, kappaj, gamma1j, gamma2j, muj = 1.0, lnmumax = 0.0, lnmumin = 0.0;
     double meankappa = 0.0, meangamma1 = 0.0, meangamma2 = 0.0;
     for (int j = 0; j < Nreal; j++) {
@@ -281,13 +279,12 @@ vector<vector<double> > Plnmuf(cosmology &C, double zs, double rS, int Nreal, in
             r = sqrt(randomreal(0.0,1.0,mt))*rmax;
             phi = randomreal(0.0,2*PI,mt);
             
-            kappa3 = kappa(C, zs, zl, r, M, rS);
+            kappav = kappa(C, zs, zl, r, M, rS);
             
-            kappaj += kappa3[0];
-            gamma1j += -cos(2*phi)*(kappa3[1]-kappa3[0]);
-            gamma2j += -sin(2*phi)*(kappa3[1]-kappa3[0]);
+            kappaj += kappav[0];
+            gamma1j += -cos(2*phi)*(kappav[1]-kappav[0]);
+            gamma2j += -sin(2*phi)*(kappav[1]-kappav[0]);
         }
-        
         meankappa += kappaj;
         meangamma1 += gamma1j;
         meangamma2 += gamma2j;
@@ -302,16 +299,12 @@ vector<vector<double> > Plnmuf(cosmology &C, double zs, double rS, int Nreal, in
         
     for (int j = 0; j < Nreal; j++) {
         kappalist[j] = kappalist[j] - meankappa;
-        //gamma1list[j] = gamma1list[j] - meangamma1;
-        //gamma2list[j] = gamma2list[j] - meangamma2;
-        
         gammalist[j] = sqrt(pow(gamma1list[j], 2.0) + pow(gamma2list[j], 2.0));
         
         muj = 1.0/(pow(1.0-kappalist[j], 2.0) - pow(gammalist[j], 2.0));
         if (muj > 0.0) {
             lnmumin = min(log(muj), lnmumin);
             lnmumax = max(log(muj), lnmumax);
-            
             lnmu.push_back(log(muj));
         }
     }
@@ -342,33 +335,4 @@ vector<vector<double> > Plnmuf(cosmology &C, double zs, double rS, int Nreal, in
     }
     
     return Plnmu;
-}
-
-
-// read or generate lensing amplification distribution
-vector<vector<vector<double> > > getPlnmu(cosmology &C, double rS, int Nreal, int Nbins) {
-    vector<vector<double> > Plnmu;
-    vector<vector<vector<double> > > Plnmuz;
-    
-    rgen mt(time(NULL)); // random number generator
-    
-    ofstream outfile;
-    outfile.open("Plnmu.dat");
-    
-    int Nkappa = 40;
-    double z;
-    for (int jz = 0; jz < C.Zlist.size(); jz++) {
-        z = C.Zlist[jz];
-        cout << "z = " << z << endl;
-        Plnmu = Plnmuf(C, z, rS, Nreal, Nbins, mt);
-        
-        // output dP/dlnmu
-        for (int jb = 0; jb < Plnmu.size(); jb++) {
-            outfile << z << "   " << Plnmu[jb][0] << "   " << Plnmu[jb][1] << endl;
-        }
-        Plnmuz.push_back(Plnmu);
-    }
-    outfile.close();
-    
-    return Plnmuz;
 }

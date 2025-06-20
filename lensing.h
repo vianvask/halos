@@ -1,3 +1,3 @@
 
-// read or generate lensing amplification distribution
-vector<vector<vector<double> > > getPlnmu(cosmology &C, double rS, int Nreal, int Nbins);
+// probability distribution of lnmu, {lnmu, dP/dlnmu}
+vector<vector<double> > Plnmuf(cosmology &C, double zs, double rS, int Nhalos, int Nreal, int Nbins, rgen &mt);
