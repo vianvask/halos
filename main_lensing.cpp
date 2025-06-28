@@ -35,13 +35,13 @@ int main (int argc, char *argv[]) {
     cout << "Generating lensing amplifications..." << endl;
     
     int Nhalos = 10;
-    int Nreal = 1e6; // realizations
-    int Nbins = 200; // P(lnmu) bins
+    int Nreal = 2e4; // realizations
+    int Nbins = 12; // P(lnmu) bins
     double rS = 0.0; // lensing source radius in kpc
     
     // list of redshift values at which P(lnmu) is computed
-    vector<double> Zlist = {10.0};
-    // vector<double> Zlist = {0.1, 0.2, 0.5, 1.0, 2.0, 4.0, 8.0, 16.0};
+    //vector<double> Zlist = {10.0};
+    vector<double> Zlist = {0.1, 0.2, 0.5, 1.0, 2.0, 5.0, 10.0};
     // vector<double> Zlist = {4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.5, 14.5, 17.0, 25.0};
     
     ofstream outfile;

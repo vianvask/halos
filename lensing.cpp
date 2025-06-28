@@ -27,6 +27,18 @@ double barSigmaf(double rs, double rhos, double x) {
     return 4*rs*rhos*g/pow(x,2);
 }
 
+// derivative of the NFW lens surface density at radius x
+double DSigmaf(double rs, double rhos, double x) {
+    double f = 0.0;
+    if (x > 1) {
+        f = -(1+2*pow(x,2))/(x*pow(pow(x,2)-1,2)) + 6*x*atan(sqrt((x-1)/(1+x)))/pow(pow(x,2)-1,5.0/2.0);
+    }
+    if (x < 1) {
+        f = -(1+2*pow(x,2))/(x*pow(pow(x,2)-1,2)) + 6*x*atanh(sqrt((1-x)/(1+x)))/pow(1-pow(x,2),5.0/2.0);
+    }
+    return 2*rhos*f;
+}
+
 
 // lensing convergence and its average, {kappa(r), bar{kappa}(<r)}
 // r_S = source size, r = impact parameter
@@ -44,7 +56,7 @@ vector<double> kappa(cosmology &C, double zs, double zl, double r, double M, dou
     double rs = NFWparams[0];
     double rhos = NFWparams[1];
     
-    double x, Sigma = 0.0, barSigma = 0.0;
+    double x, Sigma = 0.0, barSigma = 0.0, DSigma = 0.0;
     if (rS > 0.0) {
         // projection of the source to the lens plane
         double rSproj = rS*DlA/DsA;
@@ -62,17 +74,20 @@ vector<double> kappa(cosmology &C, double zs, double zl, double r, double M, dou
                 x = sqrt(pow(r,2.0) + pow(R,2.0) - 2.0*r*R*cos(theta))/rs;
                 Sigma += Sigmaf(rs, rhos, x)*R*dR*dtheta;
                 barSigma += barSigmaf(rs, rhos, x)*R*dR*dtheta;
+                DSigma += DSigmaf(rs, rhos, x)*R*dR*dtheta;
             }
         }
         Sigma = Sigma/Aproj;
         barSigma = barSigma/Aproj;
+        DSigma = DSigma/Aproj;
     }
     else {
         x = r/rs;
         Sigma = Sigmaf(rs, rhos, x);
         barSigma = barSigmaf(rs, rhos, x);
+        DSigma = DSigmaf(rs, rhos, x);
     }
-    return {Sigma/Sigmac, barSigma/Sigmac};
+    return {Sigma/Sigmac, barSigma/Sigmac, DSigma/Sigmac};
 }
 
 
@@ -190,7 +205,6 @@ vector<vector<double> > MH2D(int N, int burnin, function<double(vector<double>&)
 
 // probability distribution of lnmu, {lnmu, dP/dlnmu}
 vector<vector<double> > Plnmuf(cosmology &C, double zs, double rS, int Nhalos, int Nreal, int Nbins, rgen &mt) {
-    vector<vector<double> > Plnmu(Nbins, vector<double> (2, 0.0));
     
     // find threshold kappa that gives N_halos halos
     double kappa1 = 1.0e-12, kappa2 = 1.0;
@@ -242,8 +256,8 @@ vector<vector<double> > Plnmuf(cosmology &C, double zs, double rS, int Nhalos, i
     vector<double> lnmu;
     
     // generate the first list of z_l and M values
-    int burnin = 1e4;
-    int Nrand = 1e5;
+    int burnin = 1e3;
+    int Nrand = 1e4;
     vector<double> initial = {zs/2.0, log(1.0e12)};
     vector<vector<double> > zlnMlist = MH2D(Nrand, burnin, pdf, initial, steps, priors, cut, mt);
     //writeToFile(zlnMlist, "zlnMlist.dat");
@@ -294,9 +308,8 @@ vector<vector<double> > Plnmuf(cosmology &C, double zs, double rS, int Nhalos, i
         gamma2list[j] = gamma2j;
     }
     meankappa = meankappa/(1.0*Nreal);
-    meangamma1 = meangamma1/(1.0*Nreal);
-    meangamma2 = meangamma2/(1.0*Nreal);
-        
+     
+    double Alnmu = 0.0, Alnmu2 = 0.0;
     for (int j = 0; j < Nreal; j++) {
         kappalist[j] = kappalist[j] - meankappa;
         gammalist[j] = sqrt(pow(gamma1list[j], 2.0) + pow(gamma2list[j], 2.0));
@@ -305,21 +318,31 @@ vector<vector<double> > Plnmuf(cosmology &C, double zs, double rS, int Nhalos, i
         if (muj > 0.0) {
             lnmumin = min(log(muj), lnmumin);
             lnmumax = max(log(muj), lnmumax);
+            Alnmu += log(muj);
+            Alnmu2 += pow(log(muj),2.0);
+            
             lnmu.push_back(log(muj));
         }
     }
+    Alnmu = Alnmu/(1.0*Nreal);
+    Alnmu2 = Alnmu2/(1.0*Nreal);
+    double varlnmu = Alnmu2 - pow(Alnmu,2.0);
+    
     // writeToFile(kappalist,"kappalist.dat");
     // writeToFile(gammalist,"gammalist.dat");
     
     // binning
-    double dlnmu = (lnmumax-lnmumin)/(1.0*(Nbins-1));
-    for (int j = 0; j < Nbins; j++) {
+    double dlnmu = sqrt(varlnmu)/(1.0*(Nbins-1));
+    int Nbins2 = (int) ceil((lnmumax-lnmumin)/dlnmu + 1.0);
+    vector<vector<double> > Plnmu(Nbins2, vector<double> (2, 0.0));
+    
+    for (int j = 0; j < Nbins2; j++) {
         Plnmu[j][0] = lnmumin + j*dlnmu;
     }
     int jb;
     for (int j = 0; j < lnmu.size(); j++) {
-        jb = (int) round((Nbins-1)*(lnmu[j]-lnmumin)/(lnmumax-lnmumin));
-        if (jb >= 0 && jb < Nbins) {
+        jb = (int) round((Nbins2-1)*(lnmu[j]-lnmumin)/(lnmumax-lnmumin));
+        if (jb >= 0 && jb < Nbins2) {
             Plnmu[jb][1] += 1.0;
         }
     }

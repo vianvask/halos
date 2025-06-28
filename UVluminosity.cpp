@@ -365,10 +365,9 @@ double prior(double x, const vector<double> &bounds) {
 
 
 // Metropolis-Hastings MCMC sampler of the UV luminosity fit likelihood
-vector<vector<double> > mcmc_sampling(cosmology &C, vector<vector<double> > &data, vector<double> &initial, vector<double> &steps , vector<vector<double> > &priors, int Ns, int Nbi, int dm, rgen &mt) {
+vector<vector<double> > mcmc_sampling(cosmology &C, vector<vector<double> > &data, vector<double> &initial, vector<double> &steps , vector<vector<double> > &priors, int Ns, int Nburnin, int dm, rgen &mt) {
     
     vector<vector<double> > chain;
-    vector<double> element;
     
     // Create normal distributions for each parameter based on its proposal width
     vector<normal_distribution<>> proposal_distributions;
@@ -377,19 +376,18 @@ vector<vector<double> > mcmc_sampling(cosmology &C, vector<vector<double> > &dat
     }
     
     vector<double> current = initial;
-    double priorratio = 1.0;
-    
     double logLcurrent = loglikelihood(C, data, current,dm);
-    cout << logLcurrent << endl;
-    for (int jp = 0; jp < current.size(); jp++) {
-        cout << current[jp] << "   ";
-    }
-    cout << endl;
     
-    double logLproposed, paccept, acceptanceratio = 0.0;
+    vector<double> element;
+    element.insert(element.end(), current.begin(), current.end());
+    element.push_back(logLcurrent);
+    
     vector<double> proposed;
-    int ntry = -Nbi, ns = 0;
-    while(ns < Ns) {
+    
+    double priorratio = 1.0, acceptanceratio = 0.0;
+    double logLproposed, paccept;
+    int nnew = 0, i = -Nburnin;
+    while (chain.size() < Ns) {
         // generate new point by modifying the current sample
         proposed = current;
         for (int j = 0; j < proposed.size(); j++) {
@@ -408,36 +406,30 @@ vector<vector<double> > mcmc_sampling(cosmology &C, vector<vector<double> > &dat
             
             // accept or reject the proposed sample
             if (logLproposed - logLcurrent - log(priorratio) > log(paccept)) {
-                
                 current = proposed;
                 logLcurrent = logLproposed;
-                
-                cout << logLcurrent << endl;
-                for (int jp = 0; jp < current.size(); jp++) {
-                    cout << current[jp] << "   ";
-                }
-                cout << endl;
-                
-                if (ntry >= 0 && logLcurrent > -1000.0) {
+                if (i >= 0) {
+                    nnew++;
+                    element.clear();
                     element.insert(element.end(), current.begin(), current.end());
                     element.push_back(logLcurrent);
-                    chain.push_back(element);
-                    element.clear();
-                    
-                    ns++;
                 }
             }
+            if (i >= 0) {
+                chain.push_back(element);
+            }
         }
-        ntry++;
+        cout << i << "   " << chain.size() << "   " << nnew << "   " << "\r" << flush;
+        i++;
     }
-    cout << "acceptance ratio = " << ns/(1.0*ntry) << endl;
+    cout << "acceptance ratio = " << nnew/(1.0*Ns) << endl;
     
     return chain;
 }
 
 
 // function to generate MCMC chains to fit the UV data
-vector<double> UVLFfit(cosmology &C, vector<vector<double> > &priors, int Nsteps, int Nbi, int Nchains, double xstep, int dm) {
+vector<double> UVLFfit(cosmology &C, vector<vector<double> > &priors, int Nsteps, int Nburnin, int Nchains, double xstep, int dm) {
     // random number generator
     rgen mt(time(NULL));
     
@@ -489,7 +481,7 @@ vector<double> UVLFfit(cosmology &C, vector<vector<double> > &priors, int Nsteps
         }
         
         // generate an MCMC chain
-        chain = mcmc_sampling(C, data, initial, steps, priors, Nsteps, Nbi, dm, mt);
+        chain = mcmc_sampling(C, data, initial, steps, priors, Nsteps, Nburnin, dm, mt);
         
         // find the best fit
         jmax = max_element(chain.begin(), chain.end(), [](const vector<double> &a, const vector<double> &b) { return a.back() < b.back(); }) - chain.begin();

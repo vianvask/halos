@@ -7,7 +7,7 @@ int main (int argc, char *argv[]) {
     clock_t time_req = clock(); // timing
     cout << setprecision(6) << fixed;
     
-    const int doUVfit = atoi(argv[1]);
+    const int doUVfit = atoi(argv[1]); // 0: no, 1: yes
     const int dm = atoi(argv[2]); // 0: cold DM, 1: fuzzy DM, 2: warm DM, 3: white noise
         
     // cosmological parameters: PDG values
@@ -59,18 +59,18 @@ int main (int argc, char *argv[]) {
     cout << "Computing UV luminosity functions..." << endl;
     
     // parameters: (logMt, Mc, epsilon, alpha, beta, gamma, zc, fkappa, ze, z0, sigmaUV, logm)
-    vector<double> bf = {7.35, 3.92e11, 0.0613, 0.877, 0.405, 0.214, 10.64, 0.426, 10.45, 26.18, 0.055, 0.65};
+    vector<double> bf = {7.68, 3.88e11, 0.0609, 0.896, 0.382, 0.092, 10.31, 0.355, 12.1, 22.5, 0.057, 0.65};
 
     if (doUVfit == 1) {
-        
-        int Nsteps = 4000; // chain length (without burn-in)
-        int Nbi = 1000; // burn-in
+        int Nsteps = 4000; // chain length without burn-in
+        int Nburnin = 1000; // burn-in
         int Nchains = 10; // number of chains
-        double xstep = 14.0; // step size = prior range/xstep
+        double xstep = 16.0; // step size = prior range/xstep
         
-        vector<vector<double> > priors = {{6.0,10.0}, {3.0e11, 5.0e11}, {0.0578, 0.0658}, {0.6, 1.1}, {0.2, 0.6}, {0.05, 0.6}, {9.8, 11.4}, {0.05, 0.7}, {7.0, 25.0}, {20.0, 36.0}, {0.05, 0.2}};
+        // prior of the beyond CDM parameter is determined from the range given above
+        vector<vector<double> > priors = {{6.0,10.0}, {3.0e11, 5.0e11}, {0.0563, 0.0658}, {0.6, 1.1}, {0.2, 0.6}, {0.05, 0.6}, {9.8, 11.4}, {0.05, 0.7}, {7.0, 25.0}, {16.0, 36.0}, {0.05, 0.2}};
         
-        bf = UVLFfit(C, priors, Nsteps, Nbi, Nchains, xstep, dm);
+        bf = UVLFfit(C, priors, Nsteps, Nburnin, Nchains, xstep, dm);
     }
     
     // output the UV luminosity function for the best fit
