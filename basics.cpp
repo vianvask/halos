@@ -7,6 +7,45 @@ string to_string_prec(double a, const int n) {
     return out.str();
 }
 
+bool fileExists(const string& filename) {
+    ifstream file(filename);
+    return file.good();
+}
+
+// generates a list in linear scale
+vector<double> linlist(double xmin, double xmax, int Nx) {
+    if (Nx > 1) {
+        double dx = (xmax-xmin)/(1.0*(Nx-1));
+        double x = xmin;
+        vector<double> tmp(Nx,0.0);
+        for (int j = 0; j < Nx; j++) {
+            tmp[j] = x;
+            x += dx;
+        }
+        return tmp;
+    } else {
+        vector<double> tmp;
+        return tmp;
+    }
+}
+
+// generates a list in log scale
+vector<double> loglist(double xmin, double xmax, int Nx) {
+    if (Nx > 1) {
+        double dlogx = (log(xmax)-log(xmin))/(1.0*(Nx-1));
+        double x = xmin;
+        vector<double> tmp(Nx,0.0);
+        for (int j = 0; j < Nx; j++) {
+            tmp[j] = x;
+            x = exp(log(x) + dlogx);
+        }
+        return tmp;
+    } else {
+        vector<double> tmp;
+        return tmp;
+    }
+}
+
 // random real number in the range (x_1,x_2)
 double randomreal(double x1, double x2, rgen &mt) {
     long double r01 = mt()/(1.0*mt.max());
@@ -15,6 +54,16 @@ double randomreal(double x1, double x2, rgen &mt) {
 double randomreal(double x1, double x2) {
     long double r01 = rand()/(1.0*RAND_MAX);
     return (x1 + (x2-x1)*r01);
+}
+
+// normal distribution
+double NPDF(double x, double mu, double sigma) {
+    return exp(-pow((x-mu)/sigma,2.0)/2.0)/(sqrt(2*PI)*sigma);
+}
+
+// logarithm of a normal distribution
+double logNPDF(double x, double mu, double sigma) {
+    return (-pow((x-mu)/sigma,2.0) - log(2*PI) - 2.0*log(sigma))/2.0;
 }
 
 
@@ -133,6 +182,114 @@ vector<double> interpolate2(double x0, double y0, vector<double> &x, vector<doub
     return tmp;
 }
 
+// variance of a sample
+double variance(vector<double> &sample) {
+    double mean = accumulate(sample.begin(), sample.end(), 0.0)/(1.0*sample.size());
+    double var = 0.0;
+    for (double x : sample) {
+        var += pow(x - mean,2.0);
+    }
+    return var/(1.0*sample.size());
+}
+
+// minimal and maximal elemnets of a sample
+vector<double> findMinMax(vector<double> &sample) {
+    auto result = minmax_element(sample.begin(), sample.end());
+    return {*result.first, *result.second};
+}
+vector<double> findMinMax(vector<vector<double> > &sample2, int j) {
+    vector<double> sample;
+    for (auto& vec : sample2) {
+        sample.push_back(vec[j]);
+    }
+    
+    return findMinMax(sample);
+}
+
+
+// bin a sample
+vector<vector<double> > binSample(vector<double> &sample, int N) {
+    vector<double> minmax = findMinMax(sample);
+    double var = variance(sample);
+    
+    if (var <= 0.0 || minmax[0] >= minmax[1]) {
+        cout << "bad sample" << endl;
+    }
+    
+    double dx = sqrt(var)/(1.0*(N-1));
+    int Nbins = (int) ceil((minmax[1]-minmax[0])/dx + 1.0);
+    vector<vector<double> > P(Nbins, vector<double> (2, 0.0));
+    
+    for (int j = 0; j < Nbins; j++) {
+        P[j][0] = minmax[0] + j*dx;
+    }
+    int jb;
+    for (double x : sample) {
+        jb = (int) round((Nbins-1)*(x-minmax[0])/(minmax[1]-minmax[0]));
+        if (jb >= 0 && jb < Nbins) {
+            P[jb][1] += 1.0;
+        }
+    }
+    return P;
+}
+
+// find the mean and P CL interval from a sample
+vector<double> confidenceInterval(vector<double> &sample, double P) {
+    // sort the sample
+    sort(sample.begin(), sample.end());
+    int n = sample.size();
+
+    // compute indices for (1-P)/2% and (1-(1-P)/2)% percentiles
+    int lowerIndex = static_cast<int>(0.5*(1-P) * n);
+    int upperIndex = static_cast<int>((1-0.5*(1-P)) * n);
+
+    // clamp indices within bounds
+    lowerIndex = max(0, min(n - 1, lowerIndex));
+    upperIndex = max(0, min(n - 1, upperIndex));
+    
+    double mean = 0.0;
+    for (double x : sample) {
+        mean += x;
+    }
+    mean = mean/(1.0*n);
+
+    return {mean, sample[lowerIndex], sample[upperIndex]};
+}
+
+// sample N values from a cumulative density function
+vector<double> sampleFromCDF(vector<vector<double> > &cdf, int N, rgen &mt) {
+    double sum = cdf.back()[1];
+    vector<double> ret(N);
+    double r;
+    for (int j = 0; j < N; j++) {
+        r = sum*randomreal(0.0,1.0,mt);
+        for (int i = 0; i < cdf.size(); i++) {
+            if (r <= cdf[i][1]) {
+                if (i == 0) {
+                    ret[j] = cdf[i][0];
+                } else {
+                    ret[j] = cdf[i-1][0] + (cdf[i][1] - r)/(cdf[i][1] - cdf[i-1][1])*(cdf[i][0] - cdf[i-1][0]);
+                }
+                i = cdf.size();
+            }
+        }
+    }
+    return ret;
+}
+
+// sample N values from a probability density function
+vector<double> sampleFromPDF(vector<vector<double> > &pdf, int N, rgen &mt) {
+    vector<vector<double> > cdf(pdf.size(), vector<double> (2, 0.0));
+    cdf[0][0] = pdf[0][0];
+    double sum = 0.0;
+    for (int i = 1; i < pdf.size(); i++) {
+        cdf[i][0] = pdf[i][0];
+        sum += pdf[i][1];
+        cdf[i][1] = sum;
+    }
+    return sampleFromCDF(cdf, N, mt);
+}
+
 void writeToFile(vector<double> &row, const string &filename) {
     ofstream outFile(filename);
     for (int j = 0; j < row.size(); j++) {
@@ -207,5 +364,30 @@ void writeToFile(vector<double> &x, vector<double> &y, vector<double> &z, vector
         }
     }
     outFile.close();
+}
+
+// read data
+vector<vector<double> > readdata(string filename, int N) {
+    vector<vector<double> > data;
+    vector<double> row(N,0.0);
+    int jrow = 0;
+    double A;
+    
+    ifstream infile;
+    infile.open(filename);
+    if (infile) {
+        while (infile >> A) {
+            row[jrow] = A;
+            jrow++;
+            if (jrow == N) {
+                jrow = 0;
+                data.push_back(row);
+            }
+        }
+    } else {
+        cout << "couldn't open " << filename << endl;
+    }
+    infile.close();
+    return data;
 }
 

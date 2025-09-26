@@ -70,12 +70,12 @@ double enh(double z, double ze, double z0) {
 double MUV(cosmology &C, double z, double M, double dotM, double Mc, double Mt, double epsilon, double alpha, double beta, double gamma, double zc, double fkappa, double ze, double z0) {
     double alphaz = alpha*enh(z, ze, z0);
     double betaz = beta*enh(z, ze, z0);
-    return 51.63 - 1.08574*log(C.fstar(M,Mc,Mt,epsilon,alphaz,betaz)*max(1.0e-99,dotM)/kappaUV(z,gamma,zc,fkappa));
+    return 51.63 - 1.08574*log(C.fstar(z,M,Mc,Mt,epsilon,alphaz,betaz)*max(1.0e-99,dotM)/kappaUV(z,gamma,zc,fkappa));
 }
 
 // derivative of the UV magnitude, dM_UV/dM
-double DMUV(cosmology &C, double M, double dotM, double DdotM, double Mc, double Mt, double epsilon, double alpha, double beta) {
-    return -1.08574*(DdotM/max(1.0e-99,dotM) + C.Dfstarperfstar(M,Mc,Mt,epsilon,alpha,beta));
+double DMUV(cosmology &C, double z, double M, double dotM, double DdotM, double Mc, double Mt, double epsilon, double alpha, double beta) {
+    return -1.08574*(DdotM/max(1.0e-99,dotM) + C.Dfstarperfstar(z,M,Mc,Mt,epsilon,alpha,beta));
 }
 
 
@@ -93,7 +93,7 @@ double AUV(double MUV, double z) {
 double UVLF(cosmology &C, double z, double M, double dotM, double DdotM, double dndlnM, double Mc, double Mt, double epsilon, double alpha, double beta, double ze, double z0) {
     double alphaz = alpha*enh(z, ze, z0);
     double betaz = beta*enh(z, ze, z0);
-    return -dndlnM/M/DMUV(C,M,dotM,DdotM,Mc,Mt,epsilon,alphaz,betaz);
+    return -dndlnM/M/DMUV(C,z,M,dotM,DdotM,Mc,Mt,epsilon,alphaz,betaz);
 }
 
 
@@ -214,7 +214,6 @@ vector<vector<vector<double> > > PhiUV(cosmology &C, double logMt, double Mc, do
     double Mt = pow(10.0, logMt);
     double m = pow(10.0, logm);
     
-    // find index of z in the longer list of z values
     if (dm == 1) {
         int jm = lower_bound(C.m22list.begin(), C.m22list.end(), m)- C.m22list.begin();
         if (jm > 0 && C.m22list[jm]-m > m-C.m22list[jm-1]) {
@@ -308,13 +307,6 @@ vector<vector<double> > readUVdata(vector<string> filenames) {
     
     return data;
 }
-
-
-// logarithm of a normal distribution
-double logNPDF(double x, double mu, double sigma) {
-    return (-pow((x-mu)/sigma,2.0) - log(2*PI) - 2.0*log(sigma))/2.0;
-}
-
 
 // linear uncertainties
 double logNPDF2(double x, double mu, double sigmap, double sigmam) {

@@ -14,7 +14,6 @@ double Sigmaf(double rs, double rhos, double x) {
     return 2*rs*rhos*f;
 }
 
-
 // average of the NFW lens surface density within radius x
 double barSigmaf(double rs, double rhos, double x) {
     double g = 1 + log(1.0/2.0);
@@ -39,8 +38,7 @@ double DSigmaf(double rs, double rhos, double x) {
     return 2*rhos*f;
 }
 
-
-// lensing convergence and its average, {kappa(r), bar{kappa}(<r)}
+// lensing convergence, its average and its derivative, {kappa(r), bar{kappa}(<r), kappa'(r)}
 // r_S = source size, r = impact parameter
 vector<double> kappa(cosmology &C, double zs, double zl, double r, double M, double rS) {
     
@@ -90,7 +88,6 @@ vector<double> kappa(cosmology &C, double zs, double zl, double r, double M, dou
     return {Sigma/Sigmac, barSigma/Sigmac, DSigma/Sigmac};
 }
 
-
 // maximal r so that kappa^(1) > kappa_thr
 double rmaxf(cosmology &C, double zs, double zl, double M, double rS, double kappathr) {
     double rmax;
@@ -110,7 +107,6 @@ double rmaxf(cosmology &C, double zs, double zl, double M, double rS, double kap
     }
     return rmax;
 }
-
 
 // number of halos with kappa^(1) > kappa_thr
 double Nhf(cosmology &C, double zs, double rS, double kappathr) {
@@ -146,11 +142,10 @@ double prior(double x, vector<double> &bounds) {
 }
 
 
-// MCMC sampling function
-vector<vector<double> > MH2D(int N, int burnin, function<double(vector<double>&)> pdf, vector<double> &initial, vector<double> &steps, vector<vector<double> > &priors, function<double(vector<double>&)> cut, rgen &mt) {
+// sample N values from a PDF using Metropolis-Hastings MCMC sampler
+vector<vector<double> > MCMC_sampling(int N, int Nburnin, function<double(vector<double>&)> logpdf, vector<double> &initial, vector<double> &steps, vector<vector<double> > &priors, function<double(vector<double>&)> cut, rgen &mt, int print) {
     
     vector<vector<double> > samples(N);
-    
     int Npar = initial.size();
     
     // create normal distributions for each parameter based on its proposal width
@@ -160,51 +155,65 @@ vector<vector<double> > MH2D(int N, int burnin, function<double(vector<double>&)
     }
     
     vector<double> current = initial;
-    double pcurrent = pdf(current);
+    double logpcurrent = logpdf(current);
     
     vector<double> prop;
-    double pprop, priorratio, paccept;
-    for (int j = -burnin; j < N;) {
-                
+    double logpprop, priorratio, paccept;
+    int nnew = 0;
+    for (int j = -Nburnin; j < N;) {
+        
         // propose new point
         prop = current;
         for (int i = 0; i < Npar; i++) {
             prop[i] += proposal_distributions[i](mt);
         }
         
-        // compute prior ratio (0 or 1, flat priors)
+        // compute prior ratio
         priorratio = 1.0;
         for (int i = 0; i < Npar; i++) {
-            priorratio *= prior(prop[i], priors[i]);
+            priorratio *= prior(prop[i], priors[i])/prior(current[i], priors[i]);
         }
+        
+        // apply the cut
         if (priorratio > 0.0) {
             priorratio = cut(prop);
         }
         
-        // accept/reject
         if (priorratio > 0.0) {
-            pprop = pdf(prop);
+            logpprop = logpdf(prop);
             paccept = randomreal(0.0,1.0,mt);
-                                    
-            if (paccept < min(1.0, pprop/pcurrent)) {
+            
+            // accept or reject the proposed sample
+            if (log(paccept) < logpprop - logpcurrent - log(priorratio)) {
                 current = prop;
-                pcurrent = pprop;
+                logpcurrent = logpprop;
                 if (j >= 0) {
-                    samples[j] = current;
+                    nnew++;
                 }
-                j++;
             }
+            
+            // after burn-in, add the element to the chain
+            if (j >= 0) {
+                samples[j] = current;
+            }
+            j++;
+        }
+        
+        if (print > 0) {
+            cout << j << "   " << nnew << "   " << "\r" << flush;
         }
     }
     
-    // shuffle the samples
-    shuffle(samples.begin(), samples.end(), mt);
+    if (print > 0) {
+        cout << "acceptance ratio = " << nnew/(1.0*N) << endl;
+    }
+    
     return samples;
 }
 
 
 // probability distribution of lnmu, {lnmu, dP/dlnmu}
-vector<vector<double> > Plnmuf(cosmology &C, double zs, double rS, int Nhalos, int Nreal, int Nbins, rgen &mt) {
+vector<vector<double> > Plnmuf(cosmology &C, double zs, double rS, int Nhalos, int Nreal, int Nbins, rgen &mt, int write) {
     
     // find threshold kappa that gives N_halos halos
     double kappa1 = 1.0e-12, kappa2 = 1.0;
@@ -221,14 +230,12 @@ vector<vector<double> > Plnmuf(cosmology &C, double zs, double rS, int Nhalos, i
     double Nbar = Nhf(C, zs, rS, kappathr);
     poisson_distribution<int> PN(Nbar);
     
-    cout << kappathr << "   " << Nbar << endl;
-    
     // 2D PDF of z_l and ln M_l
-    function<double(vector<double>&)> pdf = [&C, zs, rS, kappathr](vector<double> &zlnM) {
+    function<double(vector<double>&)> logpdf = [&C, zs, rS, kappathr](vector<double> &zlnM) {
         double zl = zlnM[0];
         double M = exp(zlnM[1]);
         double rmax = rmaxf(C, zs, zl, M, rS, kappathr);
-        return pow((1.0+zl)*rmax,2.0)/C.Hz(zl)*interpolate2(zl, M, C.zlist, C.Mlist, C.HMFlist)[0];
+        return log(pow((1.0+zl)*rmax,2.0)/C.Hz(zl)*interpolate2(zl, M, C.zlist, C.Mlist, C.HMFlist)[0]);
     };
     
     // prior in z_l - M_l plane so that kappa > kappa_thr
@@ -252,20 +259,18 @@ vector<vector<double> > Plnmuf(cosmology &C, double zs, double rS, int Nhalos, i
     vector<double> kappalist(Nreal, 0.0);
     vector<double> gamma1list(Nreal, 0.0);
     vector<double> gamma2list(Nreal, 0.0);
-    vector<double> gammalist(Nreal, 0.0);
-    vector<double> lnmu;
     
     // generate the first list of z_l and M values
     int burnin = 1e3;
     int Nrand = 1e4;
     vector<double> initial = {zs/2.0, log(1.0e12)};
-    vector<vector<double> > zlnMlist = MH2D(Nrand, burnin, pdf, initial, steps, priors, cut, mt);
+    vector<vector<double> > zlnMlist = MCMC_sampling(Nrand, burnin, logpdf, initial, steps, priors, cut, mt, 0);
     //writeToFile(zlnMlist, "zlnMlist.dat");
     
     int Nh, idx = 0;
     vector<double> kappav;
-    double zl, M, rmax, r, phi, kappaj, gamma1j, gamma2j, muj = 1.0, lnmumax = 0.0, lnmumin = 0.0;
-    double meankappa = 0.0, meangamma1 = 0.0, meangamma2 = 0.0;
+    double zl, M, rmax, r, phi, kappaj, gamma1j, gamma2j, gammaj, muj;
+    double meankappa = 0.0;
     for (int j = 0; j < Nreal; j++) {
         kappaj = 0.0;
         gamma1j = 0.0;
@@ -279,17 +284,17 @@ vector<vector<double> > Plnmuf(cosmology &C, double zs, double rS, int Nhalos, i
             zl = zlnMlist[idx][0];
             M = exp(zlnMlist[idx][1]);
             idx++;
-            
+                        
             if (idx >= Nrand) {
                 // generate new set of z_l and M values
                 initial = {zl, log(M)};
-                zlnMlist = MH2D(Nrand, burnin, pdf, initial, steps, priors, cut, mt);
+                zlnMlist = MCMC_sampling(Nrand, burnin, logpdf, initial, steps, priors, cut, mt, 0);
                 idx = 0;
             }
             
             // find r_max so that kappa(r_max) = kappa_thr
             rmax = rmaxf(C, zs, zl, M, rS, kappathr);
-            
+                        
             r = sqrt(randomreal(0.0,1.0,mt))*rmax;
             phi = randomreal(0.0,2*PI,mt);
             
@@ -300,54 +305,46 @@ vector<vector<double> > Plnmuf(cosmology &C, double zs, double rS, int Nhalos, i
             gamma2j += -sin(2*phi)*(kappav[1]-kappav[0]);
         }
         meankappa += kappaj;
-        meangamma1 += gamma1j;
-        meangamma2 += gamma2j;
         
         kappalist[j] = kappaj;
         gamma1list[j] = gamma1j;
         gamma2list[j] = gamma2j;
     }
     meankappa = meankappa/(1.0*Nreal);
-     
-    double Alnmu = 0.0, Alnmu2 = 0.0;
+    
+    // compute mu
+    vector<double> lnmulist;
+    vector<double> lnmuAlist;
+    vector<double> ln1pkappalist;
+    vector<double> lngammalist;
     for (int j = 0; j < Nreal; j++) {
-        kappalist[j] = kappalist[j] - meankappa;
-        gammalist[j] = sqrt(pow(gamma1list[j], 2.0) + pow(gamma2list[j], 2.0));
+        kappaj = kappalist[j] - meankappa;
+        gammaj = sqrt(pow(gamma1list[j], 2.0) + pow(gamma2list[j], 2.0));
+        muj = 1.0/(pow(1.0-kappaj, 2.0) - pow(gammaj, 2.0));
         
-        muj = 1.0/(pow(1.0-kappalist[j], 2.0) - pow(gammalist[j], 2.0));
-        if (muj > 0.0) {
-            lnmumin = min(log(muj), lnmumin);
-            lnmumax = max(log(muj), lnmumax);
-            Alnmu += log(muj);
-            Alnmu2 += pow(log(muj),2.0);
-            
-            lnmu.push_back(log(muj));
+        if (muj > 0.0 && gammaj > 0.0) {
+            lnmulist.push_back(log(muj));
+            lnmuAlist.push_back(log(1.0/pow(1.0-kappaj, 2.0)));
+            ln1pkappalist.push_back(log(1.0+kappaj));
+            lngammalist.push_back(log(gammaj));
         }
     }
-    Alnmu = Alnmu/(1.0*Nreal);
-    Alnmu2 = Alnmu2/(1.0*Nreal);
-    double varlnmu = Alnmu2 - pow(Alnmu,2.0);
-    
-    // writeToFile(kappalist,"kappalist.dat");
-    // writeToFile(gammalist,"gammalist.dat");
     
     // binning
-    double dlnmu = sqrt(varlnmu)/(1.0*(Nbins-1));
-    int Nbins2 = (int) ceil((lnmumax-lnmumin)/dlnmu + 1.0);
-    vector<vector<double> > Plnmu(Nbins2, vector<double> (2, 0.0));
-    
-    for (int j = 0; j < Nbins2; j++) {
-        Plnmu[j][0] = lnmumin + j*dlnmu;
-    }
-    int jb;
-    for (int j = 0; j < lnmu.size(); j++) {
-        jb = (int) round((Nbins2-1)*(lnmu[j]-lnmumin)/(lnmumax-lnmumin));
-        if (jb >= 0 && jb < Nbins2) {
-            Plnmu[jb][1] += 1.0;
-        }
+    vector<vector<double> > Plnmu = binSample(lnmulist, Nbins);
+    if (write > 0) {
+        vector<vector<double> > PlnmuA = binSample(lnmuAlist, Nbins);
+        vector<vector<double> > Pln1pkappa = binSample(ln1pkappalist, Nbins);
+        vector<vector<double> > Plngamma = binSample(lngammalist, Nbins);
+            
+        writeToFile(Plnmu,"Plnmu.dat");
+        writeToFile(PlnmuA,"PlnmuA.dat");
+        writeToFile(Pln1pkappa,"Pln1pkappa.dat");
+        writeToFile(Plngamma,"Plngamma.dat");
     }
     
     // convert from image plane to source plane (P_S ~ P_I/mu) and normalize
+    double dlnmu = Plnmu[1][0] - Plnmu[0][0];
     double norm = 0.0;
     for (int j = 0; j < Plnmu.size(); j++) {
         Plnmu[j][1] *= exp(-Plnmu[j][0]);
@@ -356,6 +353,105 @@ vector<vector<double> > Plnmuf(cosmology &C, double zs, double rS, int Nhalos, i
     for (int j = 0; j < Plnmu.size(); j++) {
         Plnmu[j][1] *= 1.0/norm;
     }
-    
     return Plnmu;
+}
+
+
+double loglikelihood(cosmology &C, double DLthr, vector<vector<double> > &data, vector<double> &par, int lensing, int dm, rgen &mt) {
+    
+    // initialize cosmology
+    C.OmegaM = par[0];
+    C.sigma8 = par[1];
+    C.h = par[2];
+    C.initialize(dm, pow(10.0, par[3]));
+    
+    double z, DL0, DL, sigmaDL, Y, dY, Pdet;
+    
+    // compute loglikelihood
+    double logL = 0.0;
+    if (lensing == 0 || lensing == 1) { // model without lensing
+        for (int j = 0; j < data.size(); j++) {
+            z = data[j][0];
+            DL0 = C.DL(z);
+            DL = data[j][1];
+            sigmaDL = data[j][2];
+            
+            // compute P_det
+            dY = sigmaDL/10.0;
+            Y = min(DL0, DLthr) - 3.0*sigmaDL;
+            Pdet = 0.0;
+            while (Y <= min(DLthr, DL0 + 3.0*sigmaDL)) {
+                Pdet += dY*NPDF(Y, DL0, sigmaDL);
+                Y += dY;
+            }
+            logL += logNPDF(DL, DL0, sigmaDL) - log(Pdet);
+        }
+    }
+    else { // model with lensing
+        
+        // compute the lensing distributions
+        int Nhalos = 10;
+        int Nreal = 1e4; // realizations
+        int Nbins = 12; // P(lnmu) bins
+        double rS = 0.0; // lensing source radius in kpc
+        vector<vector<vector<double> > > Plnmuz(C.Zlist.size());
+        for (int jz = 0; jz < C.Zlist.size(); jz++) {
+            z = C.Zlist[jz];
+            Plnmuz[jz] = Plnmuf(C, z, rS, Nhalos, Nreal, Nbins, mt, 0);
+        }
+        
+        int jz;
+        vector<vector<double> > Plnmu;
+        double L, dlnmu;
+        for (int j = 0; j < data.size(); j++) {
+            z = data[j][0];
+            
+            DL = data[j][1];
+            sigmaDL = data[j][2];
+            
+            // find the closest z at which P(lnmu) is computed
+            jz = lower_bound(C.Zlist.begin(), C.Zlist.end(), z)- C.Zlist.begin();
+            if ((jz > 0 && C.Zlist[jz]-z > z-C.Zlist[jz-1]) || jz >= C.Zlist.size()) {
+                jz--;
+            }
+            Plnmu = Plnmuz[jz];
+            dlnmu = Plnmu[1][0] - Plnmu[0][0];
+            
+            // integrate over lnmu
+            dY = sigmaDL/10.0;
+            Pdet = 0.0, L = 0.0;
+            for (int i = 0; i < Plnmu.size(); i++) {
+                DL0 = C.DL(z)/exp(Plnmu[i][0]/2.0);
+                
+                L += dlnmu*Plnmu[i][1]*NPDF(DL, DL0, sigmaDL);
+                
+                // integrate over Y
+                Y = min(DL0, DLthr) - 3.0*sigmaDL;
+                while (Y <= min(DLthr, DL0 + 3.0*sigmaDL)) {
+                    Pdet += dlnmu*Plnmu[i][1]*dY*NPDF(Y, DL0, sigmaDL);
+                    Y += dY;
+                }
+            }
+            
+            logL += log(L/Pdet);
+        }
+    }
+    
+    return logL;
+}
+
+
+vector<vector<double> > Hubble_diagram_fit(cosmology &C, double DLthr, vector<vector<double> > &data, vector<double> &initial, vector<double> &steps , vector<vector<double> > &priors, int N, int Nburnin, int lensing, int dm, rgen &mt) {
+    
+    // loglikelihood
+    function<double(vector<double>&)> pdf = [&C, DLthr, &data, lensing, dm, &mt](vector<double> &par) {
+        return loglikelihood(C, DLthr, data, par, lensing, dm, mt);
+    };
+    
+    // no cut
+    function<double(vector<double>&)> cut = [](vector<double> &par) {
+        return 1.0;
+    };
+    
+    return MCMC_sampling(N, Nburnin, pdf, initial, steps, priors, cut, mt, 1);
 }

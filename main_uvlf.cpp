@@ -59,12 +59,15 @@ int main (int argc, char *argv[]) {
     cout << "Computing UV luminosity functions..." << endl;
     
     // parameters: (logMt, Mc, epsilon, alpha, beta, gamma, zc, fkappa, ze, z0, sigmaUV, logm)
-    vector<double> bf = {7.68, 3.88e11, 0.0609, 0.896, 0.382, 0.092, 10.31, 0.355, 12.1, 22.5, 0.057, 0.65};
+    vector<double> bf = {7.94, 4.00e11, 0.0612, 0.882, 0.404, 0.272, 10.73, 0.292, 12.7, 22.9, 0.068, -1.6};
+    //vector<double> bf = {7.94, 4.00e11, 0.0612, 0.882, 0.404, 0.272, 10.73, 0.292, 12.7, 22.9, 0.068, 0.75};
+    //vector<double> bf = {7.94, 4.00e11, 0.0612, 0.882, 0.404, 0.272, 10.73, 0.292, 26, 36, 0.068, 0.75};
+    //vector<double> bf = {7.94, 4.00e11, 0.0612, 0.882, 0.404, 0.272, 26, 1.0, 26, 36, 0.068, 0.75};
 
     if (doUVfit == 1) {
-        int Nsteps = 4000; // chain length without burn-in
-        int Nburnin = 1000; // burn-in
-        int Nchains = 10; // number of chains
+        int Nsteps = 10000; // chain length without burn-in
+        int Nburnin = 2000; // burn-in
+        int Nchains = 8; // number of chains
         double xstep = 16.0; // step size = prior range/xstep
         
         // prior of the beyond CDM parameter is determined from the range given above

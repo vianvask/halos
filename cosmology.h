@@ -1,7 +1,5 @@
 #include "basics.h"
 
-vector<vector<double> > comovingdistance(function<double(double)> Hz, const int Nz, const double zmin, const double zmax);
-
 class cosmology {
 
 public:
@@ -162,9 +160,6 @@ private:
 
     // variance of matter fluctuations, {M,sigma(M),sigma'(M)}
     vector<vector<double> > sigmalistf(double m22, double m3, double kc);
-    
-    // generates a list in log scale
-    vector<double> loglist(double xmin, double xmax, int Nx);
 
     // CDM halo consentration parameter (1601.02624), {jz,jM} -> {c, dc/dM}
     double cons(double M, double z);
@@ -189,10 +184,10 @@ private:
     
 public:
     // star formation rate
-    double fstar(double M, double Mc, double Mt, double epsilon, double alpha, double beta);
+    double fstar(double z, double M, double Mc, double Mt, double epsilon, double alpha, double beta);
 
     // derivative of the star formation rate, df_*/dM
-    double Dfstarperfstar(double M, double Mc, double Mt, double epsilon, double alpha, double beta);
+    double Dfstarperfstar(double z, double M, double Mc, double Mt, double epsilon, double alpha, double beta);
     
     vector<vector<double> > evolvestellarmass(double Mc, double Mt, double epsilon, double alpha, double beta);
     vector<vector<double> > evolveBHmass(double Mc, double Mt, double epsilon, double alpha, double beta, double fEdd, double facc1, double facc2);
@@ -220,74 +215,8 @@ public:
     vector<double> kclist;
     vector<vector<vector<double> > > EDMsigmalist;
     vector<vector<vector<vector<double> > > > EDMHMFlist;
-       
-    void CDM_halos() {
-        // fix deltaH to match the input sigma8
-        deltaH8 = sigma8/sigmaC(M8, 1.0)[0];
-        
-        // halo mass function and halo growth rate
-        sigmalist = sigmalistf(0.0, 0.0, 0.0);
-        HMFlist = HMFlistf();
-        
-        writeToFile(sigmalist, "sigma_CDM.dat");
-        writeToFile(zlist, Mlist, HMFlist, "HMF_CDM.dat");
-        
-        // NFW halo parameters
-        conslist = conslistf();
-        NFWlist = NFWlistf();
-    }
     
-    void FDM_halos() {
-        for (double m22 : m22list) {
-            // fix deltaH to match the input sigma8
-            deltaH8 = sigma8/sigmaF(M8, 1.0, m22)[0];
-                        
-            // halo mass function and halo growth rate
-            sigmalist = sigmalistf(m22, 0.0, 0.0);
-            HMFlist = HMFlistf();
-            
-            FDMsigmalist.push_back(sigmalist);
-            FDMHMFlist.push_back(HMFlist);
-        }
-        writeToFile(m22list, FDMsigmalist, "sigma_FDM.dat");
-        writeToFile(m22list, zlist, Mlist, FDMHMFlist, "HMF_FDM.dat");
-    }
-    
-    void WDM_halos() {
-        for (double m3 : m3list) {
-            // fix deltaH to match the input sigma8
-            deltaH8 = sigma8/sigmaW(M8, 1.0, m3)[0];
-                        
-            // halo mass function and halo growth rate
-            sigmalist = sigmalistf(0.0, m3, 0.0);
-            HMFlist = HMFlistf();
-            
-            WDMsigmalist.push_back(sigmalist);
-            WDMHMFlist.push_back(HMFlist);
-        }
-        
-        writeToFile(m3list, WDMsigmalist, "sigma_WDM.dat");
-        writeToFile(m3list, zlist, Mlist, WDMHMFlist, "HMF_WDM.dat");
-    }
-    
-    void EDM_halos() {
-        for (double kc : kclist) {
-            // fix deltaH to match the input sigma8
-            deltaH8 = sigma8/sigmaE(M8, 1.0, kc)[0];
-                        
-            // halo mass function and halo growth rate
-            sigmalist = sigmalistf(0.0, 0.0, kc);
-            HMFlist = HMFlistf();
-            
-            EDMsigmalist.push_back(sigmalist);
-            EDMHMFlist.push_back(HMFlist);
-        }
-        
-        writeToFile(kclist, EDMsigmalist, "sigma_EDM.dat");
-        writeToFile(kclist, zlist, Mlist, EDMHMFlist, "HMF_EDM.dat");
-    }
-    
-    void initialize(int dm) {
+    void initialize0() {
         OmegaR = OmegaM/(1+zeq);
         OmegaL = 1.0 - OmegaM - OmegaR;
         OmegaC = OmegaM - OmegaB;
@@ -297,28 +226,126 @@ public:
         rhoc = 277.394*pow(h,2.0);
         rhoM0 = OmegaM*rhoc;
         M8 = 4.0*PI/3.0*pow(8000.0/h,3.0)*rhoM0;
-        
+                
         zlist = loglist(zmin,zmax,Nz);
         Mlist = loglist(Mmin,Mmax,NM);
                 
         zdc = dclist();
         zt = tlist();
         
+        // NFW halo parameters, computed with CDM sigma
+        deltaH8 = sigma8/sigmaC(M8, 1.0)[0];
+        sigmalist = sigmalistf(0.0, 0.0, 0.0);
+        conslist = conslistf();
+        NFWlist = NFWlistf();
+    }
+    
+    // initialize for multiple beyond CDM parameter values and output the halo mass functions
+    void initialize(int dm) {
+        initialize0();
+        
         if (dm == 0) {
-            CDM_halos();
+            // halo mass function and halo growth rate
+            HMFlist = HMFlistf();
+            
+            writeToFile(sigmalist, "sigma_CDM.dat");
+            writeToFile(zlist, Mlist, HMFlist, "HMF_CDM.dat");
         }
         if (dm == 1) {
             m22list = loglist(m22min,m22max,Nm22);
-            FDM_halos();
+            
+            for (double m22 : m22list) {
+                // fix deltaH to match the input sigma8
+                deltaH8 = sigma8/sigmaF(M8, 1.0, m22)[0];
+                            
+                // halo mass function and halo growth rate
+                sigmalist = sigmalistf(m22, 0.0, 0.0);
+                HMFlist = HMFlistf();
+                
+                FDMsigmalist.push_back(sigmalist);
+                FDMHMFlist.push_back(HMFlist);
+            }
+            writeToFile(m22list, FDMsigmalist, "sigma_FDM.dat");
+            writeToFile(m22list, zlist, Mlist, FDMHMFlist, "HMF_FDM.dat");
         }
         if (dm == 2) {
             m3list = loglist(m3min,m3max,Nm3);
-            WDM_halos();
+            
+            for (double m3 : m3list) {
+                // fix deltaH to match the input sigma8
+                deltaH8 = sigma8/sigmaW(M8, 1.0, m3)[0];
+                            
+                // halo mass function and halo growth rate
+                sigmalist = sigmalistf(0.0, m3, 0.0);
+                HMFlist = HMFlistf();
+                
+                WDMsigmalist.push_back(sigmalist);
+                WDMHMFlist.push_back(HMFlist);
+            }
+            
+            writeToFile(m3list, WDMsigmalist, "sigma_WDM.dat");
+            writeToFile(m3list, zlist, Mlist, WDMHMFlist, "HMF_WDM.dat");
         }
         if (dm == 3) {
             kclist = loglist(kcmin,kcmax,Nkc);
-            EDM_halos();
+            
+            for (double kc : kclist) {
+                // fix deltaH to match the input sigma8
+                deltaH8 = sigma8/sigmaE(M8, 1.0, kc)[0];
+                            
+                // halo mass function and halo growth rate
+                sigmalist = sigmalistf(0.0, 0.0, kc);
+                HMFlist = HMFlistf();
+                
+                EDMsigmalist.push_back(sigmalist);
+                EDMHMFlist.push_back(HMFlist);
+            }
+            
+            writeToFile(kclist, EDMsigmalist, "sigma_EDM.dat");
+            writeToFile(kclist, zlist, Mlist, EDMHMFlist, "HMF_EDM.dat");
         }
+    }
+    
+    // initialize for single beyond CDM parameter value, x = m_WDM, m_FDM or k_EDM
+    void initialize(int dm, double x) {
+        initialize0();
+        
+        // compute halo mass function as a function of M and z
+        if (dm == 0) {
+            HMFlist = HMFlistf();
+        }
+        if (dm == 1) {
+            deltaH8 = sigma8/sigmaF(M8, 1.0, x)[0];
+            sigmalist = sigmalistf(x, 0.0, 0.0);
+            HMFlist = HMFlistf();
+        }
+        if (dm == 2) {
+            deltaH8 = sigma8/sigmaW(M8, 1.0, x)[0];
+            sigmalist = sigmalistf(0.0, x, 0.0);
+            HMFlist = HMFlistf();
+        }
+        if (dm == 3) {
+            deltaH8 = sigma8/sigmaE(M8, 1.0, x)[0];
+            sigmalist = sigmalistf(0.0, 0.0, x);
+            HMFlist = HMFlistf();
+        }
+    }
+    
+    // comoving distance
+    double dc(double z) {
+        return interpolate(z, zdc);
+    }
+    
+    // comoving distance
+    double Vc(double z) {
+        double dc = interpolate(z, zdc);
+        return 4.0*PI/3.0*pow(dc,3.0);
+    }
+    
+    // comoving distance
+    double DVc(double z) {
+        double dc = interpolate(z, zdc);
+        return 4.0*PI*pow(dc,2.0)/Hz(z);
     }
     
     // luminosity distance

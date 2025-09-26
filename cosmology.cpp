@@ -1,23 +1,5 @@
 #include "cosmology.h"
 
-// generates a list in log scale
-vector<double> cosmology::loglist(double xmin, double xmax, int Nx) {
-    if (Nx > 1) {
-        double dlogx = (log(xmax)-log(xmin))/(1.0*(Nx-1));
-        double x = xmin;
-        vector<double> tmp(Nx,0.0);
-        for (int j = 0; j < Nx; j++) {
-            tmp[j] = x;
-            x = exp(log(x) + dlogx);
-        }
-        return tmp;
-    } else {
-        vector<double> tmp;
-        return tmp;
-    }
-}
-
-
 // CDM matter transfer function (astro-ph/9709112)
 double cosmology::TM (double k) {
     double keq = 0.00326227*Hz(zeq)/(1.0+zeq);
@@ -241,22 +223,38 @@ vector<vector<vector<double> > > cosmology::HMFlistf() {
     return dndlnM;
 }
 
-// star formation rate f_*(M) and its derivative df_*/dM
-double cosmology::fstar(double M, double Mc, double Mt, double epsilon, double alpha, double beta) {
-    if (alpha>0.0 && beta>0.0) {
-        return epsilon*(alpha+beta)/(beta*pow(M/Mc,-alpha) + alpha*pow(M/Mc,beta))*exp(-Mt/M);
-    }
-    return epsilon*exp(-Mt/M);
+/*
+double Q(double S, double St, double z) {
+    double dz;
+    double Ddeltac = (deltaell(z+dz,S)-deltaell(z,S))/dz;
+    return (pow(2.0,-p)*exp(q*pow(deltac(z),2.0)/(2.0*S))*pow(q,-0.5+p)*pow(S/(S-St),1.5)*(pow(2.0,p)*sqrt(PI)+Gammaf(0.5-p))*Mt*pow(deltac(z),-1.0+2.0*p)*(1.0+pow(a*pow(deltac(z),2.0)/S,p))*Ddeltac/(sqrt(PI)*rhoM0*(pow(S,p)+pow(a*pow(deltac(z),2.0),p))*(1.0+(q*pow(deltac(z),2.0),p))));
 }
-double cosmology::Dfstarperfstar(double M, double Mc, double Mt, double epsilon, double alpha, double beta) {
+*/
+
+// star formation rate f_*(M) and its derivative df_*/dM
+double cosmology::fstar(double z, double M, double Mc, double Mt, double epsilon, double alpha, double beta) {
+    double Mtz = Mt*pow((1.0+z)/10.0,-3.0/2.0);
     if (alpha>0.0 && beta>0.0) {
-        return beta*((alpha+beta)/(alpha*pow(M/Mc,alpha+beta)+beta) - 1.0)/M + Mt/pow(M,2.0);
+        return epsilon*(alpha+beta)/(beta*pow(M/Mc,-alpha) + alpha*pow(M/Mc,beta))*exp(-Mtz/M);
     }
-    return Mt/pow(M,2.0);
+    return epsilon*exp(-Mtz/M);
+}
+double cosmology::Dfstarperfstar(double z, double M, double Mc, double Mt, double epsilon, double alpha, double beta) {
+    double Mtz = Mt*pow((1.0+z)/10.0,-3.0/2.0);
+    if (alpha>0.0 && beta>0.0) {
+        return beta*((alpha+beta)/(alpha*pow(M/Mc,alpha+beta)+beta) - 1.0)/M + Mtz/pow(M,2.0);
+    }
+    return Mtz/pow(M,2.0);
 }
 
 // halo consentration parameter (1601.02624)
-double cosmology::cons(double sigma, double z) {
+double cosmology::cons(double sigma, double z0) {
+    
+    double z = z0;
+    if (z0 > 7) {
+        z = 7.0;
+    }
+    
     double c0 = 3.395*pow(1+z,-0.215);
     double beta = 0.307*pow(1+z,0.540);
     double gamma1 = 0.628*pow(1+z,-0.047);
@@ -279,7 +277,7 @@ vector<vector<vector<double> > > cosmology::conslistf() {
         for (int jM = 0; jM < NM; jM++) {
             Mn = sigmalist[jM+1][0];
             cn = cons(sigmalist[jM+1][1],z);
-
+            
             zMc[jz][jM][0] = c;
             zMc[jz][jM][1] = (cn - c)/(Mn - M);
             
