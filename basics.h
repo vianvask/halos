@@ -45,4 +45,5 @@ void writeToFile(vector<double> &x, vector<vector<vector<double> > > &cubic, con
 void writeToFile(vector<double> &x, vector<double> &y, vector<vector<vector<double> > > &f, const string &filename);
 void writeToFile(vector<double> &x, vector<double> &y, vector<double> &z, vector<vector<vector<vector<double> > > > &f, const string &filename);
 
+vector<double> readdata(string filename);
 vector<vector<double> > readdata(string filename, int N);

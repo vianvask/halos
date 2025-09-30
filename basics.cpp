@@ -366,6 +366,25 @@ void writeToFile(vector<double> &x, vector<double> &y, vector<double> &z, vector
     outFile.close();
 }
 
+// read list
+vector<double> readdata(string filename) {
+    vector<double> data;
+    int jrow = 0;
+    double A;
+    
+    ifstream infile;
+    infile.open(filename);
+    if (infile) {
+        while (infile >> A) {
+            data.push_back(A);
+        }
+    } else {
+        cout << "couldn't open " << filename << endl;
+    }
+    infile.close();
+    return data;
+}
+
 // read data
 vector<vector<double> > readdata(string filename, int N) {
     vector<vector<double> > data;

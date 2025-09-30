@@ -128,6 +128,40 @@ double Nhf(cosmology &C, double zs, double rS, double kappathr) {
     return Nh;
 }
 
+// variance of kappa from weak lenses
+double sigmakappaW(cosmology &C, double zs, double rS, double kappathr) {
+    double Nh = 0.0, kappa1 = 0.0, kappa2 = 0.0;
+    double zl, dz, M, dlnM, dndlnM, r, kappar;
+    int Nr = 100;
+    double dlnr = 0.01;
+    for (int jz = 1; jz < C.Nz; jz++) {
+        zl = C.zlist[jz];
+        dz = zl - C.zlist[jz-1];
+        if(zl < zs) {
+            for (int jM = 1; jM < C.NM; jM++) {
+                M = C.Mlist[jM];
+                dlnM = log(M) - log(C.Mlist[jM-1]);
+                dndlnM = C.HMFlist[jz][jM][0];
+                
+                r = rmaxf(C, zs, zl, M, rS, kappathr);
+                if (r == 0.0) {
+                    r = 1.0e-6;
+                }
+                
+                kappar = kappathr;
+                while (kappar > 0.001*kappathr) {
+                    kappar = kappa(C, zs, zl, r, M, rS)[0];
+                    Nh += 306.535*PI*pow((1.0+zl)*r,2.0)/C.Hz(zl)*dndlnM*dlnr*dlnM*dz;
+                    kappa1 += 306.535*PI*pow((1.0+zl)*r,2.0)/C.Hz(zl)*dndlnM*kappar*dlnr*dlnM*dz;
+                    kappa2 += 306.535*PI*pow((1.0+zl)*r,2.0)/C.Hz(zl)*dndlnM*pow(kappar,2.0)*dlnr*dlnM*dz;
+                    r = exp(log(r) + dlnr);
+                }
+            }
+        }
+    }
+    return sqrt(kappa2 - pow(kappa1,2.0)/Nh);
+}
+
 
 // flat priors
 double prior(double x, vector<double> &bounds) {
@@ -143,7 +177,12 @@ double prior(double x, vector<double> &bounds) {
 
 
 // sample N values from a PDF using Metropolis-Hastings MCMC sampler
-vector<vector<double> > MCMC_sampling(int N, int Nburnin, function<double(vector<double>&)> logpdf, vector<double> &initial, vector<double> &steps, vector<vector<double> > &priors, function<double(vector<double>&)> cut, rgen &mt, int print) {
+vector<vector<double> > MCMC_sampling(int N, int Nburnin, function<double(vector<double>&)> logpdf, vector<double> &initial, vector<double> &steps, vector<vector<double> > &priors, function<double(vector<double>&)> cut, rgen &mt, int print, string filename) {
+    
+    ofstream outfile;
+    if (print > 0) {
+        outfile.open(filename);
+    }
     
     vector<vector<double> > samples(N);
     int Npar = initial.size();
@@ -194,6 +233,12 @@ vector<vector<double> > MCMC_sampling(int N, int Nburnin, function<double(vector
             
             // after burn-in, add the element to the chain
             if (j >= 0) {
+                if (print > 0) {
+                    for (int jp = 0; jp < Npar; jp++) {
+                        outfile << current[jp] << "   ";
+                    }
+                    outfile << endl;
+                }
                 samples[j] = current;
             }
             j++;
@@ -205,6 +250,7 @@ vector<vector<double> > MCMC_sampling(int N, int Nburnin, function<double(vector
     }
     
     if (print > 0) {
+        outfile.close();
         cout << "acceptance ratio = " << nnew/(1.0*N) << endl;
     }
     
@@ -227,7 +273,17 @@ vector<vector<double> > Plnmuf(cosmology &C, double zs, double rS, int Nhalos, i
         kappathr = pow(10.0, (log10(kappa1) + log10(kappa2))/2.0);
     }
     
-    double Nbar = Nhf(C, zs, rS, kappathr);
+    // distribution of kappa < kappa_thr
+    double skappaW = sigmakappaW(C, zs, rS, kappathr);
+    normal_distribution<double> PkappaW(0.0, skappaW);
+    
+    //cout << kappathr << "   " << skappaW << endl;
+    if (skappaW < 0.0) {
+        cout << "Error: negative standard deviation." << endl;
+    }
+    
+    //double Nbar = Nhf(C, zs, rS, kappathr);
+    double Nbar = 1.0*Nhalos;
     poisson_distribution<int> PN(Nbar);
     
     // 2D PDF of z_l and ln M_l
@@ -248,7 +304,7 @@ vector<vector<double> > Plnmuf(cosmology &C, double zs, double rS, int Nhalos, i
         }
         return 0.0;
     };
-    
+        
     // priors for z_l and ln M
     vector<vector<double> > priors = {{C.zmin, zs}, {log(C.Mmin), log(C.Mmax)}};
     vector<double> steps(priors.size());
@@ -264,7 +320,7 @@ vector<vector<double> > Plnmuf(cosmology &C, double zs, double rS, int Nhalos, i
     int burnin = 1e3;
     int Nrand = 1e4;
     vector<double> initial = {zs/2.0, log(1.0e12)};
-    vector<vector<double> > zlnMlist = MCMC_sampling(Nrand, burnin, logpdf, initial, steps, priors, cut, mt, 0);
+    vector<vector<double> > zlnMlist = MCMC_sampling(Nrand, burnin, logpdf, initial, steps, priors, cut, mt, 0, "");
     //writeToFile(zlnMlist, "zlnMlist.dat");
     
     int Nh, idx = 0;
@@ -272,7 +328,7 @@ vector<vector<double> > Plnmuf(cosmology &C, double zs, double rS, int Nhalos, i
     double zl, M, rmax, r, phi, kappaj, gamma1j, gamma2j, gammaj, muj;
     double meankappa = 0.0;
     for (int j = 0; j < Nreal; j++) {
-        kappaj = 0.0;
+        kappaj =  PkappaW(mt); // include contribution of lenses with kappa < kappa_thr
         gamma1j = 0.0;
         gamma2j = 0.0;
         
@@ -288,7 +344,7 @@ vector<vector<double> > Plnmuf(cosmology &C, double zs, double rS, int Nhalos, i
             if (idx >= Nrand) {
                 // generate new set of z_l and M values
                 initial = {zl, log(M)};
-                zlnMlist = MCMC_sampling(Nrand, burnin, logpdf, initial, steps, priors, cut, mt, 0);
+                zlnMlist = MCMC_sampling(Nrand, burnin, logpdf, initial, steps, priors, cut, mt, 0, "");
                 idx = 0;
             }
             
@@ -357,6 +413,7 @@ vector<vector<double> > Plnmuf(cosmology &C, double zs, double rS, int Nhalos, i
 }
 
 
+// loglikelihood of the Hubble digram data
 double loglikelihood(cosmology &C, double DLthr, vector<vector<double> > &data, vector<double> &par, int lensing, int dm, rgen &mt) {
     
     // initialize cosmology
@@ -369,7 +426,7 @@ double loglikelihood(cosmology &C, double DLthr, vector<vector<double> > &data, 
     
     // compute loglikelihood
     double logL = 0.0;
-    if (lensing == 0 || lensing == 1) { // model without lensing
+    if (lensing == 0) { // model without lensing
         for (int j = 0; j < data.size(); j++) {
             z = data[j][0];
             DL0 = C.DL(z);
@@ -390,10 +447,11 @@ double loglikelihood(cosmology &C, double DLthr, vector<vector<double> > &data, 
     else { // model with lensing
         
         // compute the lensing distributions
-        int Nhalos = 10;
-        int Nreal = 1e4; // realizations
+        int Nreal = 2e3; // realizations
+        int Nhalos = 40; // number of halos in each realization
         int Nbins = 12; // P(lnmu) bins
         double rS = 0.0; // lensing source radius in kpc
+        
         vector<vector<vector<double> > > Plnmuz(C.Zlist.size());
         for (int jz = 0; jz < C.Zlist.size(); jz++) {
             z = C.Zlist[jz];
@@ -441,7 +499,8 @@ double loglikelihood(cosmology &C, double DLthr, vector<vector<double> > &data, 
 }
 
 
-vector<vector<double> > Hubble_diagram_fit(cosmology &C, double DLthr, vector<vector<double> > &data, vector<double> &initial, vector<double> &steps , vector<vector<double> > &priors, int N, int Nburnin, int lensing, int dm, rgen &mt) {
+// MCMC inference of the Hubble diagram data
+void Hubble_diagram_fit(cosmology &C, double DLthr, vector<vector<double> > &data, vector<double> &initial, vector<double> &steps , vector<vector<double> > &priors, int N, int Nburnin, int lensing, int dm, rgen &mt, string filename) {
     
     // loglikelihood
     function<double(vector<double>&)> pdf = [&C, DLthr, &data, lensing, dm, &mt](vector<double> &par) {
@@ -453,5 +512,5 @@ vector<vector<double> > Hubble_diagram_fit(cosmology &C, double DLthr, vector<ve
         return 1.0;
     };
     
-    return MCMC_sampling(N, Nburnin, pdf, initial, steps, priors, cut, mt, 1);
+    MCMC_sampling(N, Nburnin, pdf, initial, steps, priors, cut, mt, 1, filename);
 }
