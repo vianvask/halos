@@ -54,10 +54,11 @@ int main (int argc, char *argv[]) {
     
     ofstream outfile, outfile1, outfile2;
     
-    int Nreal = 1e4; // realizations
+    int Nreal = 2e4; // realizations
     int Nhalos = 40; // number of halos in each realization
     int Nbins = 12; // P(lnmu) bins
-    double rS = 0.0; // lensing source radius in kpc
+    
+    //Plnmuf(C, 1.0, Nhalos, Nreal, Nbins, mt, 1);
     
     double z, lnmu, DL0, DL, sigmaDL;
     vector<vector<double> > Plnmu;
@@ -76,7 +77,7 @@ int main (int argc, char *argv[]) {
             cout << "z = " << z << endl;
             
             // compute and output the distribution of lnmu
-            Plnmu = Plnmuf(C, z, rS, Nhalos, Nreal, Nbins, mt, 0);
+            Plnmu = Plnmuf(C, z, Nhalos, Nreal, Nbins, mt, 0);
             for (int jb = 0; jb < Plnmu.size(); jb++) {
                 outfile1 << z << "   " << Plnmu[jb][0] << "   " << Plnmu[jb][1] << endl;
             }
@@ -103,7 +104,7 @@ int main (int argc, char *argv[]) {
         
         int Nheavy = 10; // size of the LISA SMBH catalogue with EM counterparts
         double zthr = 10.0; // threshold z
-        double FsigmaDL = 0.01; // relative error in D_L for LISA SMBH binaries
+        double FsigmaDL = 0.003; // relative error in D_L for LISA SMBH binaries
         
         vector<double> zSMBHlist = readdata("zSMBHlist.dat"); // catalogue of LISA SMBH redshifts
         shuffle(zSMBHlist.begin(), zSMBHlist.end(), mt);
@@ -117,7 +118,7 @@ int main (int argc, char *argv[]) {
             
             if (z < zthr) {
                 // generate amplification
-                Plnmu = Plnmuf(C, z, rS, Nhalos, Nreal, Nbins, mt, 0);
+                Plnmu = Plnmuf(C, z, Nhalos, Nreal, Nbins, mt, 0);
                 lnmu = sampleFromPDF(Plnmu, 1, mt)[0];
                 
                 // lensed luminosity distance
@@ -142,8 +143,8 @@ int main (int argc, char *argv[]) {
         
         outfile.open("catalogueNS.dat");
         
-        int Nlight = 2500; // size of the ET NS catalogue
-        double zthr = 2.5; // threshold z
+        int Nlight = 1000; // size of the ET NS catalogue
+        double zthr = 2.0; // threshold z
         double FsigmaDL = 0.03; // relative error in D_L for ET NS binaries
         double zeta = 2.6; // z dependence of NS binary mergers, N propto (1+z)^zeta
         
@@ -163,7 +164,7 @@ int main (int argc, char *argv[]) {
             z = sampleFromCDF(CDFz, 1, mt)[0];
             
             // generate amplification
-            Plnmu = Plnmuf(C, z, rS, Nhalos, Nreal, Nbins, mt, 0);
+            Plnmu = Plnmuf(C, z, Nhalos, Nreal, Nbins, mt, 0);
             lnmu = sampleFromPDF(Plnmu, 1, mt)[0];
             
             // lensed luminosity distance

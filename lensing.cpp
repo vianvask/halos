@@ -1,46 +1,51 @@
 #include "cosmology.h"
 #include "lensing.h"
 
-
-// NFW lens surface density at radius x
-double Sigmaf(double rs, double rhos, double x) {
-    double f = 1.0/3.0;
+// relevant functions for NFW halos from astro-ph/0608153
+double kappas(double rs, double rhos, double Sigmac) {
+    return rs*rhos/Sigmac;
+}
+double F(double x) {
     if (x > 1) {
-        f = (1 - 2*atan(sqrt((x-1)/(1+x)))/sqrt(pow(x,2)-1))/(pow(x,2)-1);
+        return (1 - 2*atan(sqrt((x-1)/(1+x)))/sqrt(pow(x,2)-1))/(pow(x,2)-1);
     }
     if (x < 1) {
-        f = (1 - 2*atanh(sqrt((1-x)/(1+x)))/sqrt(1-pow(x,2)))/(pow(x,2)-1);
+        return (1 - 2*atanh(sqrt((1-x)/(1+x)))/sqrt(1-pow(x,2)))/(pow(x,2)-1);
     }
-    return 2*rs*rhos*f;
+    return 1.0/3.0;
 }
-
-// average of the NFW lens surface density within radius x
-double barSigmaf(double rs, double rhos, double x) {
-    double g = 1 + log(1.0/2.0);
+double g(double x) {
     if (x > 1) {
-        g = 2*atan(sqrt((x-1)/(1+x)))/sqrt(pow(x,2)-1) + log(x/2);
+        return 2*atan(sqrt((x-1)/(1+x)))/sqrt(pow(x,2)-1) + log(x/2);
     }
     if (x < 1) {
-        g = 2*atanh(sqrt((1-x)/(1+x)))/sqrt(1-pow(x,2)) + log(x/2);
+        return 2*atanh(sqrt((1-x)/(1+x)))/sqrt(1-pow(x,2)) + log(x/2);
     }
-    return 4*rs*rhos*g/pow(x,2);
+    return 1 + log(1.0/2.0);
 }
-
-// derivative of the NFW lens surface density at radius x
-double DSigmaf(double rs, double rhos, double x) {
-    double f = 0.0;
-    if (x > 1) {
-        f = -(1+2*pow(x,2))/(x*pow(pow(x,2)-1,2)) + 6*x*atan(sqrt((x-1)/(1+x)))/pow(pow(x,2)-1,5.0/2.0);
-    }
-    if (x < 1) {
-        f = -(1+2*pow(x,2))/(x*pow(pow(x,2)-1,2)) + 6*x*atanh(sqrt((1-x)/(1+x)))/pow(1-pow(x,2),5.0/2.0);
-    }
-    return 2*rhos*f;
+double kappa(double kappas, double x) {
+    return 2.0*kappas*F(x);
 }
+double gamma(double kappas, double x) {
+    return 2.0*kappas*(2.0*g(x)/pow(x,2.0) - F(x));
+}
+vector<double> kappagammaeps(double epsilon, double kappas, double x, double phi) {
+    double a1eps = 1.0-epsilon;
+    double a2eps = 1.0+epsilon;
+    double x1eps = sqrt(a1eps)*cos(phi)*x;
+    double x2eps = sqrt(a2eps)*sin(phi)*x;
+    double xeps = sqrt(pow(x1eps,2.0) + pow(x2eps,2.0));
+    double phieps = atan(x2eps/x1eps);
+    
+    double kappaeps0 = kappa(kappas, xeps);
+    double gammaeps0 = gamma(kappas, xeps);
 
-// lensing convergence, its average and its derivative, {kappa(r), bar{kappa}(<r), kappa'(r)}
-// r_S = source size, r = impact parameter
-vector<double> kappa(cosmology &C, double zs, double zl, double r, double M, double rS) {
+    double kappaeps = kappaeps0 + epsilon*cos(2.0*phieps)*gammaeps0;
+    double gammaeps = sqrt(pow(gammaeps0,2.0) + 2.0*epsilon*cos(2.0*phieps)*gammaeps0*kappaeps0 + pow(epsilon,2.0)*(pow(kappaeps0,2.0) - pow(cos(2.0*phieps)*gammaeps0,2.0)));
+    
+    return {kappaeps, gammaeps};
+}
+vector<double> kappagamma(cosmology &C, double zs, double zl, double r, double M, double phi, double epsilon) {
     
     // angular diameter distances
     double DsA = C.DL(zs)/pow(1+zs,2.0);
@@ -53,49 +58,19 @@ vector<double> kappa(cosmology &C, double zs, double zl, double r, double M, dou
     vector<double> NFWparams = interpolate2(zl, M, C.zlist, C.Mlist, C.NFWlist);
     double rs = NFWparams[0];
     double rhos = NFWparams[1];
-    
-    double x, Sigma = 0.0, barSigma = 0.0, DSigma = 0.0;
-    if (rS > 0.0) {
-        // projection of the source to the lens plane
-        double rSproj = rS*DlA/DsA;
-        double Aproj = PI*pow(rSproj,2.0)/2.0;
-        
-        // average over the source projection
-        int NR = 10, Ntheta = 10;
-        double dR = rSproj/(1.0*(NR-1));
-        double dtheta = PI/(1.0*(Ntheta-1));
-        double R, theta;
-        for (int jR = 0; jR < NR; jR++) {
-            R = jR*dR;
-            for (int jtheta = 0; jtheta < Ntheta; jtheta++) {
-                theta = jtheta*dtheta;
-                x = sqrt(pow(r,2.0) + pow(R,2.0) - 2.0*r*R*cos(theta))/rs;
-                Sigma += Sigmaf(rs, rhos, x)*R*dR*dtheta;
-                barSigma += barSigmaf(rs, rhos, x)*R*dR*dtheta;
-                DSigma += DSigmaf(rs, rhos, x)*R*dR*dtheta;
-            }
-        }
-        Sigma = Sigma/Aproj;
-        barSigma = barSigma/Aproj;
-        DSigma = DSigma/Aproj;
-    }
-    else {
-        x = r/rs;
-        Sigma = Sigmaf(rs, rhos, x);
-        barSigma = barSigmaf(rs, rhos, x);
-        DSigma = DSigmaf(rs, rhos, x);
-    }
-    return {Sigma/Sigmac, barSigma/Sigmac, DSigma/Sigmac};
+            
+    return kappagammaeps(epsilon, kappas(rs, rhos, Sigmac), r/rs, phi);
 }
 
+
 // maximal r so that kappa^(1) > kappa_thr
-double rmaxf(cosmology &C, double zs, double zl, double M, double rS, double kappathr) {
+double rmaxf(cosmology &C, double zs, double zl, double M, double kappathr) {
     double rmax;
     double logr1 = log(1.0e-6), logr2 = log(1.0e6);
-    if (kappa(C, zs, zl, exp(logr1), M, rS)[0] > kappathr) {
+    if (kappagamma(C, zs, zl, exp(logr1), M, 0.0, 0.0)[0] > kappathr) {
         while (logr2-logr1 > 0.02) {
             rmax = exp((logr2+logr1)/2.0);
-            if (kappa(C, zs, zl, rmax, M, rS)[0] > kappathr) {
+            if (kappagamma(C, zs, zl, rmax, M, 0.0, 0.0)[0] > kappathr) {
                 logr1 = log(rmax);
             } else {
                 logr2 = log(rmax);
@@ -109,7 +84,7 @@ double rmaxf(cosmology &C, double zs, double zl, double M, double rS, double kap
 }
 
 // number of halos with kappa^(1) > kappa_thr
-double Nhf(cosmology &C, double zs, double rS, double kappathr) {
+double Nhf(cosmology &C, double zs, double kappathr) {
     double Nh = 0.0;
     double zl, dz, M, dlnM, dndlnM, rmax;
     for (int jz = 1; jz < C.Nz; jz++) {
@@ -120,7 +95,7 @@ double Nhf(cosmology &C, double zs, double rS, double kappathr) {
                 M = C.Mlist[jM];
                 dlnM = log(M) - log(C.Mlist[jM-1]);
                 dndlnM = C.HMFlist[jz][jM][0];
-                rmax = rmaxf(C, zs, zl, M, rS, kappathr);
+                rmax = rmaxf(C, zs, zl, M, kappathr);
                 Nh += 306.535*PI*pow((1.0+zl)*rmax,2.0)/C.Hz(zl)*dndlnM*dlnM*dz;
             }
         }
@@ -129,7 +104,7 @@ double Nhf(cosmology &C, double zs, double rS, double kappathr) {
 }
 
 // variance of kappa from weak lenses
-double sigmakappaW(cosmology &C, double zs, double rS, double kappathr) {
+double sigmakappaW(cosmology &C, double zs, double kappathr) {
     double Nh = 0.0, kappa1 = 0.0, kappa2 = 0.0;
     double zl, dz, M, dlnM, dndlnM, r, kappar;
     int Nr = 100;
@@ -143,14 +118,14 @@ double sigmakappaW(cosmology &C, double zs, double rS, double kappathr) {
                 dlnM = log(M) - log(C.Mlist[jM-1]);
                 dndlnM = C.HMFlist[jz][jM][0];
                 
-                r = rmaxf(C, zs, zl, M, rS, kappathr);
+                r = rmaxf(C, zs, zl, M, kappathr);
                 if (r == 0.0) {
                     r = 1.0e-6;
                 }
                 
                 kappar = kappathr;
                 while (kappar > 0.001*kappathr) {
-                    kappar = kappa(C, zs, zl, r, M, rS)[0];
+                    kappar = kappagamma(C, zs, zl, r, M, 0.0, 0.0)[0];
                     Nh += 306.535*PI*pow((1.0+zl)*r,2.0)/C.Hz(zl)*dndlnM*dlnr*dlnM*dz;
                     kappa1 += 306.535*PI*pow((1.0+zl)*r,2.0)/C.Hz(zl)*dndlnM*kappar*dlnr*dlnM*dz;
                     kappa2 += 306.535*PI*pow((1.0+zl)*r,2.0)/C.Hz(zl)*dndlnM*pow(kappar,2.0)*dlnr*dlnM*dz;
@@ -161,7 +136,6 @@ double sigmakappaW(cosmology &C, double zs, double rS, double kappathr) {
     }
     return sqrt(kappa2 - pow(kappa1,2.0)/Nh);
 }
-
 
 // flat priors
 double prior(double x, vector<double> &bounds) {
@@ -174,7 +148,6 @@ double prior(double x, vector<double> &bounds) {
     }
     return 1.0/(upper-lower);
 }
-
 
 // sample N values from a PDF using Metropolis-Hastings MCMC sampler
 vector<vector<double> > MCMC_sampling(int N, int Nburnin, function<double(vector<double>&)> logpdf, vector<double> &initial, vector<double> &steps, vector<vector<double> > &priors, function<double(vector<double>&)> cut, rgen &mt, int print, string filename) {
@@ -257,15 +230,14 @@ vector<vector<double> > MCMC_sampling(int N, int Nburnin, function<double(vector
     return samples;
 }
 
-
 // probability distribution of lnmu, {lnmu, dP/dlnmu}
-vector<vector<double> > Plnmuf(cosmology &C, double zs, double rS, int Nhalos, int Nreal, int Nbins, rgen &mt, int write) {
+vector<vector<double> > Plnmuf(cosmology &C, double zs, int Nhalos, int Nreal, int Nbins, rgen &mt, int write) {
     
     // find threshold kappa that gives N_halos halos
     double kappa1 = 1.0e-12, kappa2 = 1.0;
     double kappathr = pow(10.0, (log10(kappa1) + log10(kappa2))/2.0);
     while (log10(kappa2) - log10(kappa1) > 0.01) {
-        if (Nhf(C, zs, rS, kappathr) > Nhalos) {
+        if (Nhf(C, zs, kappathr) > Nhalos) {
             kappa1 = kappathr;
         } else {
             kappa2 = kappathr;
@@ -274,7 +246,7 @@ vector<vector<double> > Plnmuf(cosmology &C, double zs, double rS, int Nhalos, i
     }
     
     // distribution of kappa < kappa_thr
-    double skappaW = sigmakappaW(C, zs, rS, kappathr);
+    double skappaW = sigmakappaW(C, zs, kappathr);
     normal_distribution<double> PkappaW(0.0, skappaW);
     
     //cout << kappathr << "   " << skappaW << endl;
@@ -282,23 +254,23 @@ vector<vector<double> > Plnmuf(cosmology &C, double zs, double rS, int Nhalos, i
         cout << "Error: negative standard deviation." << endl;
     }
     
-    //double Nbar = Nhf(C, zs, rS, kappathr);
+    //double Nbar = Nhf(C, zs, kappathr);
     double Nbar = 1.0*Nhalos;
     poisson_distribution<int> PN(Nbar);
     
     // 2D PDF of z_l and ln M_l
-    function<double(vector<double>&)> logpdf = [&C, zs, rS, kappathr](vector<double> &zlnM) {
+    function<double(vector<double>&)> logpdf = [&C, zs, kappathr](vector<double> &zlnM) {
         double zl = zlnM[0];
         double M = exp(zlnM[1]);
-        double rmax = rmaxf(C, zs, zl, M, rS, kappathr);
+        double rmax = rmaxf(C, zs, zl, M, kappathr);
         return log(pow((1.0+zl)*rmax,2.0)/C.Hz(zl)*interpolate2(zl, M, C.zlist, C.Mlist, C.HMFlist)[0]);
     };
     
     // prior in z_l - M_l plane so that kappa > kappa_thr
-    function<double(vector<double>&)> cut = [&C, zs, rS, kappathr](vector<double> &zlnM) {
+    function<double(vector<double>&)> cut = [&C, zs, kappathr](vector<double> &zlnM) {
         double zl = zlnM[0];
         double M = exp(zlnM[1]);
-        double kappa0 = kappa(C, zs, zl, 1.0e-6, M, rS)[0];
+        double kappa0 = kappagamma(C, zs, zl, 1.0e-6, M, 0.0, 0.0)[0];
         if (kappa0 > kappathr) {
             return 1.0;
         }
@@ -321,11 +293,13 @@ vector<vector<double> > Plnmuf(cosmology &C, double zs, double rS, int Nhalos, i
     int Nrand = 1e4;
     vector<double> initial = {zs/2.0, log(1.0e12)};
     vector<vector<double> > zlnMlist = MCMC_sampling(Nrand, burnin, logpdf, initial, steps, priors, cut, mt, 0, "");
-    //writeToFile(zlnMlist, "zlnMlist.dat");
+    if (write > 0) {
+        writeToFile(zlnMlist, "zlnMlist.dat");
+    }
     
     int Nh, idx = 0;
     vector<double> kappav;
-    double zl, M, rmax, r, phi, kappaj, gamma1j, gamma2j, gammaj, muj;
+    double zl, M, rmax, r, phi, phih, epsilon, kappaj, gamma1j, gamma2j, gammaj, muj;
     double meankappa = 0.0;
     for (int j = 0; j < Nreal; j++) {
         kappaj =  PkappaW(mt); // include contribution of lenses with kappa < kappa_thr
@@ -349,16 +323,19 @@ vector<vector<double> > Plnmuf(cosmology &C, double zs, double rS, int Nhalos, i
             }
             
             // find r_max so that kappa(r_max) = kappa_thr
-            rmax = rmaxf(C, zs, zl, M, rS, kappathr);
+            rmax = rmaxf(C, zs, zl, M, kappathr);
                         
             r = sqrt(randomreal(0.0,1.0,mt))*rmax;
-            phi = randomreal(0.0,2*PI,mt);
+            phi = randomreal(0.0,2*PI,mt); // polar angle or r vector
+            phih = randomreal(0.0,PI,mt); // orientation of the halo
             
-            kappav = kappa(C, zs, zl, r, M, rS);
+            epsilon = max(0.0, 0.2 + 0.1*(log10(M) - 13.0)); // fix ellipticity using the fit of 2209.09088
+            
+            kappav = kappagamma(C, zs, zl, r, M, phih, epsilon);
             
             kappaj += kappav[0];
-            gamma1j += -cos(2*phi)*(kappav[1]-kappav[0]);
-            gamma2j += -sin(2*phi)*(kappav[1]-kappav[0]);
+            gamma1j += -cos(2*phi)*kappav[1];
+            gamma2j += -sin(2*phi)*kappav[1];
         }
         meankappa += kappaj;
         
@@ -412,7 +389,6 @@ vector<vector<double> > Plnmuf(cosmology &C, double zs, double rS, int Nhalos, i
     return Plnmu;
 }
 
-
 // loglikelihood of the Hubble digram data
 double loglikelihood(cosmology &C, double DLthr, vector<vector<double> > &data, vector<double> &par, int lensing, int dm, rgen &mt) {
     
@@ -447,15 +423,14 @@ double loglikelihood(cosmology &C, double DLthr, vector<vector<double> > &data, 
     else { // model with lensing
         
         // compute the lensing distributions
-        int Nreal = 2e3; // realizations
+        int Nreal = 4e3; // realizations
         int Nhalos = 40; // number of halos in each realization
         int Nbins = 12; // P(lnmu) bins
-        double rS = 0.0; // lensing source radius in kpc
         
         vector<vector<vector<double> > > Plnmuz(C.Zlist.size());
         for (int jz = 0; jz < C.Zlist.size(); jz++) {
             z = C.Zlist[jz];
-            Plnmuz[jz] = Plnmuf(C, z, rS, Nhalos, Nreal, Nbins, mt, 0);
+            Plnmuz[jz] = Plnmuf(C, z, Nhalos, Nreal, Nbins, mt, 0);
         }
         
         int jz;
@@ -497,7 +472,6 @@ double loglikelihood(cosmology &C, double DLthr, vector<vector<double> > &data, 
     
     return logL;
 }
-
 
 // MCMC inference of the Hubble diagram data
 void Hubble_diagram_fit(cosmology &C, double DLthr, vector<vector<double> > &data, vector<double> &initial, vector<double> &steps , vector<vector<double> > &priors, int N, int Nburnin, int lensing, int dm, rgen &mt, string filename) {
