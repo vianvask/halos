@@ -3,7 +3,7 @@
 
 // units: masses in solar masses, time in Myr, length in kpc
 
-// z distribution of sources in the mock catalogue
+// z distribution of NS binaries
 double pz(cosmology &C, double z, double zeta) {
     return pow(1.0+z,zeta)*C.DVc(z);
 }
@@ -12,12 +12,12 @@ int main (int argc, char *argv[]) {
     clock_t time_req = clock(); // timing
     cout << setprecision(8) << fixed;
     rgen mt(time(NULL)); // random number generator
-
+    
     const int dm = atoi(argv[1]); // 0: CDM, 1: FDM, 2: WDM, 3: EDM
     const int lensing = atoi(argv[2]); // 0: without lensing, 1: with lensing
     const int catl = atoi(argv[3]); // 0: DES-5yr SN catalogue, 1: SMBH catalogue, 2: NS catalogue, 3: combined SMBH+NS catalogue
     const double fstep = atof(argv[4]); // stepsize relative to the prior range
-
+     
     // benchmark cosmological parameters: PDG values
     cosmology C;
     C.OmegaM = 0.315;
@@ -47,18 +47,18 @@ int main (int argc, char *argv[]) {
     // redshifts
     C.zmin = 0.01;
     C.zmax = 10.01;
-    C.Nz = 40;
+    C.Nz = 100;
     
     // initialize benchmar CDM halo mass function
     C.initialize(0);
     
     ofstream outfile, outfile1, outfile2;
     
-    int Nreal = 2e4; // realizations
-    int Nhalos = 40; // number of halos in each realization
+    int Nreal = 4e5; // realizations
+    int Nhalos = 100; // number of halos in each realization
     int Nbins = 12; // P(lnmu) bins
     
-    //Plnmuf(C, 1.0, Nhalos, Nreal, Nbins, mt, 1);
+    // Plnmuf(C, 10.0, Nhalos, Nreal, Nbins, mt, 1, 0, 1);
     
     double z, lnmu, DL0, DL, sigmaDL;
     vector<vector<double> > Plnmu;
@@ -68,8 +68,9 @@ int main (int argc, char *argv[]) {
         outfile1.open("Plnmuz.dat");
         outfile2.open("PDL.dat");
         
-        C.Zlist = {0.05, 0.1, 0.2, 0.4, 0.8, 1.2, 1.6, 2.0, 2.5, 3.0, 3.5, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0};
-
+        C.Zlist = {0.05, 0.1, 0.2, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0};
+        //C.Zlist = {1.0, 10.0};
+        
         vector<vector<double> > PDL;
         vector<double> sample, DLCL(2,0.0);
         for (int jz = 0; jz < C.Zlist.size(); jz++) {
@@ -77,7 +78,9 @@ int main (int argc, char *argv[]) {
             cout << "z = " << z << endl;
             
             // compute and output the distribution of lnmu
-            Plnmu = Plnmuf(C, z, Nhalos, Nreal, Nbins, mt, 0);
+            Plnmu = Plnmuf(C, z, Nhalos, Nreal, Nbins, mt, 1, 1, 0);
+            //Plnmu = Plnmuf(C, z, Nhalos, Nreal, Nbins, mt, 1, 0, 0); // without elliptisities
+            //Plnmu = Plnmuf(C, z, Nhalos, Nreal, Nbins, mt, 0, 0, 0); // without elliptisities and bias
             for (int jb = 0; jb < Plnmu.size(); jb++) {
                 outfile1 << z << "   " << Plnmu[jb][0] << "   " << Plnmu[jb][1] << endl;
             }
@@ -97,12 +100,14 @@ int main (int argc, char *argv[]) {
         outfile2.close();
     }
     
+    Nreal = 4e4; // lower number of realizations for the catalogue
+    
     if (!fileExists("catalogueSMBH.dat")) {
         cout << "Generating SMBHB catalogue..." << endl;
         
         outfile.open("catalogueSMBH.dat");
         
-        int Nheavy = 10; // size of the LISA SMBH catalogue with EM counterparts
+        int Nheavy = 16; // size of the LISA SMBH catalogue with EM counterparts
         double zthr = 10.0; // threshold z
         double FsigmaDL = 0.003; // relative error in D_L for LISA SMBH binaries
         
@@ -118,7 +123,7 @@ int main (int argc, char *argv[]) {
             
             if (z < zthr) {
                 // generate amplification
-                Plnmu = Plnmuf(C, z, Nhalos, Nreal, Nbins, mt, 0);
+                Plnmu = Plnmuf(C, z, Nhalos, Nreal, Nbins, mt, 1, 1, 0);
                 lnmu = sampleFromPDF(Plnmu, 1, mt)[0];
                 
                 // lensed luminosity distance
@@ -143,10 +148,10 @@ int main (int argc, char *argv[]) {
         
         outfile.open("catalogueNS.dat");
         
-        int Nlight = 1000; // size of the ET NS catalogue
+        int Nlight = 500; // size of the ET NS catalogue
         double zthr = 2.0; // threshold z
         double FsigmaDL = 0.03; // relative error in D_L for ET NS binaries
-        double zeta = 2.6; // z dependence of NS binary mergers, N propto (1+z)^zeta
+        double zeta = 2.7; // z dependence of NS binary mergers, N propto (1+z)^zeta
         
         // z distribution of the NS sources
         vector<vector<double> > CDFz(1000, vector<double> (2,0.0));
@@ -164,7 +169,7 @@ int main (int argc, char *argv[]) {
             z = sampleFromCDF(CDFz, 1, mt)[0];
             
             // generate amplification
-            Plnmu = Plnmuf(C, z, Nhalos, Nreal, Nbins, mt, 0);
+            Plnmu = Plnmuf(C, z, Nhalos, Nreal, Nbins, mt, 1, 1, 0);
             lnmu = sampleFromPDF(Plnmu, 1, mt)[0];
             
             // lensed luminosity distance
@@ -184,10 +189,10 @@ int main (int argc, char *argv[]) {
     }
     
     cout << "Performing MCMC scan..." << endl;
-
+    
     // MCMC scan parameters
     vector<double> par = {C.OmegaM, C.sigma8, C.h, 1.0};
-    vector<vector<double> > priors = {{0.21, 0.42}, {0.5, 1.1}, {0.64, 0.71}, {-0.6, 1.4}};
+    vector<vector<double> > priors = {{0.19, 0.47}, {0.4, 1.5}, {0.59, 0.76}, {-0.6, 1.4}};
     int Npar = par.size();
     
     // read catalogue
@@ -219,7 +224,7 @@ int main (int argc, char *argv[]) {
         Zlist2 = linlist(minmaxz[1], minmaxz2[1], 4);
         C.Zlist.insert(C.Zlist.end(), Zlist2.begin(), Zlist2.end());
     }
-        
+    
     vector<double> steps(Npar, 0.0);
     for (int j = 0; j < Npar; j++) {
         steps[j] = fstep*(priors[j][1]-priors[j][0]);

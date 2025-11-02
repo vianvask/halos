@@ -5,6 +5,8 @@
 #include <iostream>
 #include <fstream>
 #include <iomanip>
+#include <gsl/gsl_sf_expint.h>
+
 
 using namespace std;
 
@@ -26,6 +28,7 @@ double logNPDF(double x, double mu, double sigma);
 
 double interpolate(double X, vector<vector<double> > &xy);
 vector<double> interpolaten(double X, vector<vector<double> > &xy);
+double interpolate2(double x0, double y0, vector<double> &x, vector<double> &y, vector<vector<double> > &f);
 vector<double> interpolate2(double x0, double y0, vector<double> &x, vector<double> &y, vector<vector<vector<double> > > &f);
 
 double variance(vector<double> &sample);
@@ -42,7 +45,9 @@ vector<double> sampleFromPDF(vector<vector<double> > &pdf, int N, rgen &mt);
 void writeToFile(vector<double> &row, const string &filename);
 void writeToFile(vector<vector<double> > &matrix, const string &filename);
 void writeToFile(vector<double> &x, vector<vector<vector<double> > > &cubic, const string &filename);
+void writeToFile(vector<double> &x, vector<double> &y, vector<vector<double> > &f, const string &filename);
 void writeToFile(vector<double> &x, vector<double> &y, vector<vector<vector<double> > > &f, const string &filename);
+void writeToFile(vector<double> &x, vector<double> &y, vector<double> &z, vector<vector<vector<double> > > &f, const string &filename);
 void writeToFile(vector<double> &x, vector<double> &y, vector<double> &z, vector<vector<vector<vector<double> > > > &f, const string &filename);
 
 vector<double> readdata(string filename);

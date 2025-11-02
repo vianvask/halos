@@ -223,6 +223,44 @@ vector<vector<vector<double> > > cosmology::HMFlistf() {
     return dndlnM;
 }
 
+// first crossing probability for filaments
+double cosmology::pFCfil(double delta, double S) {
+    double p = 0.0;
+    double q = 0.7;
+    double A = 0.5;
+    
+    double nu2 = 0.0;
+    if (S > 0.0) {
+        nu2 = pow(delta,2.0)/S;
+    }
+    if (nu2 > 0.0) {
+        return A*(1+pow(q*nu2,-p))*sqrt(q*nu2/(2.0*PI))*exp(-q*nu2/2.0)/S;
+    }
+    return 0.0;
+}
+
+// filament mass function and growth rate, {jz,jM} -> dn_fil/dlnM
+vector<vector<double> > cosmology::FMFlistf() {
+    
+    double dz = 0.01; // z step over which DeltaM is computed
+    
+    double dlogz = (log(zmax)-log(zmin))/(1.0*(Nz-1));
+    vector<vector<double> > dndlnM(Nz, vector<double> (NM, 0.0));
+    
+    double z, M;
+    vector<double> sigma, sigma2;
+    for (int jz = 0; jz < Nz; jz++) {
+        z = zlist[jz];
+        sigma = sigmalist[0];
+        for (int jM = 0; jM < NM; jM++) {
+            dndlnM[jz][jM] = -rhoM0*pFCfil(deltac(z),pow(sigma[1],2.0))*2.0*sigma[1]*sigma[2];
+            sigma = sigmalist[jM+1];
+        }
+    }
+    return dndlnM;
+}
+
+
 /*
 double Q(double S, double St, double z) {
     double dz;
@@ -291,7 +329,7 @@ vector<vector<vector<double> > > cosmology::conslistf() {
 
 // NFW scale radius and density and their derivatives, {jz, jM} -> {r_s, rho_s}
 vector<vector<vector<double> > > cosmology::NFWlistf() {
-    vector<vector<vector<double> > > NFWparams(Nz, vector<vector<double> > (NM, vector<double> (2,0.0)));
+    vector<vector<vector<double> > > NFWparams(Nz, vector<vector<double> > (NM, vector<double> (3,0.0)));
     
     double z, M, c, Dc, r200, rs, rhos;
     vector<double> zMc(2,0.0);
@@ -302,24 +340,99 @@ vector<vector<vector<double> > > cosmology::NFWlistf() {
             
             zMc = conslist[jz][jM];
             c = zMc[0];
-            //Dc = zMc[1];
             
             r200 = pow(3.0*M/(4.0*PI*200*rhoc),1.0/3.0);
-            //Dr200 = 3.0/(4.0*PI*200*rhoc)*pow(3.0*M/(4.0*PI*200*rhoc),-2.0/3.0);
-            
             rs =  r200/c;
-            //Drs =  Dr200/c - r200*Dc/pow(c,2.0);
-            
             rhos = 200*rhoc*pow(c,3.0)*(1+c)/(3.0*((1+c)*log(1+c) - c));
-            //Drhos = Dc*pow(c,2.0)*(-c*(3+4*c) + 3*pow(1+c,2.0)*log(1+c))/(3.0*pow(c-(1+c)*log(1+c),2.0));
+            
+            /*
+            Dc = zMc[1];
+            Dr200 = 3.0/(4.0*PI*200*rhoc)*pow(3.0*M/(4.0*PI*200*rhoc),-2.0/3.0);
+            Drs =  Dr200/c - r200*Dc/pow(c,2.0);
+            Drhos = Dc*pow(c,2.0)*(-c*(3+4*c) + 3*pow(1+c,2.0)*log(1+c))/(3.0*pow(c-(1+c)*log(1+c),2.0));
+            */
             
             NFWparams[jz][jM][0] = rs;
             NFWparams[jz][jM][1] = rhos;
+            NFWparams[jz][jM][2] = c;
         }
     }
     return NFWparams;
 }
 
+
+// Fourier transform of the NFW density profile
+double rhokNFW(double k, double rs, double rhos, double c) {
+    double x = rs*k;
+    return 4*PI*pow(rs, 3.0)*rhos*(cos(x)*(-gsl_sf_Ci(x) + gsl_sf_Ci(x + c*x)) + sin(x)*(-gsl_sf_Si(x) + gsl_sf_Si(x + c*x)) - sin(c*x)/(x + c*x));
+}
+
+
+// halo bias, see Baumann (5.132)
+double cosmology::halobias(double z, double sigma) {
+
+    double p = 0.3;
+    double q = 0.75;
+    double qnu2 = q*pow(deltac(z)/sigma,2.0);
+    
+    return 1.0 + (qnu2-1.0)/deltac0 + 2.0*p/(deltac0*(1.0+pow(qnu2, p)));
+}
+
+// halo bias, {jz,jM} -> b
+vector<vector<double> > cosmology::halobiaslistf() {
+    vector<vector<double> > B(Nz, vector<double> (NM, 0.0));
+
+    double z;
+    for (int jz = 0; jz < Nz; jz++) {
+        z = zlist[jz];
+        for (int jM = 0; jM < NM; jM++) {
+            B[jz][jM] = halobias(z, sigmalist[jM][1]);
+        }
+    }
+    return B;
+}
+
+vector<vector<double> > cosmology::PQlistf(double z) {
+    double kmax = 1.0;
+    double kmin = 1.0e-6;
+    double dlogk = (log(kmax)-log(kmin))/(1.0*(Nk-1));
+    vector<vector<double> > PQ(Nk, vector<double> (3, 0.0));
+    
+    int jz = lower_bound(zlist.begin(), zlist.end(), z)- zlist.begin();
+    if (jz > 0 && zlist[jz]-z > z-zlist[jz-1]) {
+        jz--;
+    }
+    
+    double dlogM = log(Mlist[1]) - log(Mlist[0]);
+    
+    vector<double> NFWpar;
+    double M, k, rs, rhos, c, HMF, B, bnrho, bnM;
+    for (int jk = 0.0; jk < Nk; jk++) {
+        k = exp(log(kmin) + jk*dlogk);
+        
+        bnrho = 0.0;
+        bnM = 0.0;
+        for (int jM = 0; jM < NM; jM++) {
+            M = Mlist[jM];
+            
+            NFWpar = NFWlist[jz][jM];
+            rs = NFWpar[0];
+            rhos = NFWpar[1];
+            c = NFWpar[2];
+            
+            HMF = HMFlist[jz][jM][0];
+            B = halobiaslist[jz][jM];
+                                    
+            bnrho += HMF*B*rhokNFW(k, rs, rhos, c)*dlogM;
+            bnM += HMF*B*M*dlogM;
+        }
+        PQ[jk][0] = k;
+        PQ[jk][1] = Plin(z, k, deltaH8)*pow(bnrho/bnM, 2.0);
+        PQ[jk][2] = Plin(z, k, deltaH8);
+    }
+    
+    return PQ;
+}
 
 
 // comoving distance, {z,d_c}
@@ -374,3 +487,29 @@ vector<vector<double> > cosmology::tlist() {
     return tlist;
 }
 
+
+// characteristic mass such that sigma(M_char) = delta_c(z)
+vector<vector<double> > cosmology::logMcharlistf() {
+    vector<vector<double> > logMcharlist(Nz);
+    
+    double z, deltaz, M, logMmin, logMmax;
+    for (int jz = 0; jz < Nz; jz++) {
+        z = zlist[jz];
+        deltaz = deltac(z);
+        
+        logMmin = -1.0;
+        logMmax = 15.0;
+        M = pow(10.0, (logMmax+logMmin)/2.0);
+        while (logMmax - logMmin > 0.01) {
+            if (sigmaC(M, deltaH8)[0] > deltaz) {
+                logMmin = (logMmax+logMmin)/2.0;
+            } else {
+                logMmax = (logMmax+logMmin)/2.0;
+            }
+            M = pow(10.0, (logMmax+logMmin)/2.0);
+        }
+        
+        logMcharlist[jz] = {z, log(M)};
+    }
+    return logMcharlist;
+}

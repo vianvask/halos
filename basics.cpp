@@ -182,6 +182,47 @@ vector<double> interpolate2(double x0, double y0, vector<double> &x, vector<doub
     return tmp;
 }
 
+double interpolate2(double x0, double y0, vector<double> &x, vector<double> &y, vector<vector<double> > &f) {
+    
+    int nx = x.size();
+    int ny = y.size();
+    
+    // find the closest corner where x>x0 and y>y0
+    int jx = lower_bound(x.begin(), x.end(), x0) - x.begin();
+    int jy = lower_bound(y.begin(), y.end(), y0) - y.begin();
+
+    double tmp = 0.0;
+    if (jx <= 0) {
+        if (jy <= 0) {
+            tmp = f[0][0];
+        } else if (jy >= ny) {
+            tmp = f[0][ny-1];
+        } else {
+            tmp = lin(f[0][jy-1], f[0][jy], y[jy-1], y[jy], y0);
+        }
+    } else if (jx >= nx) {
+        if (jy <= 0) {
+            tmp = f[nx-1][0];
+        } else if (jy >= ny) {
+            tmp = f[nx-1][ny-1];
+        } else {
+            tmp = lin(f[nx-1][jy-1], f[nx-1][jy], y[jy-1], y[jy], y0);
+        }
+    } else {
+        if (jy <= 0) {
+            tmp = lin(f[jx-1][0], f[jx][0], x[jx-1], x[jx], x0);
+        } else if (jy >= ny) {
+            tmp = lin(f[jx-1][ny-1], f[jx][ny-1], x[jx-1], x[jx], x0);
+        }
+        else {
+            double low = lin(f[jx-1][jy-1], f[jx][jy-1], x[jx-1], x[jx], x0);
+            double up = lin(f[jx-1][jy], f[jx][jy], x[jx-1], x[jx], x0);
+            tmp = lin(low, up, y[jy-1], y[jy], y0);
+        }
+    }
+    return tmp;
+}
+
 // variance of a sample
 double variance(vector<double> &sample) {
     double mean = accumulate(sample.begin(), sample.end(), 0.0)/(1.0*sample.size());
@@ -334,6 +375,16 @@ void writeToFile(vector<double> &x, vector<vector<vector<double> > > &cubic, con
     outFile.close();
 }
 
+void writeToFile(vector<double> &x, vector<double> &y, vector<vector<double> > &f, const string &filename) {
+    ofstream outFile(filename);
+    for (int jx = 0; jx < x.size(); jx++) {
+        for (int jy = 0; jy < y.size(); jy++) {
+            outFile << x[jx] << "   " << y[jy] << "   " << f[jx][jy] << "   " << endl;
+        }
+    }
+    outFile.close();
+}
+
 void writeToFile(vector<double> &x, vector<double> &y, vector<vector<vector<double> > > &f, const string &filename) {
     ofstream outFile(filename);
     for (int jx = 0; jx < x.size(); jx++) {
@@ -344,6 +395,18 @@ void writeToFile(vector<double> &x, vector<double> &y, vector<vector<vector<doub
                 outFile << "   ";
             }
             outFile << endl;
+        }
+    }
+    outFile.close();
+}
+
+void writeToFile(vector<double> &x, vector<double> &y, vector<double> &z, vector<vector<vector<double> > > &f, const string &filename) {
+    ofstream outFile(filename);
+    for (int jx = 0; jx < x.size(); jx++) {
+        for (int jy = 0; jy < y.size(); jy++) {
+            for (int jz = 0; jz < z.size(); jz++) {
+                outFile << x[jx] << "   " << y[jy] << "   " << z[jz] << "   " << f[jx][jy][jz] << endl;
+            }
         }
     }
     outFile.close();

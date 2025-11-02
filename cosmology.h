@@ -58,8 +58,9 @@ public:
     }
     
     // spherical collapse threshold
+    double deltac0 = 3.0/5.0*pow(3.0*PI/2.0,2.0/3.0);
     double deltac(double z) {
-        return 3.0/5.0*pow(3.0*PI/2.0,2.0/3.0)/Dg(z);
+        return deltac0/Dg(z);
     }
     
     // elliptical collapse threshold (Eq. (1) of MNRAS 329, 61–75 (2002)), S>0
@@ -84,14 +85,12 @@ private:
     double km22(double m22) {
         double A = 2.22*pow(m22,1.0/25.0 - 0.001*log(m22));
         return kJ(m22)/A;
-        //return 1.0/1.61*pow(m22,-1.0/18.0)*kJ(m22);
     }
     double TF(double k, double m22) {
         double n = 5.0/2.0;
         double x = k/km22(m22);
         double B = 0.16*pow(m22,-1.0/20.0);
         return sin(pow(x,n))/pow(x,n)/(1+B*pow(x,6-n));
-        //return cos(pow(k/km22(m22),3.0))/(1+pow(k/km22(m22),8.0));
     }
     double TMF(double k, double m22) {
         return TF(k,m22)*TM(k);
@@ -116,20 +115,32 @@ private:
     double Deltak(double k, double deltaH) {
         return sqrt(pow(306.535*k/H0,3.0+ns)*pow(deltaH*TM(k),2.0));
     }
+    double Plin(double z, double k, double deltaH) {
+        return pow(Deltak(k, deltaH)*Dg(z), 2.0)/(pow(k,3.0)/(2.0*pow(PI,2.0)));
+    }
     
     // FDM matter power spectrum
     double DeltakF(double k, double deltaH, double m22) {
         return sqrt(pow(306.535*k/H0,3.0+ns)*pow(deltaH*TMF(k,m22),2.0));
+    }
+    double PlinF(double z, double k, double deltaH, double m22) {
+        return pow(DeltakF(k, deltaH, m22)*Dg(z), 2.0)/(pow(k,3.0)/(2.0*pow(PI,2.0)));
     }
     
     // WDM matter power spectrum
     double DeltakW(double k, double deltaH, double m3) {
         return sqrt(pow(306.535*k/H0,3.0+ns)*pow(deltaH*TMW(k,m3),2.0));
     }
+    double PlinW(double z, double k, double deltaH, double m3) {
+        return pow(DeltakW(k, deltaH, m3)*Dg(z), 2.0)/(pow(k,3.0)/(2.0*pow(PI,2.0)));
+    }
     
     // white noise enhanced matter power spectrum
     double DeltakE(double k, double deltaH, double kc) {
         return Deltak(k, deltaH) + pow(k/kc,3.0)*Deltak(kc, deltaH);
+    }
+    double PlinE(double z, double k, double deltaH, double kc) {
+        return pow(DeltakE(k, deltaH, kc)*Dg(z), 2.0)/(pow(k,3.0)/(2.0*pow(PI,2.0)));
     }
     
     // real space top hat window function
@@ -172,9 +183,22 @@ private:
     // first crossing probability with ellipsoidal collapse
     double pFC(double delta, double S);
     double pFC(double deltap, double Sp, double delta, double S);
+    
+    // first crossing probability for filaments
+    double pFCfil(double delta, double S);
 
     // halo mass function and growth rate, {jz,jM} -> {dn/dlnM, dotM, dotM/dM}
     vector<vector<vector<double> > > HMFlistf();
+    
+    // halo bias, {jz,jM} -> b
+    vector<vector<double> > halobiaslistf();
+    vector<vector<double> > PQlistf(double z);
+    
+    // filament mass function and growth rate, {jz,jM} -> dn_fil/dlnM
+    vector<vector<double> > FMFlistf();
+    
+    // characteristic mass such that sigma(M_char) = delta_c(z)
+    vector<vector<double> > logMcharlistf();
     
     vector<vector<double> > dclist();
     vector<vector<double> > tlist();
@@ -183,6 +207,10 @@ private:
     vector<vector<double> > zt;
     
 public:
+    
+    // halo bias b(M,z)
+    double halobias(double z, double sigma);
+    
     // star formation rate
     double fstar(double z, double M, double Mc, double Mt, double epsilon, double alpha, double beta);
 
@@ -191,13 +219,16 @@ public:
     
     vector<vector<double> > evolvestellarmass(double Mc, double Mt, double epsilon, double alpha, double beta);
     vector<vector<double> > evolveBHmass(double Mc, double Mt, double epsilon, double alpha, double beta, double fEdd, double facc1, double facc2);
-    
+        
     // list of redshifts and halo masses
     vector<double> zlist;
     vector<double>  Mlist;
     
     vector<vector<double> > sigmalist;
     vector<vector<vector<double> > > HMFlist;
+    vector<vector<double> > halobiaslist;
+    vector<vector<double> > FMFlist;
+    vector<vector<double> > logMcharlist;
     vector<vector<vector<double> > > NFWlist;
     
     // list of redshifts, same as for P(lnmu,z) list
@@ -207,14 +238,17 @@ public:
     vector<double> m22list;
     vector<vector<vector<double> > > FDMsigmalist;
     vector<vector<vector<vector<double> > > > FDMHMFlist;
+    vector<vector<vector<double> > > FDMFMFlist;
     
     vector<double> m3list;
     vector<vector<vector<double> > > WDMsigmalist;
     vector<vector<vector<vector<double> > > > WDMHMFlist;
+    vector<vector<vector<double> > > WDMFMFlist;
     
     vector<double> kclist;
     vector<vector<vector<double> > > EDMsigmalist;
     vector<vector<vector<vector<double> > > > EDMHMFlist;
+    vector<vector<vector<double> > > EDMFMFlist;
     
     void initialize0() {
         OmegaR = OmegaM/(1+zeq);
@@ -236,8 +270,24 @@ public:
         // NFW halo parameters, computed with CDM sigma
         deltaH8 = sigma8/sigmaC(M8, 1.0)[0];
         sigmalist = sigmalistf(0.0, 0.0, 0.0);
+        logMcharlist = logMcharlistf();
         conslist = conslistf();
         NFWlist = NFWlistf();
+        
+        writeToFile(logMcharlist, "logMcharlist.dat");
+        
+        /*
+        vector<vector<double> > Deltalist(100, vector<double> (2, 0.0));
+        double dlnk = (log(1000.0)-log(0.001))/99.0;
+        double ki;
+        for (int jk = 0; jk < Deltalist.size(); jk++) {
+            ki = exp(log(0.001) + jk*dlnk);
+            Deltalist[jk][0] = ki;
+            Deltalist[jk][1] = Deltak(h*ki/1000.0, deltaH8);
+        }
+        
+        writeToFile(Deltalist, "Deltak_CDM.dat");
+        */
     }
     
     // initialize for multiple beyond CDM parameter values and output the halo mass functions
@@ -247,9 +297,11 @@ public:
         if (dm == 0) {
             // halo mass function and halo growth rate
             HMFlist = HMFlistf();
-            
+            halobiaslist = halobiaslistf();
+                        
             writeToFile(sigmalist, "sigma_CDM.dat");
             writeToFile(zlist, Mlist, HMFlist, "HMF_CDM.dat");
+            writeToFile(zlist, Mlist, halobiaslist, "halobiaslist_CDM.dat");
         }
         if (dm == 1) {
             m22list = loglist(m22min,m22max,Nm22);
@@ -261,7 +313,8 @@ public:
                 // halo mass function and halo growth rate
                 sigmalist = sigmalistf(m22, 0.0, 0.0);
                 HMFlist = HMFlistf();
-                
+                halobiaslist = halobiaslistf();
+
                 FDMsigmalist.push_back(sigmalist);
                 FDMHMFlist.push_back(HMFlist);
             }
@@ -278,7 +331,8 @@ public:
                 // halo mass function and halo growth rate
                 sigmalist = sigmalistf(0.0, m3, 0.0);
                 HMFlist = HMFlistf();
-                
+                halobiaslist = halobiaslistf();
+
                 WDMsigmalist.push_back(sigmalist);
                 WDMHMFlist.push_back(HMFlist);
             }
@@ -296,7 +350,8 @@ public:
                 // halo mass function and halo growth rate
                 sigmalist = sigmalistf(0.0, 0.0, kc);
                 HMFlist = HMFlistf();
-                
+                halobiaslist = halobiaslistf();
+
                 EDMsigmalist.push_back(sigmalist);
                 EDMHMFlist.push_back(HMFlist);
             }
@@ -313,21 +368,25 @@ public:
         // compute halo mass function as a function of M and z
         if (dm == 0) {
             HMFlist = HMFlistf();
+            halobiaslist = halobiaslistf();
         }
         if (dm == 1) {
             deltaH8 = sigma8/sigmaF(M8, 1.0, x)[0];
             sigmalist = sigmalistf(x, 0.0, 0.0);
             HMFlist = HMFlistf();
+            halobiaslist = halobiaslistf();
         }
         if (dm == 2) {
             deltaH8 = sigma8/sigmaW(M8, 1.0, x)[0];
             sigmalist = sigmalistf(0.0, x, 0.0);
             HMFlist = HMFlistf();
+            halobiaslist = halobiaslistf();
         }
         if (dm == 3) {
             deltaH8 = sigma8/sigmaE(M8, 1.0, x)[0];
             sigmalist = sigmalistf(0.0, 0.0, x);
             HMFlist = HMFlistf();
+            halobiaslist = halobiaslistf();
         }
     }
     
@@ -336,13 +395,13 @@ public:
         return interpolate(z, zdc);
     }
     
-    // comoving distance
+    // comoving volume
     double Vc(double z) {
         double dc = interpolate(z, zdc);
         return 4.0*PI/3.0*pow(dc,3.0);
     }
     
-    // comoving distance
+    // derivative of the comoving volume
     double DVc(double z) {
         double dc = interpolate(z, zdc);
         return 4.0*PI*pow(dc,2.0)/Hz(z);
