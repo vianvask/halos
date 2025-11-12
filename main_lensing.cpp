@@ -14,7 +14,7 @@ int main (int argc, char *argv[]) {
     rgen mt(time(NULL)); // random number generator
     
     const int dm = atoi(argv[1]); // 0: CDM, 1: FDM, 2: WDM, 3: EDM
-    const int lensing = atoi(argv[2]); // 0: without lensing, 1: with lensing
+    const int lens = atoi(argv[2]); // 0: without lensing, 1: with lensing
     const int catl = atoi(argv[3]); // 0: DES-5yr SN catalogue, 1: SMBH catalogue, 2: NS catalogue, 3: combined SMBH+NS catalogue
     const double fstep = atof(argv[4]); // stepsize relative to the prior range
      
@@ -27,17 +27,6 @@ int main (int argc, char *argv[]) {
     C.h = 0.674;
     C.T0 = 2.7255;
     C.ns = 0.965;
-    
-    /*
-    // comparison with T11
-    C.OmegaM = 0.274;
-    C.OmegaB = 0.046;
-    C.zeq = 3402.0;
-    C.sigma8 = 0.812;
-    C.h = 0.705;
-    C.T0 = 2.7255;
-    C.ns = 0.96;
-    */
     
     // halo masses
     C.Mmin = 1.0e7;
@@ -54,11 +43,12 @@ int main (int argc, char *argv[]) {
     
     ofstream outfile, outfile1, outfile2;
     
-    int Nreal = 4e5; // realizations
-    int Nhalos = 100; // number of halos in each realization
-    int Nbins = 12; // P(lnmu) bins
+    lensing L;
+    L.Nreal = 4e5; // realizations
+    L.Nhalos = 100; // number of halos in each realization
+    L.Nbins = 12; // P(lnmu) bins
     
-    // Plnmuf(C, 10.0, Nhalos, Nreal, Nbins, mt, 1, 0, 1);
+    //L.Plnmuf(C, 10.0, mt, 1, 0, 1);
     
     double z, lnmu, DL0, DL, sigmaDL;
     vector<vector<double> > Plnmu;
@@ -69,7 +59,6 @@ int main (int argc, char *argv[]) {
         outfile2.open("PDL.dat");
         
         C.Zlist = {0.05, 0.1, 0.2, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0};
-        //C.Zlist = {1.0, 10.0};
         
         vector<vector<double> > PDL;
         vector<double> sample, DLCL(2,0.0);
@@ -78,17 +67,17 @@ int main (int argc, char *argv[]) {
             cout << "z = " << z << endl;
             
             // compute and output the distribution of lnmu
-            Plnmu = Plnmuf(C, z, Nhalos, Nreal, Nbins, mt, 1, 1, 0);
-            //Plnmu = Plnmuf(C, z, Nhalos, Nreal, Nbins, mt, 1, 0, 0); // without elliptisities
-            //Plnmu = Plnmuf(C, z, Nhalos, Nreal, Nbins, mt, 0, 0, 0); // without elliptisities and bias
+            Plnmu = L.Plnmuf(C, z, mt, 1, 1, 0);
+            //Plnmu = L.Plnmuf(C, z, mt, 1, 0, 0); // without elliptisities
+            //Plnmu = L.Plnmuf(C, z, mt, 0, 0, 0); // without elliptisities and bias
             for (int jb = 0; jb < Plnmu.size(); jb++) {
                 outfile1 << z << "   " << Plnmu[jb][0] << "   " << Plnmu[jb][1] << endl;
             }
             
             // generate a sample of apparent D_L
-            sample = sampleFromPDF(Plnmu, Nreal, mt);
+            sample = sampleFromPDF(Plnmu, L.Nreal, mt);
             DL0 = C.DL(z);
-            for (int j = 0; j < Nreal; j++) {
+            for (int j = 0; j < sample.size(); j++) {
                 sample[j] = DL0/exp(sample[j]/2.0);
             }
             
@@ -100,7 +89,7 @@ int main (int argc, char *argv[]) {
         outfile2.close();
     }
     
-    Nreal = 4e4; // lower number of realizations for the catalogue
+    L.Nreal = 1e4; // lower number of realizations for the catalogue and scan
     
     if (!fileExists("catalogueSMBH.dat")) {
         cout << "Generating SMBHB catalogue..." << endl;
@@ -123,7 +112,7 @@ int main (int argc, char *argv[]) {
             
             if (z < zthr) {
                 // generate amplification
-                Plnmu = Plnmuf(C, z, Nhalos, Nreal, Nbins, mt, 1, 1, 0);
+                Plnmu = L.Plnmuf(C, z, mt, 1, 1, 0);
                 lnmu = sampleFromPDF(Plnmu, 1, mt)[0];
                 
                 // lensed luminosity distance
@@ -169,7 +158,7 @@ int main (int argc, char *argv[]) {
             z = sampleFromCDF(CDFz, 1, mt)[0];
             
             // generate amplification
-            Plnmu = Plnmuf(C, z, Nhalos, Nreal, Nbins, mt, 1, 1, 0);
+            Plnmu = L.Plnmuf(C, z, mt, 1, 1, 0);
             lnmu = sampleFromPDF(Plnmu, 1, mt)[0];
             
             // lensed luminosity distance
@@ -234,7 +223,7 @@ int main (int argc, char *argv[]) {
     int Nsteps = 2000;
     int Nburnin = 200;
     for (int j = 0; j < 8; j++) {
-        Hubble_diagram_fit(C, 3.0e8, catalogue, par, steps, priors, Nsteps, Nburnin, lensing, dm, mt, "lensing_chains_" + to_string(dm) + "_" + to_string(lensing) + "_" + to_string(catl) + "_c_" + to_string(j) + ".dat");
+        L.Hubble_diagram_fit(C, 3.0e8, catalogue, par, steps, priors, Nsteps, Nburnin, lens, dm, mt, "lensing_chains_" + to_string(dm) + "_" + to_string(lens) + "_" + to_string(catl) + "_c_" + to_string(j) + ".dat");
     }
     
     time_req = clock() - time_req;

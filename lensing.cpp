@@ -423,7 +423,7 @@ double findkappathr(int N, function<double(double)> Nf) {
 
 
 // probability distribution of lnmu, {lnmu, dP/dlnmu}
-vector<vector<double> > Plnmuf(cosmology &C, double zs, int Nhalos, int Nreal, int Nbins, rgen &mt, int bias, int ell, int write) {
+vector<vector<double> > lensing::Plnmuf(cosmology &C, double zs, rgen &mt, int bias, int ell, int write) {
     
     // fix threshold kappa
     function<double(double)> NfNFW = [&C, zs](double kappa) {
@@ -637,7 +637,7 @@ vector<vector<double> > Plnmuf(cosmology &C, double zs, int Nhalos, int Nreal, i
 /* ---------------------------------------------------------------------------------------------------------------------------------------------- */
 
 // loglikelihood of the Hubble digram data
-double loglikelihood(cosmology &C, double DLthr, vector<vector<double> > &data, vector<double> &par, int lensing, int dm, rgen &mt) {
+double lensing::loglikelihood(cosmology &C, double DLthr, vector<vector<double> > &data, vector<double> &par, int lens, int dm, rgen &mt) {
     
     // initialize cosmology
     C.OmegaM = par[0];
@@ -649,7 +649,7 @@ double loglikelihood(cosmology &C, double DLthr, vector<vector<double> > &data, 
     
     // compute loglikelihood
     double logL = 0.0;
-    if (lensing == 0) { // model without lensing
+    if (lens == 0) { // model without lensing
         for (int j = 0; j < data.size(); j++) {
             z = data[j][0];
             DL0 = C.DL(z);
@@ -670,14 +670,10 @@ double loglikelihood(cosmology &C, double DLthr, vector<vector<double> > &data, 
     else { // model with lensing
         
         // compute the lensing distributions
-        int Nreal = 4e4; // realizations
-        int Nhalos = 100; // number of halos in each realization
-        int Nbins = 12; // P(lnmu) bins
-        
         vector<vector<vector<double> > > Plnmuz(C.Zlist.size());
         for (int jz = 0; jz < C.Zlist.size(); jz++) {
             z = C.Zlist[jz];
-            Plnmuz[jz] = Plnmuf(C, z, Nhalos, Nreal, Nbins, mt, 1, 1, 0);
+            Plnmuz[jz] = Plnmuf(C, z, mt, 1, 1, 0);
         }
         
         int jz;
@@ -721,11 +717,11 @@ double loglikelihood(cosmology &C, double DLthr, vector<vector<double> > &data, 
 }
 
 // MCMC inference of the Hubble diagram data
-void Hubble_diagram_fit(cosmology &C, double DLthr, vector<vector<double> > &data, vector<double> &initial, vector<double> &steps , vector<vector<double> > &priors, int N, int Nburnin, int lensing, int dm, rgen &mt, string filename) {
+void lensing::Hubble_diagram_fit(cosmology &C, double DLthr, vector<vector<double> > &data, vector<double> &initial, vector<double> &steps , vector<vector<double> > &priors, int N, int Nburnin, int lens, int dm, rgen &mt, string filename) {
     
     // loglikelihood
-    function<double(vector<double>&)> pdf = [&C, DLthr, &data, lensing, dm, &mt](vector<double> &par) {
-        return loglikelihood(C, DLthr, data, par, lensing, dm, mt);
+    function<double(vector<double>&)> pdf = [this, &C, DLthr, &data, lens, dm, &mt](vector<double> &par) {
+        return loglikelihood(C, DLthr, data, par, lens, dm, mt);
     };
     
     // no cut
