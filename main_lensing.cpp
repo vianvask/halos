@@ -107,7 +107,7 @@ int main (int argc, char *argv[]) {
         
         outfile.open("catalogueSMBH.dat");
         
-        int Nheavy = 16; // size of the LISA SMBH catalogue with EM counterparts
+        int Nheavy = 12; // size of the LISA SMBH catalogue with EM counterparts
         double zthr = 10.0; // threshold z
         double FsigmaDL = 0.003; // relative error in D_L for LISA SMBH binaries
         
@@ -148,7 +148,7 @@ int main (int argc, char *argv[]) {
         
         outfile.open("catalogueNS.dat");
         
-        int Nlight = 500; // size of the ET NS catalogue
+        int Nlight = 300; // size of the ET NS catalogue
         double zthr = 2.0; // threshold z
         double FsigmaDL = 0.03; // relative error in D_L for ET NS binaries
         double zeta = 2.7; // z dependence of NS binary mergers, N propto (1+z)^zeta

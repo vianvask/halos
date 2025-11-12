@@ -285,8 +285,16 @@ double cosmology::Dfstarperfstar(double z, double M, double Mc, double Mt, doubl
     return Mtz/pow(M,2.0);
 }
 
-// halo consentration parameter (1601.02624)
-double cosmology::cons(double sigma, double z0) {
+// halo concentration parameter (1402.7073)
+double cosmology::cons14(double z0, double M) {
+    double a = 0.520 + (0.905-0.520)*exp(-0.617*pow(z0,1.21));
+    double b = -0.101 + 0.026*z0;
+    
+    return pow(10.0, a + b*log10(M/(1.0e12/h)));
+}
+
+// halo concentration parameter (1601.02624)
+double cosmology::cons16(double z0, double sigma) {
     
     double z = z0;
     if (z0 > 7) {
@@ -304,17 +312,21 @@ double cosmology::cons(double sigma, double z0) {
     return c0*pow(nu/nu0,-gamma1)*pow(1+pow(nu/nu0,1.0/beta),-beta*(gamma2-gamma1));
 }
 
-// halo consentration parameter, {jz,jM} -> {c, dc/dM}
+// halo concentration parameter, {jz,jM} -> {c, dc/dM}
 vector<vector<vector<double> > > cosmology::conslistf() {
     vector<vector<vector<double> > > zMc(Nz, vector<vector<double> > (NM, vector<double> (2,0.0)));
     double z, c, cn, M, Mn;
     for (int jz = 0; jz < Nz; jz++) {
         z = zlist[jz];
         M = sigmalist[0][0];
-        c = cons(sigmalist[0][1],z);
+        
+        c = cons14(z, M);
+        //c = cons16(z, sigmalist[0][1]);
         for (int jM = 0; jM < NM; jM++) {
             Mn = sigmalist[jM+1][0];
-            cn = cons(sigmalist[jM+1][1],z);
+            
+            cn = cons14(z, Mn);
+            // cn = cons16(z, sigmalist[jM+1][1]);
             
             zMc[jz][jM][0] = c;
             zMc[jz][jM][1] = (cn - c)/(Mn - M);

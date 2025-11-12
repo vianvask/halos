@@ -188,6 +188,123 @@ double sigmakappaW(cosmology &C, double zs, double kappathr) {
 
 
 /* ---------------------------------------------------------------------------------------------------------------------------------------------- */
+/*                                                           Cylindrical filaments                                                                */
+/* ---------------------------------------------------------------------------------------------------------------------------------------------- */
+
+// axis in the lens plane
+double kappa0CYL(double rs, double rhos, double Sigmac) {
+    return rs*rhos/Sigmac;
+}
+
+// uniform density inside the cylinder
+double kappaCYL1(double r, double rs, double kappa0) {
+    if (r > rs) {
+        return 0.0;
+    }
+    return kappa0*2.0*sqrt(1.0-pow(r/rs,2.0));
+}
+double gammaCYL1(double r, double rs, double kappa0) {
+    return kappaCYL1(r, rs, kappa0);
+}
+
+// 1/(1+(r/r_s)^2) profile inside the cylinder
+double kappaCYL2(double r, double rs, double kappa0) {
+    if (r > rs) {
+        return 0.0;
+    }
+    return kappa0*2.0*PI/sqrt(1.0+pow(r/rs,2.0));
+}
+double gammaCYL2(double r, double rs, double kappa0) {
+    return kappa0*4.0*PI*(sqrt(1.0+pow(r/rs,2.0)) - 1.0)*pow(rs/r,2.0) - kappaCYL2(r, rs, kappa0);
+}
+
+vector<double> kappagammaCYL(cosmology &C, double zs, double zl, double r, double M, double phi) {
+    double Sigmac = Sigmacf(C, zs, zl);
+    
+    // cylinder radius and length, M = mass inside radius r_s (see astro-ph/0406665)
+    double rs = 1000.0*pow(M/1.0e14, 1.0/3.0);
+    double L = 20000.0*pow(M/1.0e14, 1.0/3.0);
+    
+    // average density inside radius r_s = 10*rho_c, rough approximation of rho_s density when it is not in the lens plane
+    double rhos = 14.4*C.rhoc*L/max(2.0*rs, abs(cos(phi))*L);
+    
+    double kappa0 = kappa0CYL(rs, rhos, Sigmac);
+    
+    return {kappaCYL2(r, rs, kappa0), gammaCYL2(r, rs, kappa0)};
+}
+
+// maximal r so that kappa_CYL > kappa_thr
+double rmaxfCYL(cosmology &C, double zs, double zl, double M, double kappathr) {
+    double rmax;
+    double logr1 = log(1.0e-6), logr2 = log(1.0e6);
+    if (kappagammaCYL(C, zs, zl, exp(logr1), M, 0.0)[0] > kappathr) {
+        while (logr2-logr1 > 0.02) {
+            rmax = exp((logr2+logr1)/2.0);
+            if (kappagammaCYL(C, zs, zl, rmax, M, 0.0)[0] > kappathr) {
+                logr1 = log(rmax);
+            } else {
+                logr2 = log(rmax);
+            }
+        }
+        rmax = exp((logr2+logr1)/2.0);
+    } else {
+        rmax = 0.0;
+    }
+    return rmax;
+}
+
+// number of halos with kappa_NFW > kappa_thr in each z and M bin
+vector<vector<vector<double> > > deltaNhfCYL(cosmology &C, double zs, double kappathr) {
+    vector<vector<vector<double> > > dNh(C.Nz, vector<vector<double> > (C.NM, vector<double> (3, 0.0)));
+    double zl, dz, M, Mb, dlnM, dndlnM, rmax, sigma, sigmab;
+    for (int jz = 1; jz < C.Nz; jz++) {
+        zl = C.zlist[jz];
+        dz = zl - C.zlist[jz-1];
+        if (zl < zs) {
+            for (int jM = 1; jM < C.NM; jM++) {
+                M = C.Mlist[jM];
+                sigma = C.sigmalist[jM][1];
+                
+                dlnM = log(M) - log(C.Mlist[jM-1]);
+                dndlnM = C.FMFlist[jz][jM];
+                rmax = rmaxfCYL(C, zs, zl, M, kappathr);
+                dNh[jz][jM][0] = 306.535*PI*pow((1.0+zl)*rmax,2.0)/C.Hz(zl)*dndlnM*dlnM*dz;
+                
+                Mb = 2.0*PI*pow(rmax,2.0)*(C.dc(zl)-C.dc(zl-dz))*C.rhoM0;
+                sigmab = interpolate(Mb, C.sigmalist);
+                
+                // see Baumann (5.129)
+                dNh[jz][jM][1] = C.Dg(zl)*sigmab*C.halobias(zl, sigma);
+                
+                dNh[jz][jM][2] = rmax;
+            }
+        }
+    }
+    return dNh;
+}
+
+// number of filaments with kappa_CYL > kappa_thr
+double NhfCYL(cosmology &C, double zs, double kappathr) {
+    double Nh = 0.0;
+    double zl, dz, M, dlnM, dndlnM, rmax;
+    for (int jz = 1; jz < C.Nz; jz++) {
+        zl = C.zlist[jz];
+        dz = zl - C.zlist[jz-1];
+        if (zl < zs) {
+            for (int jM = 1; jM < C.NM; jM++) {
+                M = C.Mlist[jM];
+                dlnM = log(M) - log(C.Mlist[jM-1]);
+                dndlnM = C.FMFlist[jz][jM];
+                rmax = rmaxfCYL(C, zs, zl, M, kappathr);
+                Nh += 306.535*PI*pow((1.0+zl)*rmax,2.0)/C.Hz(zl)*dndlnM*dlnM*dz;
+            }
+        }
+    }
+    return Nh;
+}
+
+
+/* ---------------------------------------------------------------------------------------------------------------------------------------------- */
 /*                                                           MCMC sampler                                                                         */
 /* ---------------------------------------------------------------------------------------------------------------------------------------------- */
 
@@ -329,41 +446,48 @@ vector<vector<double> > Plnmuf(cosmology &C, double zs, int Nhalos, int Nreal, i
     }
     
     vector<vector<vector<double> > > dNH = deltaNhfNFW(C, zs, kappathrH);
+    vector<vector<vector<double> > > dNF = deltaNhfCYL(C, zs, kappathrH);
     if (write > 0) {
         writeToFile(C.zlist, C.Mlist, dNH, "dNH.dat");
     }
     
     vector<double> kappagamma;
-    normal_distribution<double> pG(1.0);
+    normal_distribution<double> pG(0.0, 1.0);
     poisson_distribution<int> PN;
-    double zl, M, rmax, r, phi, phiH, epsilon = 0.0, barN, sigma, deltab, lambda, meankappa = 0.0;
-    int NH = 0;
+    double zl, M, rmaxH, rmaxF, r, phi, phiH, phiF, epsilon = 0.0, barNH, barNF, sigma, deltab, lambda, meankappa = 0.0;
+    int NH, NF;
+    int NtotH = 0, NtotF = 0;;
     for (int jz = 0; jz < C.Nz; jz++) {
         zl = C.zlist[jz];
         if (zl < zs) {
             for (int jM = 0; jM < C.NM; jM++) {
                 M = C.Mlist[jM];
                 
-                // generate realizations of halos
-                barN = dNH[jz][jM][0];
+                // generate realizations
+                barNH = dNH[jz][jM][0];
                 sigma = dNH[jz][jM][1];
-                rmax = dNH[jz][jM][2];
+                rmaxH = dNH[jz][jM][2];
+                
+                barNF = dNF[jz][jM][0];
+                rmaxF = dNF[jz][jM][2];
+                
                 for (int j = 0; j < Nreal; j++) {
                     
                     // bias
                     deltab = sigma*pG(mt);
-                    lambda = barN*(1.0+deltab);
+                    lambda = exp(deltab - pow(sigma,2.0)/2.0); // log-normal
                     
                     if (bias == 0) {
-                        lambda = barN;
+                        lambda = 1.0;
                     }
                     
-                    if (lambda < 0.2) { // if lambda is small, compare lambda to a random number U(0,1) (faster)
-                        if (lambda > randomreal(0.0, 1.0, mt)) {
+                    // generate halos
+                    if (lambda*barNH < 0.2) { // if lambda is small, compare to a random number U(0,1) (faster)
+                        if (lambda*barNH > randomreal(0.0, 1.0, mt)) {
                             if (ell > 0) {
                                 epsilon = epsilonNFW(C, zl, M); // pseudo ellipsity of the halo
                             }
-                            r = sqrt(randomreal(0.0,1.0,mt))*rmax; // distance from the line-of-sight
+                            r = sqrt(randomreal(0.0,1.0,mt))*rmaxH; // distance from the line-of-sight
                             phi = randomreal(0.0,2*PI,mt); // polar angle of r vector
                             phiH = randomreal(0.0,2*PI,mt); // orientation of the halo ellipticity
                             
@@ -374,17 +498,18 @@ vector<vector<double> > Plnmuf(cosmology &C, double zs, int Nhalos, int Nreal, i
                             gamma2list[j] += sin(phi)*kappagamma[1];
                             
                             meankappa += kappagamma[0];
+                            
+                            NtotH++;
                         }
-                    }
-                    else { // for larger lambda, generate number of halos from Poisson distribution (slower)
-                        PN = poisson_distribution<int>(lambda);
+                    } else { // for larger lambda, generate number of halos from Poisson distribution (slower)
+                        PN = poisson_distribution<int>(lambda*barNH);
                         NH = PN(mt);
                         if (NH > 0) {
                             if (ell > 0) {
                                 epsilon = epsilonNFW(C, zl, M); // pseudo ellipsity of the halo
                             }
                             for (int jH = 0; jH < NH; jH++) {
-                                r = sqrt(randomreal(0.0,1.0,mt))*rmax; // distance from the line-of-sight
+                                r = sqrt(randomreal(0.0,1.0,mt))*rmaxH; // distance from the line-of-sight
                                 phi = randomreal(0.0,2*PI,mt); // polar angle of r vector
                                 phiH = randomreal(0.0,2*PI,mt); // orientation of the halo ellipticity
                                 
@@ -395,6 +520,47 @@ vector<vector<double> > Plnmuf(cosmology &C, double zs, int Nhalos, int Nreal, i
                                 gamma2list[j] += sin(phi)*kappagamma[1];
                                 
                                 meankappa += kappagamma[0];
+                                
+                                NtotH++;
+                            }
+                        }
+                    }
+                    
+                    // generate filaments
+                    if (lambda*barNF < 0.2) { // if lambda is small, compare to a random number U(0,1) (faster)
+                        if (lambda*barNF > randomreal(0.0, 1.0, mt)) {
+                            r = sqrt(randomreal(0.0,1.0,mt))*rmaxF; // distance from the line-of-sight
+                            phi = randomreal(0.0,2*PI,mt); // polar angle of r vector
+                            phiF = randomreal(0.0,2*PI,mt); // orientation of the filament
+                                                        
+                            kappagamma = kappagammaCYL(C, zs, zl, r, M, phiF);
+                            
+                            kappalist[j] += kappagamma[0];
+                            gamma1list[j] += cos(phi)*kappagamma[1];
+                            gamma2list[j] += sin(phi)*kappagamma[1];
+                            
+                            meankappa += kappagamma[0];
+                            
+                            NtotF++;
+                        }
+                    } else { // for larger lambda, generate number of halos from Poisson distribution (slower)
+                        PN = poisson_distribution<int>(lambda*barNF);
+                        NF = PN(mt);
+                        if (NF > 0) {
+                            for (int jF = 0; jF < NF; jF++) {
+                                r = sqrt(randomreal(0.0,1.0,mt))*rmaxF; // distance from the line-of-sight
+                                phi = randomreal(0.0,2*PI,mt); // polar angle of r vector
+                                phiF = randomreal(0.0,2*PI,mt); // orientation of the filament
+                                
+                                kappagamma = kappagammaCYL(C, zs, zl, r, M, phiF);
+                                
+                                kappalist[j] += kappagamma[0];
+                                gamma1list[j] += cos(phi)*kappagamma[1];
+                                gamma2list[j] += sin(phi)*kappagamma[1];
+                                
+                                meankappa += kappagamma[0];
+                                
+                                NtotF++;
                             }
                         }
                     }
@@ -403,6 +569,8 @@ vector<vector<double> > Plnmuf(cosmology &C, double zs, int Nhalos, int Nreal, i
         }
     }
     meankappa = meankappa/(1.0*Nreal);
+    
+    //cout << NtotH/(1.0*Nreal) << "   " << NtotF/(1.0*Nreal) << endl;
     
     // compute mu
     vector<double> lnmulist, lnmuAlist, ln1pkappalist, lngammalist;
@@ -432,6 +600,23 @@ vector<vector<double> > Plnmuf(cosmology &C, double zs, int Nhalos, int Nreal, i
         writeToFile(Pln1pkappa,"Pln1pkappa_z=" + to_string_prec(zs,1) + ".dat");
         writeToFile(Plngamma,"Plngamma_z=" + to_string_prec(zs,1) + ".dat");
     }
+    
+    int jmin = 0, jmax = Plnmu.size()-1;
+    for (int j = 0; j < Plnmu.size()-4; j++) {
+        if (Plnmu[j][1] > 0 && Plnmu[j+1][1] > 0 && Plnmu[j+2][1] > 0 && Plnmu[j+3][1] > 0 && Plnmu[j+4][1] > 0) {
+            jmin = j;
+            j = Plnmu.size();
+        }
+    }
+    for (int j = max(4,jmin); j < Plnmu.size(); j++) {
+        if (Plnmu[j-4][1] == 0 && Plnmu[j-3][1] == 0 && Plnmu[j-2][1] == 0 && Plnmu[j-1][1] == 0 && Plnmu[j][1] == 0) {
+            jmax = j;
+            j = Plnmu.size();
+        }
+    }
+    //cout << jmin << "   " << jmax << endl;
+    Plnmu.erase(Plnmu.begin() + jmax, Plnmu.end());
+    Plnmu.erase(Plnmu.begin(), Plnmu.begin() + jmin);
     
     // convert from image plane to source plane (P_S ~ P_I/mu) and normalize
     double dlnmu = Plnmu[1][0] - Plnmu[0][0];
@@ -485,8 +670,8 @@ double loglikelihood(cosmology &C, double DLthr, vector<vector<double> > &data, 
     else { // model with lensing
         
         // compute the lensing distributions
-        int Nreal = 4e3; // realizations
-        int Nhalos = 40; // number of halos in each realization
+        int Nreal = 4e4; // realizations
+        int Nhalos = 100; // number of halos in each realization
         int Nbins = 12; // P(lnmu) bins
         
         vector<vector<vector<double> > > Plnmuz(C.Zlist.size());

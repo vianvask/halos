@@ -173,7 +173,8 @@ private:
     vector<vector<double> > sigmalistf(double m22, double m3, double kc);
 
     // CDM halo consentration parameter (1601.02624), {jz,jM} -> {c, dc/dM}
-    double cons(double M, double z);
+    double cons14(double z, double M);
+    double cons16(double z, double sigma);
     vector<vector<vector<double> > > conslistf();
     vector<vector<vector<double> > > conslist;
     
@@ -297,10 +298,12 @@ public:
         if (dm == 0) {
             // halo mass function and halo growth rate
             HMFlist = HMFlistf();
+            FMFlist = FMFlistf();
             halobiaslist = halobiaslistf();
                         
             writeToFile(sigmalist, "sigma_CDM.dat");
             writeToFile(zlist, Mlist, HMFlist, "HMF_CDM.dat");
+            writeToFile(zlist, Mlist, FMFlist, "FMF_CDM.dat");
             writeToFile(zlist, Mlist, halobiaslist, "halobiaslist_CDM.dat");
         }
         if (dm == 1) {
@@ -368,6 +371,7 @@ public:
         // compute halo mass function as a function of M and z
         if (dm == 0) {
             HMFlist = HMFlistf();
+            FMFlist = FMFlistf();
             halobiaslist = halobiaslistf();
         }
         if (dm == 1) {
