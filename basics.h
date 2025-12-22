@@ -5,10 +5,12 @@
 #include <iostream>
 #include <fstream>
 #include <iomanip>
+#include <filesystem>
 #include <gsl/gsl_sf_expint.h>
 
 
 using namespace std;
+namespace fs = std::filesystem;
 
 typedef mt19937_64 rgen;
 
@@ -50,5 +52,6 @@ void writeToFile(vector<double> &x, vector<double> &y, vector<vector<vector<doub
 void writeToFile(vector<double> &x, vector<double> &y, vector<double> &z, vector<vector<vector<double> > > &f, const string &filename);
 void writeToFile(vector<double> &x, vector<double> &y, vector<double> &z, vector<vector<vector<vector<double> > > > &f, const string &filename);
 
-vector<double> readdata(string filename);
-vector<vector<double> > readdata(string filename, int N);
+vector<double> readdata(fs::path filename);
+vector<vector<double> > readdata(fs::path filename, int N);
+vector<vector<double> > readdataCSV(fs::path filename);

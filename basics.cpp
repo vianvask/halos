@@ -430,7 +430,7 @@ void writeToFile(vector<double> &x, vector<double> &y, vector<double> &z, vector
 }
 
 // read list
-vector<double> readdata(string filename) {
+vector<double> readdata(fs::path filename) {
     vector<double> data;
     int jrow = 0;
     double A;
@@ -449,7 +449,7 @@ vector<double> readdata(string filename) {
 }
 
 // read data
-vector<vector<double> > readdata(string filename, int N) {
+vector<vector<double> > readdata(fs::path filename, int N) {
     vector<vector<double> > data;
     vector<double> row(N,0.0);
     int jrow = 0;
@@ -473,3 +473,29 @@ vector<vector<double> > readdata(string filename, int N) {
     return data;
 }
 
+// read data
+vector<vector<double> > readdataCSV(fs::path filename) {
+    vector<vector<double> > data;
+    string line;
+    int jrow = 0;
+    double A;
+    
+    ifstream infile;
+    infile.open(filename);
+    if (infile) {
+        while (getline(infile, line)) {
+            stringstream ss(line);
+            string token;
+            vector<double> row;
+            
+            while (std::getline(ss, token, ',')) {
+                row.push_back(stod(token));
+            }
+            data.push_back(row);
+        }
+    } else {
+        cout << "couldn't open " << filename << endl;
+    }
+    infile.close();
+    return data;
+}

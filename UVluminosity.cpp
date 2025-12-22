@@ -258,6 +258,9 @@ void writeUVLF(cosmology &C, double logMt, double Mc, double epsilon, double alp
     if (dm == 3) {
         filename = "UVluminosity_EDM.dat";
     }
+    if (dm == 4) {
+        filename = "UVluminosity_B.dat";
+    }
     
     ofstream outfile;
     outfile.open(filename);

@@ -17,7 +17,7 @@ int main (int argc, char *argv[]) {
     const int lens = atoi(argv[2]); // 0: without lensing, 1: with lensing
     const int catl = atoi(argv[3]); // 0: DES-5yr SN catalogue, 1: SMBH catalogue, 2: NS catalogue, 3: combined SMBH+NS catalogue
     const double fstep = atof(argv[4]); // stepsize relative to the prior range
-     
+    
     // benchmark cosmological parameters: PDG values
     cosmology C;
     C.OmegaM = 0.315;
@@ -39,6 +39,7 @@ int main (int argc, char *argv[]) {
     C.Nz = 100;
     
     // initialize benchmar CDM halo mass function
+    C.outdir = "dataL";
     C.initialize(0);
     
     ofstream outfile, outfile1, outfile2;
@@ -48,15 +49,15 @@ int main (int argc, char *argv[]) {
     L.Nhalos = 100; // number of halos in each realization
     L.Nbins = 12; // P(lnmu) bins
     
-    //L.Plnmuf(C, 10.0, mt, 1, 0, 1);
-    
+    // L.Plnmuf(C, 10.0, mt, 1, 1, 1, 1);
+
     double z, lnmu, DL0, DL, sigmaDL;
     vector<vector<double> > Plnmu;
-    if (!fileExists("Plnmuz.dat")) {
+    if (!fs::exists(C.outdir/"Plnmuz.dat")) {
         cout << "Generating lensing amplifications..." << endl;
         
-        outfile1.open("Plnmuz.dat");
-        outfile2.open("PDL.dat");
+        outfile1.open(C.outdir/"Plnmuz.dat");
+        outfile2.open(C.outdir/"PDL.dat");
         
         C.Zlist = {0.05, 0.1, 0.2, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0};
         
@@ -67,9 +68,10 @@ int main (int argc, char *argv[]) {
             cout << "z = " << z << endl;
             
             // compute and output the distribution of lnmu
-            Plnmu = L.Plnmuf(C, z, mt, 1, 1, 0);
-            //Plnmu = L.Plnmuf(C, z, mt, 1, 0, 0); // without elliptisities
-            //Plnmu = L.Plnmuf(C, z, mt, 0, 0, 0); // without elliptisities and bias
+            Plnmu = L.Plnmuf(C, z, mt, 1, 1, 1, 0);
+            //Plnmu = L.Plnmuf(C, z, mt, 0, 1, 1, 0); // without filaments
+            //Plnmu = L.Plnmuf(C, z, mt, 0, 1, 0, 0); // without elliptisities
+            //Plnmu = L.Plnmuf(C, z, mt, 0, 0, 0, 0); // without bias
             for (int jb = 0; jb < Plnmu.size(); jb++) {
                 outfile1 << z << "   " << Plnmu[jb][0] << "   " << Plnmu[jb][1] << endl;
             }
@@ -91,16 +93,16 @@ int main (int argc, char *argv[]) {
     
     L.Nreal = 1e4; // lower number of realizations for the catalogue and scan
     
-    if (!fileExists("catalogueSMBH.dat")) {
+    if (!fs::exists(C.outdir/"catalogueSMBH.dat")) {
         cout << "Generating SMBHB catalogue..." << endl;
         
-        outfile.open("catalogueSMBH.dat");
+        outfile.open(C.outdir/"catalogueSMBH.dat");
         
         int Nheavy = 12; // size of the LISA SMBH catalogue with EM counterparts
         double zthr = 10.0; // threshold z
         double FsigmaDL = 0.003; // relative error in D_L for LISA SMBH binaries
         
-        vector<double> zSMBHlist = readdata("zSMBHlist.dat"); // catalogue of LISA SMBH redshifts
+        vector<double> zSMBHlist = readdata(C.outdir/"zSMBHlist.dat"); // catalogue of LISA SMBH redshifts
         shuffle(zSMBHlist.begin(), zSMBHlist.end(), mt);
         zSMBHlist.erase(zSMBHlist.begin() + 10, zSMBHlist.end());
         
@@ -112,7 +114,7 @@ int main (int argc, char *argv[]) {
             
             if (z < zthr) {
                 // generate amplification
-                Plnmu = L.Plnmuf(C, z, mt, 1, 1, 0);
+                Plnmu = L.Plnmuf(C, z, mt, 1, 1, 1, 0);
                 lnmu = sampleFromPDF(Plnmu, 1, mt)[0];
                 
                 // lensed luminosity distance
@@ -132,10 +134,10 @@ int main (int argc, char *argv[]) {
         outfile.close();
     }
     
-    if (!fileExists("catalogueNS.dat")) {
+    if (!fs::exists(C.outdir/"catalogueNS.dat")) {
         cout << "Generating NSB catalogue..." << endl;
         
-        outfile.open("catalogueNS.dat");
+        outfile.open(C.outdir/"catalogueNS.dat");
         
         int Nlight = 300; // size of the ET NS catalogue
         double zthr = 2.0; // threshold z
@@ -158,7 +160,7 @@ int main (int argc, char *argv[]) {
             z = sampleFromCDF(CDFz, 1, mt)[0];
             
             // generate amplification
-            Plnmu = L.Plnmuf(C, z, mt, 1, 1, 0);
+            Plnmu = L.Plnmuf(C, z, mt, 1, 1, 1, 0);
             lnmu = sampleFromPDF(Plnmu, 1, mt)[0];
             
             // lensed luminosity distance
@@ -189,24 +191,24 @@ int main (int argc, char *argv[]) {
     vector<double> minmaxz, minmaxz2, Zlist2;
     if (catl < 3) {
         if (catl == 0) {
-            catalogue = readdata("SNcatalogue.dat", 3);
+            catalogue = readdata(C.outdir/"SNcatalogue.dat", 3);
             par = {0.33, 0.8, 0.7, 0.0};
             priors = {{0.1, 0.6}, {0.4, 1.4}, {0.699, 0.701}, {-0.1, 0.1}};
         } else if (catl == 1) {
-            catalogue = readdata("catalogueSMBH.dat", 3);
+            catalogue = readdata(C.outdir/"catalogueSMBH.dat", 3);
         } else {
-            catalogue = readdata("catalogueNS.dat", 3);
+            catalogue = readdata(C.outdir/"catalogueNS.dat", 3);
         }
         minmaxz = findMinMax(catalogue, 0);
         C.Zlist = linlist(minmaxz[0], minmaxz[1], 6);
     }
     else {
-        catalogue = readdata("catalogueNS.dat", 3);
+        catalogue = readdata(C.outdir/"catalogueNS.dat", 3);
         
         minmaxz = findMinMax(catalogue, 0);
         C.Zlist = linlist(minmaxz[0], minmaxz[1], 6);
         
-        catalogue2 = readdata("catalogueSMBH.dat", 3);
+        catalogue2 = readdata(C.outdir/"catalogueSMBH.dat", 3);
         catalogue.insert(catalogue.end(), catalogue2.begin(), catalogue2.end());
         
         minmaxz2 = findMinMax(catalogue2, 0);
@@ -223,9 +225,9 @@ int main (int argc, char *argv[]) {
     int Nsteps = 2000;
     int Nburnin = 200;
     for (int j = 0; j < 8; j++) {
-        L.Hubble_diagram_fit(C, 3.0e8, catalogue, par, steps, priors, Nsteps, Nburnin, lens, dm, mt, "lensing_chains_" + to_string(dm) + "_" + to_string(lens) + "_" + to_string(catl) + "_c_" + to_string(j) + ".dat");
+        L.Hubble_diagram_fit(C, 3.0e8, catalogue, par, steps, priors, Nsteps, Nburnin, lens, dm, mt, C.outdir/("lensing_chains_" + to_string(dm) + "_" + to_string(lens) + "_" + to_string(catl) + "_c_" + to_string(j) + ".dat"));
     }
-    
+
     time_req = clock() - time_req;
     cout << "Total evaluation time: " << ((double) time_req/CLOCKS_PER_SEC/60.0) << " min." << endl;
     

@@ -3,6 +3,8 @@
 class cosmology {
 
 public:
+    fs::path outdir;
+    
     int Nk = 1000;
     int NM, Nz;
     double Mmin, Mmax, zmin, zmax;
@@ -143,6 +145,16 @@ private:
         return pow(DeltakE(k, deltaH, kc)*Dg(z), 2.0)/(pow(k,3.0)/(2.0*pow(PI,2.0)));
     }
     
+    vector<vector<double> > DeltaBlist;
+    
+    // magnetic field enhanced matter power spectrum
+    double DeltakB(double k, double deltaH, double B) {
+        return sqrt(pow(Deltak(k, deltaH),2.0) + pow(interpolate(k/h*1000.0, DeltaBlist),2.0));
+    }
+    double PlinB(double z, double k, double deltaH, double B) {
+        return pow(DeltakB(k, deltaH, B)*Dg(z), 2.0)/(pow(k,3.0)/(2.0*pow(PI,2.0)));
+    }
+    
     // real space top hat window function
     double W(double x) {
         return 3.0*(x*cos(x)-sin(x))/pow(x,3.0);
@@ -168,9 +180,10 @@ private:
     vector<double> sigmaF(double M, double deltaH, double m22);
     vector<double> sigmaW(double M, double deltaH, double m3);
     vector<double> sigmaE(double M, double deltaH, double kc);
+    vector<double> sigmaB(double M, double deltaH, double B);
 
     // variance of matter fluctuations, {M,sigma(M),sigma'(M)}
-    vector<vector<double> > sigmalistf(double m22, double m3, double kc);
+    vector<vector<double> > sigmalistf(double m22, double m3, double kc, double B);
 
     // CDM halo consentration parameter (1601.02624), {jz,jM} -> {c, dc/dM}
     double cons14(double z, double M);
@@ -185,11 +198,18 @@ private:
     double pFC(double delta, double S);
     double pFC(double deltap, double Sp, double delta, double S);
     
+    // transition rate S->S0
+    double pTR(double delta, double Ddeltaell, double S, double S0);
+
+    
     // first crossing probability for filaments
     double pFCfil(double delta, double S);
 
     // halo mass function and growth rate, {jz,jM} -> {dn/dlnM, dotM, dotM/dM}
     vector<vector<vector<double> > > HMFlistf();
+    
+    // halo merger rate, {jz,jM1,jM2} -> dR/dlnM1 dlnM2
+    vector<vector<vector<double> > > HMRlistf();
     
     // halo bias, {jz,jM} -> b
     vector<vector<double> > halobiaslistf();
@@ -227,6 +247,7 @@ public:
     
     vector<vector<double> > sigmalist;
     vector<vector<vector<double> > > HMFlist;
+    vector<vector<vector<double> > > HMRlist;
     vector<vector<double> > halobiaslist;
     vector<vector<double> > FMFlist;
     vector<vector<double> > logMcharlist;
@@ -252,6 +273,12 @@ public:
     vector<vector<vector<double> > > EDMFMFlist;
     
     void initialize0() {
+        
+        // directory for output files
+        if (!fs::exists(outdir)) {
+            fs::create_directories(outdir);
+        }
+        
         OmegaR = OmegaM/(1+zeq);
         OmegaL = 1.0 - OmegaM - OmegaR;
         OmegaC = OmegaM - OmegaB;
@@ -270,12 +297,12 @@ public:
         
         // NFW halo parameters, computed with CDM sigma
         deltaH8 = sigma8/sigmaC(M8, 1.0)[0];
-        sigmalist = sigmalistf(0.0, 0.0, 0.0);
+        sigmalist = sigmalistf(0.0, 0.0, 0.0, 0.0);
         logMcharlist = logMcharlistf();
         conslist = conslistf();
         NFWlist = NFWlistf();
         
-        writeToFile(logMcharlist, "logMcharlist.dat");
+        writeToFile(logMcharlist, outdir/"logMcharlist.dat");
         
         /*
         vector<vector<double> > Deltalist(100, vector<double> (2, 0.0));
@@ -300,11 +327,15 @@ public:
             HMFlist = HMFlistf();
             FMFlist = FMFlistf();
             halobiaslist = halobiaslistf();
-                        
-            writeToFile(sigmalist, "sigma_CDM.dat");
-            writeToFile(zlist, Mlist, HMFlist, "HMF_CDM.dat");
-            writeToFile(zlist, Mlist, FMFlist, "FMF_CDM.dat");
-            writeToFile(zlist, Mlist, halobiaslist, "halobiaslist_CDM.dat");
+            
+            // uncomment to compute and export halo merger rate
+            //HMRlist = HMRlistf();
+            //writeToFile(zlist, Mlist, Mlist, HMRlist, "HMR_CDM.dat");
+            
+            writeToFile(sigmalist, outdir/"sigma_CDM.dat");
+            writeToFile(zlist, Mlist, HMFlist, outdir/"HMF_CDM.dat");
+            writeToFile(zlist, Mlist, FMFlist, outdir/"FMF_CDM.dat");
+            writeToFile(zlist, Mlist, halobiaslist, outdir/"halobiaslist_CDM.dat");
         }
         if (dm == 1) {
             m22list = loglist(m22min,m22max,Nm22);
@@ -314,15 +345,15 @@ public:
                 deltaH8 = sigma8/sigmaF(M8, 1.0, m22)[0];
                             
                 // halo mass function and halo growth rate
-                sigmalist = sigmalistf(m22, 0.0, 0.0);
+                sigmalist = sigmalistf(m22, 0.0, 0.0, 0.0);
                 HMFlist = HMFlistf();
                 halobiaslist = halobiaslistf();
 
                 FDMsigmalist.push_back(sigmalist);
                 FDMHMFlist.push_back(HMFlist);
             }
-            writeToFile(m22list, FDMsigmalist, "sigma_FDM.dat");
-            writeToFile(m22list, zlist, Mlist, FDMHMFlist, "HMF_FDM.dat");
+            writeToFile(m22list, FDMsigmalist, outdir/"sigma_FDM.dat");
+            writeToFile(m22list, zlist, Mlist, FDMHMFlist, outdir/"HMF_FDM.dat");
         }
         if (dm == 2) {
             m3list = loglist(m3min,m3max,Nm3);
@@ -332,7 +363,7 @@ public:
                 deltaH8 = sigma8/sigmaW(M8, 1.0, m3)[0];
                             
                 // halo mass function and halo growth rate
-                sigmalist = sigmalistf(0.0, m3, 0.0);
+                sigmalist = sigmalistf(0.0, m3, 0.0, 0.0);
                 HMFlist = HMFlistf();
                 halobiaslist = halobiaslistf();
 
@@ -340,8 +371,8 @@ public:
                 WDMHMFlist.push_back(HMFlist);
             }
             
-            writeToFile(m3list, WDMsigmalist, "sigma_WDM.dat");
-            writeToFile(m3list, zlist, Mlist, WDMHMFlist, "HMF_WDM.dat");
+            writeToFile(m3list, WDMsigmalist, outdir/"sigma_WDM.dat");
+            writeToFile(m3list, zlist, Mlist, WDMHMFlist, outdir/"HMF_WDM.dat");
         }
         if (dm == 3) {
             kclist = loglist(kcmin,kcmax,Nkc);
@@ -351,7 +382,7 @@ public:
                 deltaH8 = sigma8/sigmaE(M8, 1.0, kc)[0];
                             
                 // halo mass function and halo growth rate
-                sigmalist = sigmalistf(0.0, 0.0, kc);
+                sigmalist = sigmalistf(0.0, 0.0, kc, 0.0);
                 HMFlist = HMFlistf();
                 halobiaslist = halobiaslistf();
 
@@ -359,8 +390,23 @@ public:
                 EDMHMFlist.push_back(HMFlist);
             }
             
-            writeToFile(kclist, EDMsigmalist, "sigma_EDM.dat");
-            writeToFile(kclist, zlist, Mlist, EDMHMFlist, "HMF_EDM.dat");
+            writeToFile(kclist, EDMsigmalist, outdir/"sigma_EDM.dat");
+            writeToFile(kclist, zlist, Mlist, EDMHMFlist, outdir/"HMF_EDM.dat");
+        }
+        if (dm == 4) {
+            double B = 0.2;
+            DeltaBlist = readdataCSV("PS_PMF.csv");
+            
+            // fix deltaH to match the input sigma8
+            deltaH8 = sigma8/sigmaB(M8, 1.0, B)[0];
+                        
+            // halo mass function and halo growth rate
+            sigmalist = sigmalistf(0.0, 0.0, 0.0, B);
+            HMFlist = HMFlistf();
+            halobiaslist = halobiaslistf();
+            
+            writeToFile(sigmalist, outdir/"sigma_B.dat");
+            writeToFile(zlist, Mlist, HMFlist, outdir/"HMF_B.dat");
         }
     }
     
@@ -376,19 +422,25 @@ public:
         }
         if (dm == 1) {
             deltaH8 = sigma8/sigmaF(M8, 1.0, x)[0];
-            sigmalist = sigmalistf(x, 0.0, 0.0);
+            sigmalist = sigmalistf(x, 0.0, 0.0, 0.0);
             HMFlist = HMFlistf();
             halobiaslist = halobiaslistf();
         }
         if (dm == 2) {
             deltaH8 = sigma8/sigmaW(M8, 1.0, x)[0];
-            sigmalist = sigmalistf(0.0, x, 0.0);
+            sigmalist = sigmalistf(0.0, x, 0.0, 0.0);
             HMFlist = HMFlistf();
             halobiaslist = halobiaslistf();
         }
         if (dm == 3) {
             deltaH8 = sigma8/sigmaE(M8, 1.0, x)[0];
-            sigmalist = sigmalistf(0.0, 0.0, x);
+            sigmalist = sigmalistf(0.0, 0.0, x, 0.0);
+            HMFlist = HMFlistf();
+            halobiaslist = halobiaslistf();
+        }
+        if (dm == 4) {
+            deltaH8 = sigma8/sigmaB(M8, 1.0, x)[0];
+            sigmalist = sigmalistf(0.0, 0.0, 0.0, x);
             HMFlist = HMFlistf();
             halobiaslist = halobiaslistf();
         }
