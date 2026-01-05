@@ -111,7 +111,7 @@ vector<double> cosmology::sigmaW(double M, double deltaH, double m3) {
     return {sqrt(sigma2), dsigma2/(2.0*sqrt(sigma2))};
 }
 
-// variance of the enhanced matter fluctuations
+// variance of the white noise enhanced matter fluctuations
 vector<double> cosmology::sigmaE(double M, double deltaH, double kc) {
     double RM = pow(3.0*M/(4.0*PI*rhoM0),1.0/3.0);
     double DRM = RM/(3.0*M);
@@ -131,9 +131,29 @@ vector<double> cosmology::sigmaE(double M, double deltaH, double kc) {
     return {sqrt(sigma2), dsigma2/(2.0*sqrt(sigma2))};
 }
 
+// variance of the magnetic field enhanced matter fluctuations
+vector<double> cosmology::sigmaB(double M, double deltaH, double B) {
+    double RM = pow(3.0*M/(4.0*PI*rhoM0),1.0/3.0);
+    double DRM = RM/(3.0*M);
+    
+    double kmax = 1000.0/RM;
+    double kmin = 1.0e-6*kmax;
+    double dlogk = (log(kmax)-log(kmin))/(1.0*(Nk-1));
+    
+    double sigma2 = 0.0, dsigma2 = 0.0;
+    double k1, k2 = kmin;
+    for (int jk = 0; jk < Nk; jk++) {
+        k1 = k2;
+        k2 = exp(log(k2)+dlogk);
+        sigma2 += (k2-k1)*(pow(Ws(k1*RM)*DeltakB(k1,deltaH,B),2.0)/k1 + pow(Ws(k2*RM)*DeltakB(k2,deltaH,B),2.0)/k2)/2.0;
+        dsigma2 += (k2-k1)*(2.0*k2*DRM*DWs(k2*RM)*Ws(k2*RM)*pow(DeltakB(k2,deltaH,B),2.0)/k2 + 2.0*k1*DRM*DWs(k1*RM)*Ws(k1*RM)*pow(DeltakB(k1,deltaH,B),2.0)/k1)/2.0;
+    }
+    return {sqrt(sigma2), dsigma2/(2.0*sqrt(sigma2))};
+}
+
 
 // list of matter fluctuation variances, {M, sigma, dsigma/dM}
-vector<vector<double> > cosmology::sigmalistf(double m22, double m3, double kc) {
+vector<vector<double> > cosmology::sigmalistf(double m22, double m3, double kc, double B) {
     int Nextra = (int) ceil((NM-1)*log(3.0)/log(Mmax/Mmin)); // extend the M range for computation of dotM
     vector<vector<double> > Ms(NM+Nextra, vector<double> (3,0.0));
     
@@ -154,6 +174,9 @@ vector<vector<double> > cosmology::sigmalistf(double m22, double m3, double kc) 
         }
         if (kc > 0.0) {
             sigma = sigmaE(M, deltaH8, kc);
+        }
+        if (B > 0.0) {
+            sigma = sigmaB(M, deltaH8, B);
         }
         Ms[jM][0] = M;
         Ms[jM][1] = sigma[0];
@@ -180,25 +203,21 @@ double cosmology::pFC(double delta, double S) {
 
 // halo mass function and growth rate, {jz,jM} -> {dn/dlnM, dotM, dotM/dM}
 vector<vector<vector<double> > > cosmology::HMFlistf() {
-    
-    double dz = 0.01; // z step over which DeltaM is computed
-    double q = 0.75; // for computation of dotM
-    
-    double dlogz = (log(zmax)-log(zmin))/(1.0*(Nz-1));
     vector<vector<vector<double> > > dndlnM(Nz, vector<vector<double> > (NM, vector<double> (3,0.0)));
     
-    double z, M, Mp1, S, S2, Ddeltac, dMdt, dMdtp1;
+    double dz = 0.01; // z step over which DeltaM is computed
+    double z, M, Mp1, S, S2, Ddeltaell, dMdt, dMdtp1;
     vector<double> sigma, sigma2;
     for (int jz = 0; jz < Nz; jz++) {
         z = zlist[jz];
         
         sigma = sigmalist[0];
         S = pow(sigma[1],2.0);
-        Ddeltac = (deltaell(z+dz,S)-deltaell(z,S))/dz;
+        Ddeltaell = (deltaell(z+dz,S)-deltaell(z,S))/dz;
         M = sigma[0];
         sigma2 = interpolaten(2.0*M, sigmalist);
         S2 = pow(sigma2[1],2.0);
-        dMdt = (1+z)*Hz(z)*sqrt(2.0/PI)*Ddeltac/abs(2.0*sigma[1]*sigma[2])*sqrt(S-S2);
+        dMdt = (1+z)*Hz(z)*sqrt(2.0/PI)*Ddeltaell/abs(2.0*sigma[1]*sigma[2])*sqrt(S-S2);
         
         for (int jM = 0; jM < NM; jM++) {
             dndlnM[jz][jM][0] = -rhoM0*pFC(deltac(z),pow(sigma[1],2.0))*2.0*sigma[1]*sigma[2];
@@ -206,12 +225,12 @@ vector<vector<vector<double> > > cosmology::HMFlistf() {
             sigma = sigmalist[jM+1];
             S = pow(sigma[1],2.0);
             
-            Ddeltac = (deltaell(z+dz,S)-deltaell(z,S))/dz;
+            Ddeltaell = (deltaell(z+dz,S)-deltaell(z,S))/dz;
             
             Mp1 = sigma[0];
             sigma2 = interpolaten(2.0*Mp1, sigmalist);
             S2 = pow(sigma2[1],2.0);
-            dMdtp1 = (1+z)*Hz(z)*sqrt(2.0/PI)*Ddeltac/abs(2.0*sigma[1]*sigma[2])*sqrt(S-S2);
+            dMdtp1 = (1+z)*Hz(z)*sqrt(2.0/PI)*Ddeltaell/abs(2.0*sigma[1]*sigma[2])*sqrt(S-S2);
             
             dndlnM[jz][jM][1] = dMdt;
             dndlnM[jz][jM][2] = (dMdtp1 - dMdt)/(Mp1 - M);
@@ -223,12 +242,64 @@ vector<vector<vector<double> > > cosmology::HMFlistf() {
     return dndlnM;
 }
 
+// transition rate S->S0
+double cosmology::pTR(double delta, double Ddeltaell, double S, double S0) {
+    double p = 0.3;
+    double q = 0.8;
+    double a = 0.707;
+    
+    double nu = pow(delta,2.0)/S;
+    double nu0 = pow(delta,2.0)/S0;
+    
+    double Ap = 1.0/(1+pow(a*nu0,-p));
+    
+    return Ap/sqrt(2.0*PI)*(1.0+pow(a*nu,-p))*(1.0+pow(q*nu0,-p))/(1.0+pow(q*nu,-p))*pow(S/(S0*(S-S0)),3.0/2.0)*exp(-q*(nu0-nu)/2.0);
+}
+
+// halo merger rate, {jz,jM1,jM2} -> dR/dlnM1 dlnM2
+vector<vector<vector<double> > > cosmology::HMRlistf() {
+    vector<vector<vector<double> > > dRdlnM1dlnM2(Nz, vector<vector<double> > (NM, vector<double> (NM, 0.0)));
+    
+    double dz = 0.01; // z step over which DeltaM is computed
+    double z, M1, M2, Mb, Mf, S1, S2, Sb, Sf, dndlnMb, Ddeltaell;
+    int jMb;
+    vector<double> sigma1, sigma2, sigmaf;
+    for (int jz = 0; jz < Nz; jz++) {
+        z = zlist[jz];
+
+        for (int jM1 = 0; jM1 < NM; jM1++) {
+            sigma1 = sigmalist[jM1];
+            M1 = sigma1[0];
+            S1 = pow(sigma1[1],2.0);
+            
+            for (int jM2 = 0; jM2 < NM; jM2++) {
+                sigma2 = sigmalist[jM2];
+                M2 = sigma2[0];
+                S2 = pow(sigma2[1],2.0);
+                
+                jMb = min(jM1, jM2);
+                Mb = min(M1, M2);
+                Sb = max(S1, S2);
+                dndlnMb = HMFlist[jz][jMb][0];
+                
+                Mf = M1 + M2;
+                sigmaf = interpolaten(Mf, sigmalist);
+                Sf = pow(sigmaf[1],2.0);
+                Ddeltaell = (deltaell(z+dz,Sf)-deltaell(z,Sf))/dz;
+                
+                dRdlnM1dlnM2[jz][jM1][jM2] = dndlnMb*(1+z)*Hz(z)*abs(2.0*sigmaf[1]*sigmaf[2])*Mf*pTR(deltac(z), Ddeltaell, Sb, Sf);
+            }
+        }
+    }
+    return dRdlnM1dlnM2;
+}
+
 // first crossing probability for filaments
 double cosmology::pFCfil(double delta, double S) {
     double p = 0.0;
     double q = 0.7;
-    double A = 0.5;
-    
+    double A = 1.0/(1+pow(2.0,-p)*tgammaf(0.5-p)/sqrt(PI));
+
     double nu2 = 0.0;
     if (S > 0.0) {
         nu2 = pow(delta,2.0)/S;
@@ -239,7 +310,7 @@ double cosmology::pFCfil(double delta, double S) {
     return 0.0;
 }
 
-// filament mass function and growth rate, {jz,jM} -> dn_fil/dlnM
+// filament mass function, {jz,jM} -> dn_fil/dlnM
 vector<vector<double> > cosmology::FMFlistf() {
     
     double dz = 0.01; // z step over which DeltaM is computed

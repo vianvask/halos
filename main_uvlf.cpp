@@ -8,8 +8,8 @@ int main (int argc, char *argv[]) {
     cout << setprecision(6) << fixed;
     
     const int doUVfit = atoi(argv[1]); // 0: no, 1: yes
-    const int dm = atoi(argv[2]); // 0: cold DM, 1: fuzzy DM, 2: warm DM, 3: white noise
-        
+    const int dm = atoi(argv[2]); // 0: cold DM, 1: fuzzy DM, 2: warm DM, 3: white noise, 4: magnetic fields
+    
     // cosmological parameters: PDG values
     cosmology C;
     C.OmegaM = 0.315;
@@ -23,7 +23,7 @@ int main (int argc, char *argv[]) {
     // halo masses
     C.Mmin = 1.0e6;
     C.Mmax = 1.0e17;
-    C.NM = 2000;
+    C.NM = 200;
     
     // redshifts
     C.zmin = 0.01;

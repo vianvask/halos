@@ -47,10 +47,10 @@ int main (int argc, char *argv[]) {
     lensing L;
     L.Nreal = 4e5; // realizations
     L.Nhalos = 100; // number of halos in each realization
-    L.Nbins = 12; // P(lnmu) bins
+    L.Nbins = 12; // P(lnmu) bin widht = sigma/Nbins
     
-    // L.Plnmuf(C, 10.0, mt, 1, 1, 1, 1);
-
+    //L.Plnmuf(C, 5.0, mt, 1, 1, 1, 1);
+    
     double z, lnmu, DL0, DL, sigmaDL;
     vector<vector<double> > Plnmu;
     if (!fs::exists(C.outdir/"Plnmuz.dat")) {
@@ -183,7 +183,7 @@ int main (int argc, char *argv[]) {
     
     // MCMC scan parameters
     vector<double> par = {C.OmegaM, C.sigma8, C.h, 1.0};
-    vector<vector<double> > priors = {{0.19, 0.47}, {0.4, 1.5}, {0.59, 0.76}, {-0.6, 1.4}};
+    vector<vector<double> > priors = {{0.15, 0.47}, {0.4, 1.4}, {0.59, 0.76}, {-0.6, 1.4}};
     int Npar = par.size();
     
     // read catalogue
@@ -222,12 +222,12 @@ int main (int argc, char *argv[]) {
     }
     
     // generate MCMC chains
-    int Nsteps = 2000;
+    int Nsteps = 2400;
     int Nburnin = 200;
-    for (int j = 0; j < 8; j++) {
+    for (int j = 0; j < 4; j++) {
         L.Hubble_diagram_fit(C, 3.0e8, catalogue, par, steps, priors, Nsteps, Nburnin, lens, dm, mt, C.outdir/("lensing_chains_" + to_string(dm) + "_" + to_string(lens) + "_" + to_string(catl) + "_c_" + to_string(j) + ".dat"));
     }
-
+    
     time_req = clock() - time_req;
     cout << "Total evaluation time: " << ((double) time_req/CLOCKS_PER_SEC/60.0) << " min." << endl;
     

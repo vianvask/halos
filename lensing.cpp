@@ -321,7 +321,7 @@ double prior(double x, vector<double> &bounds) {
 }
 
 // sample N values from a PDF using Metropolis-Hastings MCMC sampler
-vector<vector<double> > MCMC_sampling(int N, int Nburnin, function<double(vector<double>&)> logpdf, vector<double> &initial, vector<double> &steps, vector<vector<double> > &priors, function<double(vector<double>&)> cut, rgen &mt, int print, string filename) {
+vector<vector<double> > MCMC_sampling(int N, int Nburnin, function<double(vector<double>&)> logpdf, vector<double> &initial, vector<double> &steps, vector<vector<double> > &priors, function<double(vector<double>&)> cut, rgen &mt, int print, fs::path filename) {
     
     ofstream outfile;
     if (print > 0) {
@@ -423,13 +423,17 @@ double findkappathr(int N, function<double(double)> Nf) {
 
 
 // probability distribution of lnmu, {lnmu, dP/dlnmu}
-vector<vector<double> > lensing::Plnmuf(cosmology &C, double zs, rgen &mt, int bias, int ell, int write) {
+vector<vector<double> > lensing::Plnmuf(cosmology &C, double zs, rgen &mt, int fil, int bias, int ell, int write) {
     
     // fix threshold kappa
     function<double(double)> NfNFW = [&C, zs](double kappa) {
         return NhfNFW(C, zs, kappa);
     };
     double kappathrH = findkappathr(Nhalos, NfNFW);
+    
+    if (write > 0) {
+        cout << kappathrH << endl;
+    }
         
     // distribution of kappa_NFW < kappa_thr
     double skappaW = sigmakappaW(C, zs, kappathrH);
@@ -448,7 +452,8 @@ vector<vector<double> > lensing::Plnmuf(cosmology &C, double zs, rgen &mt, int b
     vector<vector<vector<double> > > dNH = deltaNhfNFW(C, zs, kappathrH);
     vector<vector<vector<double> > > dNF = deltaNhfCYL(C, zs, kappathrH);
     if (write > 0) {
-        writeToFile(C.zlist, C.Mlist, dNH, "dNH.dat");
+        writeToFile(C.zlist, C.Mlist, dNH, C.outdir/"dNH.dat");
+        writeToFile(C.zlist, C.Mlist, dNF, C.outdir/"dNF.dat");
     }
     
     vector<double> kappagamma;
@@ -526,32 +531,14 @@ vector<vector<double> > lensing::Plnmuf(cosmology &C, double zs, rgen &mt, int b
                         }
                     }
                     
-                    // generate filaments
-                    if (lambda*barNF < 0.2) { // if lambda is small, compare to a random number U(0,1) (faster)
-                        if (lambda*barNF > randomreal(0.0, 1.0, mt)) {
-                            r = sqrt(randomreal(0.0,1.0,mt))*rmaxF; // distance from the line-of-sight
-                            phi = randomreal(0.0,2*PI,mt); // polar angle of r vector
-                            phiF = randomreal(0.0,2*PI,mt); // orientation of the filament
-                                                        
-                            kappagamma = kappagammaCYL(C, zs, zl, r, M, phiF);
-                            
-                            kappalist[j] += kappagamma[0];
-                            gamma1list[j] += cos(phi)*kappagamma[1];
-                            gamma2list[j] += sin(phi)*kappagamma[1];
-                            
-                            meankappa += kappagamma[0];
-                            
-                            NtotF++;
-                        }
-                    } else { // for larger lambda, generate number of halos from Poisson distribution (slower)
-                        PN = poisson_distribution<int>(lambda*barNF);
-                        NF = PN(mt);
-                        if (NF > 0) {
-                            for (int jF = 0; jF < NF; jF++) {
+                    if (fil > 0) {
+                        // generate filaments
+                        if (lambda*barNF < 0.2) { // if lambda is small, compare to a random number U(0,1) (faster)
+                            if (lambda*barNF > randomreal(0.0, 1.0, mt)) {
                                 r = sqrt(randomreal(0.0,1.0,mt))*rmaxF; // distance from the line-of-sight
                                 phi = randomreal(0.0,2*PI,mt); // polar angle of r vector
                                 phiF = randomreal(0.0,2*PI,mt); // orientation of the filament
-                                
+                                                            
                                 kappagamma = kappagammaCYL(C, zs, zl, r, M, phiF);
                                 
                                 kappalist[j] += kappagamma[0];
@@ -562,8 +549,29 @@ vector<vector<double> > lensing::Plnmuf(cosmology &C, double zs, rgen &mt, int b
                                 
                                 NtotF++;
                             }
+                        } else { // for larger lambda, generate number of halos from Poisson distribution (slower)
+                            PN = poisson_distribution<int>(lambda*barNF);
+                            NF = PN(mt);
+                            if (NF > 0) {
+                                for (int jF = 0; jF < NF; jF++) {
+                                    r = sqrt(randomreal(0.0,1.0,mt))*rmaxF; // distance from the line-of-sight
+                                    phi = randomreal(0.0,2*PI,mt); // polar angle of r vector
+                                    phiF = randomreal(0.0,2*PI,mt); // orientation of the filament
+                                    
+                                    kappagamma = kappagammaCYL(C, zs, zl, r, M, phiF);
+                                    
+                                    kappalist[j] += kappagamma[0];
+                                    gamma1list[j] += cos(phi)*kappagamma[1];
+                                    gamma2list[j] += sin(phi)*kappagamma[1];
+                                    
+                                    meankappa += kappagamma[0];
+                                    
+                                    NtotF++;
+                                }
+                            }
                         }
                     }
+                    
                 }
             }
         }
@@ -595,10 +603,10 @@ vector<vector<double> > lensing::Plnmuf(cosmology &C, double zs, rgen &mt, int b
         vector<vector<double> > Pln1pkappa = binSample(ln1pkappalist, Nbins);
         vector<vector<double> > Plngamma = binSample(lngammalist, Nbins);
             
-        writeToFile(Plnmu,"Plnmu_z=" + to_string_prec(zs,1) + ".dat");
-        writeToFile(PlnmuA,"PlnmuA_z=" + to_string_prec(zs,1) + ".dat");
-        writeToFile(Pln1pkappa,"Pln1pkappa_z=" + to_string_prec(zs,1) + ".dat");
-        writeToFile(Plngamma,"Plngamma_z=" + to_string_prec(zs,1) + ".dat");
+        writeToFile(Plnmu, C.outdir/("Plnmu_z=" + to_string_prec(zs,1) + ".dat"));
+        writeToFile(PlnmuA, C.outdir/("PlnmuA_z=" + to_string_prec(zs,1) + ".dat"));
+        writeToFile(Pln1pkappa, C.outdir/("Pln1pkappa_z=" + to_string_prec(zs,1) + ".dat"));
+        writeToFile(Plngamma, C.outdir/("Plngamma_z=" + to_string_prec(zs,1) + ".dat"));
     }
     
     int jmin = 0, jmax = Plnmu.size()-1;
@@ -673,7 +681,7 @@ double lensing::loglikelihood(cosmology &C, double DLthr, vector<vector<double> 
         vector<vector<vector<double> > > Plnmuz(C.Zlist.size());
         for (int jz = 0; jz < C.Zlist.size(); jz++) {
             z = C.Zlist[jz];
-            Plnmuz[jz] = Plnmuf(C, z, mt, 1, 1, 0);
+            Plnmuz[jz] = Plnmuf(C, z, mt, 1, 1, 1, 0);
         }
         
         int jz;
@@ -686,7 +694,7 @@ double lensing::loglikelihood(cosmology &C, double DLthr, vector<vector<double> 
             sigmaDL = data[j][2];
             
             // find the closest z at which P(lnmu) is computed
-            jz = lower_bound(C.Zlist.begin(), C.Zlist.end(), z)- C.Zlist.begin();
+            jz = lower_bound(C.Zlist.begin(), C.Zlist.end(), z) - C.Zlist.begin();
             if ((jz > 0 && C.Zlist[jz]-z > z-C.Zlist[jz-1]) || jz >= C.Zlist.size()) {
                 jz--;
             }
@@ -717,7 +725,7 @@ double lensing::loglikelihood(cosmology &C, double DLthr, vector<vector<double> 
 }
 
 // MCMC inference of the Hubble diagram data
-void lensing::Hubble_diagram_fit(cosmology &C, double DLthr, vector<vector<double> > &data, vector<double> &initial, vector<double> &steps , vector<vector<double> > &priors, int N, int Nburnin, int lens, int dm, rgen &mt, string filename) {
+void lensing::Hubble_diagram_fit(cosmology &C, double DLthr, vector<vector<double> > &data, vector<double> &initial, vector<double> &steps , vector<vector<double> > &priors, int N, int Nburnin, int lens, int dm, rgen &mt, fs::path filename) {
     
     // loglikelihood
     function<double(vector<double>&)> pdf = [this, &C, DLthr, &data, lens, dm, &mt](vector<double> &par) {
