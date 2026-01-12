@@ -3,16 +3,16 @@
 
 
 // read lensing amplification distribution
-vector<vector<vector<double> > > getPlnmu() {
+vector<vector<vector<double> > > getPlnmu(fs::path filename) {
     vector<vector<double> > Plnmu;
     vector<vector<vector<double> > > Plnmuz;
     
     double z;
+    vector<double> tmp(2, 0.0);
     
     ifstream infile;
-    infile.open("Plnmu.dat");
+    infile.open(filename);
     if (infile) {
-        vector<double> tmp(2,0.0);
         int jA = 0;
         double A;
         z = 0;
@@ -42,6 +42,28 @@ vector<vector<vector<double> > > getPlnmu() {
         cout << "Plnmu.dat missing." << endl;
     }
     infile.close();
+        
+    double dlnmu;
+    for (int jz = 0; jz < Plnmuz.size(); jz++) {
+        
+        // find the element where the second component is 0
+        auto vec = Plnmuz[jz];
+        auto it = std::find_if(vec.begin(), vec.end(), [](const std::vector<double> &v) { return v.size() > 1 && v[1] == 0.0; });
+
+        // erase from that point to the end
+        vec.erase(it, vec.end());
+                
+        // extrapolate
+        dlnmu = vec[vec.size()-1][0] - vec[vec.size()-2][0];
+        while (vec.back()[0] < 1000.0) {
+            tmp[0] = vec.back()[0] + dlnmu;
+            tmp[1] = vec.back()[1]*exp(-3.0*dlnmu);
+            
+            vec.push_back(tmp);
+        }
+        
+        Plnmuz[jz] = vec;
+    }
     
     return Plnmuz;
 }
@@ -263,7 +285,7 @@ void writeUVLF(cosmology &C, double logMt, double Mc, double epsilon, double alp
     }
     
     ofstream outfile;
-    outfile.open(filename);
+    outfile.open(C.outdir/filename);
     outfile << scientific << setprecision(12);
 
     double z, MUV, M, Phi0, Phi1, Phi2;
@@ -459,7 +481,7 @@ vector<double> UVLFfit(cosmology &C, vector<vector<double> > &priors, int Nsteps
     
     // output the MCMC chains and find the best fit
     ofstream outfile;
-    outfile.open(filename);
+    outfile.open(C.outdir/filename);
     int jmax = 0;
     double logLmax = 0.0;
     vector<double> initial(Npar,0.0);

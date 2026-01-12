@@ -60,6 +60,7 @@ int main (int argc, char *argv[]) {
         outfile2.open(C.outdir/"PDL.dat");
         
         C.Zlist = {0.05, 0.1, 0.2, 0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0, 6.0, 8.0, 10.0};
+        //C.Zlist = {4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.5, 14.5, 17.0, 25.};
         
         vector<vector<double> > PDL;
         vector<double> sample, DLCL(2,0.0);

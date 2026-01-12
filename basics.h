@@ -10,7 +10,7 @@
 
 
 using namespace std;
-namespace fs = std::filesystem;
+namespace fs = filesystem;
 
 typedef mt19937_64 rgen;
 

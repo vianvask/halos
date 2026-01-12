@@ -46,13 +46,15 @@ int main (int argc, char *argv[]) {
     C.Nkc = 50;
     
     cout << "Computing halo mass functions..." << endl;
+    
+    C.outdir = "dataU";
     C.initialize(dm);
     
     cout << "Reading lensing amplifications..." << endl;
     C.Zlist = {4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 10.0, 11.0, 12.5, 14.5, 17.0, 25.0};
-    C.Plnmuz = getPlnmu();    
+    C.Plnmuz = getPlnmu(C.outdir/"Plnmuz.dat");
     if (C.Plnmuz.size() != C.Zlist.size()) {
-        cout << "Wrong Plnmu.dat file." << endl;
+        cout << "Wrong Plnmu file." << endl;
         return 0;
     }
     
