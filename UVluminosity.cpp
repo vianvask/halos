@@ -316,15 +316,15 @@ void writeUVLF(cosmology &C, double logMt, double Mc, double epsilon, double alp
 /* ---------------------------------------------------------------------------------------------------------------------------------------------- */
 
 // read UV luminosity data, {z, MUV, Phi, +sigmaPhi, -sigmaPhi}
-vector<vector<double> > readUVdata(vector<string> filenames) {
+vector<vector<double> > readUVdata(vector<fs::path> filedir) {
     vector<vector<double> > data;
     vector<double> row(5,0.0);
     int jrow = 0;
     double A;
     
     ifstream infile;
-    for (int j = 0; j < filenames.size(); j++) {
-        infile.open(filenames[j]);
+    for (int j = 0; j < filedir.size(); j++) {
+        infile.open(filedir[j]);
         if (infile) {
             while (infile >> A) {
                 row[jrow] = A;
@@ -335,11 +335,10 @@ vector<vector<double> > readUVdata(vector<string> filenames) {
                 }
             }
         } else {
-            cout << "couldn't open " << filenames[j] << endl;
+            cout << "couldn't open " << filedir[j] << endl;
         }
         infile.close();
     }
-    
     return data;
 }
 
@@ -384,7 +383,11 @@ vector<double> UVLFfit(cosmology &C, vector<vector<double> > &priors, int Nsteps
     
     // read UV luminosity data files, {MUV, Phi, +sigmaPhi, -sigmaPhi}
     vector<string> datafiles {"UVLF_2102.07775.txt", "UVLF_2108.01090.txt", "UVLF_2403.03171.txt", "UVLF_2503.15594.txt", "UVLF_2504.05893.txt", "UVLF_2505.11263.txt"};
-    vector<vector<double> > data = readUVdata(datafiles);
+    vector<fs::path> datadir(datafiles.size());
+    for (int j = 0; j < datadir.size(); j++) {
+        datadir[j] = C.outdir/datafiles[j];
+    }
+    vector<vector<double> > data = readUVdata(datadir);
     
     int Npar = priors.size();
     
