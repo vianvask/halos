@@ -145,11 +145,17 @@ private:
         return pow(DeltakE(k, deltaH, kc)*Dg(z), 2.0)/(pow(k,3.0)/(2.0*pow(PI,2.0)));
     }
     
+    vector<double> kBlist;
     vector<vector<double> > DeltaBlist;
-    
+
     // magnetic field enhanced matter power spectrum
     double DeltakB(double k, double deltaH, double B) {
-        return sqrt(pow(Deltak(k, deltaH),2.0) + pow(interpolate(k/h*1000.0, DeltaBlist),2.0));
+        if (k/h*1000.0 > kBlist.front() && k/h*1000.0 < kBlist.back()) {
+            double kmin = kBlist.front()*h/1000.0;
+            double correction = Deltak(kmin, deltaH)/sqrt(pow(10.0, interpolate2(B, kmin/h*1000.0, Blist, kBlist, DeltaBlist)));
+            return correction*sqrt(pow(10.0, interpolate2(B, k/h*1000.0, Blist, kBlist, DeltaBlist)));
+        }
+        return Deltak(k, deltaH);
     }
     double PlinB(double z, double k, double deltaH, double B) {
         return pow(DeltakB(k, deltaH, B)*Dg(z), 2.0)/(pow(k,3.0)/(2.0*pow(PI,2.0)));
@@ -271,6 +277,11 @@ public:
     vector<vector<vector<double> > > EDMsigmalist;
     vector<vector<vector<vector<double> > > > EDMHMFlist;
     vector<vector<vector<double> > > EDMFMFlist;
+    
+    vector<double> Blist;
+    vector<vector<vector<double> > > BDMsigmalist;
+    vector<vector<vector<vector<double> > > > BDMHMFlist;
+    vector<vector<vector<double> > > BDMFMFlist;
     
     void initialize0() {
         
@@ -394,19 +405,55 @@ public:
             writeToFile(kclist, zlist, Mlist, EDMHMFlist, outdir/"HMF_EDM.dat");
         }
         if (dm == 4) {
-            double B = 0.2;
-            DeltaBlist = readdataCSV("PS_PMF.csv");
+            // read Delta spectra for different B values and extract list of B and k values
+            vector<vector<double> > tmp  = readdata(outdir/"DeltaB/DeltaB.dat",3);
             
-            // fix deltaH to match the input sigma8
-            deltaH8 = sigma8/sigmaB(M8, 1.0, B)[0];
-                        
-            // halo mass function and halo growth rate
-            sigmalist = sigmalistf(0.0, 0.0, 0.0, B);
-            HMFlist = HMFlistf();
-            halobiaslist = halobiaslistf();
+            set<double> xs, ys;
+            for (const auto &row : tmp) {
+                xs.insert(row[0]);
+                ys.insert(row[1]);
+            }
+            Blist.assign(xs.begin(), xs.end());
+            kBlist.assign(ys.begin(), ys.end());
+
+            xs.clear(); ys.clear();
+            map<double,int> x_index, y_index;
+            for (int i = 0; i < Blist.size(); ++i) {
+                x_index[Blist[i]] = i;
+            }
+            for (int j = 0; j < kBlist.size(); ++j) {
+                y_index[kBlist[j]] = j;
+            }
+
+            vector<vector<double> > tmp2(Blist.size(), vector<double>(kBlist.size()));
+            for (const auto &row : tmp) {
+                double x = row[0];
+                double y = row[1];
+                double z = row[2];
+                
+                int jx = x_index[x];
+                int jy = y_index[y];
+
+                tmp2[jx][jy] = log10(z);
+            }
+            DeltaBlist = tmp2;
+            tmp.clear(); tmp2.clear();
             
-            writeToFile(sigmalist, outdir/"sigma_B.dat");
-            writeToFile(zlist, Mlist, HMFlist, outdir/"HMF_B.dat");
+            for (double B : Blist) {
+                // fix deltaH to match the input sigma8
+                deltaH8 = sigma8/sigmaC(M8, 1.0)[0];
+                                
+                // halo mass function and halo growth rate
+                sigmalist = sigmalistf(0.0, 0.0, 0.0, B);
+                HMFlist = HMFlistf();
+                halobiaslist = halobiaslistf();
+                
+                BDMsigmalist.push_back(sigmalist);
+                BDMHMFlist.push_back(HMFlist);
+            }
+            
+            writeToFile(Blist, BDMsigmalist, outdir/"sigma_BDM.dat");
+            writeToFile(Blist, zlist, Mlist, BDMHMFlist, outdir/"HMF_BDM.dat");
         }
     }
     
@@ -438,7 +485,7 @@ public:
             HMFlist = HMFlistf();
             halobiaslist = halobiaslistf();
         }
-        if (dm == 4) {
+        if (dm == 4) { // TODO: look how this case is done above and adapt
             deltaH8 = sigma8/sigmaB(M8, 1.0, x)[0];
             sigmalist = sigmalistf(0.0, 0.0, 0.0, x);
             HMFlist = HMFlistf();

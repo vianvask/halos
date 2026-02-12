@@ -59,28 +59,38 @@ int main (int argc, char *argv[]) {
     }
     
     cout << "Computing UV luminosity functions..." << endl;
-    
+   
     // parameters: (logMt, Mc, epsilon, alpha, beta, gamma, zc, fkappa, ze, z0, sigmaUV, logm)
-    vector<double> bf = {7.94, 4.00e11, 0.0612, 0.882, 0.404, 0.272, 10.73, 0.292, 12.7, 22.9, 0.068, -1.6};
-    //vector<double> bf = {7.94, 4.00e11, 0.0612, 0.882, 0.404, 0.272, 10.73, 0.292, 12.7, 22.9, 0.068, 0.75};
-    //vector<double> bf = {7.94, 4.00e11, 0.0612, 0.882, 0.404, 0.272, 10.73, 0.292, 26, 36, 0.068, 0.75};
-    //vector<double> bf = {7.94, 4.00e11, 0.0612, 0.882, 0.404, 0.272, 26, 1.0, 26, 36, 0.068, 0.75};
-
+    vector<double> bf = {7.2, 3.9e11, 0.061, 0.88, 0.40, 0.2, 10.7, 0.34, 12.0, 28.0, 0.0, -1.0};
+    
     if (doUVfit == 1) {
-        int Nsteps = 10000; // chain length without burn-in
-        int Nburnin = 2000; // burn-in
+        int Nsteps = 1000; // chain length without burn-in
+        int Nburnin = 100; // burn-in
         int Nchains = 8; // number of chains
         double xstep = 16.0; // step size = prior range/xstep
         
-        // prior of the beyond CDM parameter is determined from the range given above
-        vector<vector<double> > priors = {{6.0,10.0}, {3.0e11, 5.0e11}, {0.0563, 0.0658}, {0.6, 1.1}, {0.2, 0.6}, {0.05, 0.6}, {9.8, 11.4}, {0.05, 0.7}, {7.0, 25.0}, {16.0, 36.0}, {0.05, 0.2}};
+        // parameters: (logMt, Mc, epsilon, alpha, beta, gamma, zc, fkappa, ze, z0, sigmaUV)
+        vector<vector<double> > priors = {{6.0,10.0}, {2.4e11, 5.2e11}, {0.0562, 0.0690}, {0.6, 1.1}, {0.2, 0.6}, {0.05, 0.6}, {9.8, 11.4}, {0.05, 0.7}, {7.0, 25.0}, {16.0, 36.0}, {0.0, 0.0}};
+        
+        if (dm == 1) {
+            priors.push_back({log10(C.m22list.front()), log10(C.m22list.back())});
+        }
+        if (dm == 2) {
+            priors.push_back({log10(C.m3list.front()), log10(C.m3list.back())});
+        }
+        if (dm == 3) {
+            priors.push_back({log10(C.kclist.front()), log10(C.kclist.back())});
+        }
+        if (dm == 4) {
+            priors.push_back({log10(C.Blist.front()), log10(C.Blist.back())});
+        }
         
         bf = UVLFfit(C, priors, Nsteps, Nburnin, Nchains, xstep, dm);
     }
     
     // output the UV luminosity function for the best fit
     writeUVLF(C, bf[0], bf[1], bf[2], bf[3], bf[4], bf[5], bf[6], bf[7], bf[8], bf[9], bf[10], bf[11], dm);
-
+    
     time_req = clock() - time_req;
     cout << "Total evaluation time: " << ((double) time_req/CLOCKS_PER_SEC/60.0) << " min." << endl;
     

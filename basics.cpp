@@ -1,16 +1,8 @@
 #include "basics.h"
 
-string to_string_prec(double a, const int n) {
-    ostringstream out;
-    out.precision(n);
-    out << fixed << a;
-    return out.str();
-}
-
-bool fileExists(const string& filename) {
-    ifstream file(filename);
-    return file.good();
-}
+/* ---------------------------------------------------------------------------------------------------------------------------------------------- */
+/*                                                         generate lists                                                                         */
+/* ---------------------------------------------------------------------------------------------------------------------------------------------- */
 
 // generates a list in linear scale
 vector<double> linlist(double xmin, double xmax, int Nx) {
@@ -46,6 +38,199 @@ vector<double> loglist(double xmin, double xmax, int Nx) {
     }
 }
 
+
+/* ---------------------------------------------------------------------------------------------------------------------------------------------- */
+/*                                                       outputs and inputs                                                                       */
+/* ---------------------------------------------------------------------------------------------------------------------------------------------- */
+
+string to_string_prec(double a, const int n) {
+    ostringstream out;
+    out.precision(n);
+    out << fixed << a;
+    return out.str();
+}
+
+bool fileExists(const string& filename) {
+    ifstream file(filename);
+    return file.good();
+}
+
+void writeToFile(vector<double> &row, const string &filename) {
+    ofstream outFile(filename);
+    for (int j = 0; j < row.size(); j++) {
+        outFile << row[j];
+        if (j < row.size() - 1) {
+            outFile << endl;
+        }
+    }
+    outFile.close();
+}
+
+void writeToFile(vector<vector<double> > &matrix, const string &filename) {
+    ofstream outFile(filename);
+    for (auto& row : matrix) {
+        for (int j = 0; j < row.size(); j++) {
+            outFile << row[j];
+            if (j < row.size() - 1) {
+                outFile << "   ";
+            }
+        }
+        outFile << endl;
+    }
+    outFile.close();
+}
+
+void writeToFile(vector<double> &x, vector<vector<vector<double> > > &cubic, const string &filename) {
+    ofstream outFile(filename);
+    vector<vector<double> > matrix;
+    for (int jx = 0; jx < x.size(); jx++) {
+        matrix = cubic[jx];
+        for (auto& row : matrix) {
+            outFile << x[jx] << "   ";
+            for (int j = 0; j < row.size(); j++) {
+                outFile << row[j];
+                if (j < row.size() - 1) {
+                    outFile << "   ";
+                }
+            }
+            outFile << endl;
+        }
+    }
+    outFile.close();
+}
+
+void writeToFile(vector<double> &x, vector<double> &y, vector<vector<double> > &f, const string &filename) {
+    ofstream outFile(filename);
+    for (int jx = 0; jx < x.size(); jx++) {
+        for (int jy = 0; jy < y.size(); jy++) {
+            outFile << x[jx] << "   " << y[jy] << "   " << f[jx][jy] << "   " << endl;
+        }
+    }
+    outFile.close();
+}
+
+void writeToFile(vector<double> &x, vector<double> &y, vector<vector<vector<double> > > &f, const string &filename) {
+    ofstream outFile(filename);
+    for (int jx = 0; jx < x.size(); jx++) {
+        for (int jy = 0; jy < y.size(); jy++) {
+            outFile << x[jx] << "   " << y[jy] << "   ";
+            for (int j = 0; j < f[jx][jy].size(); j++) {
+                outFile << f[jx][jy][j];
+                outFile << "   ";
+            }
+            outFile << endl;
+        }
+    }
+    outFile.close();
+}
+
+void writeToFile(vector<double> &x, vector<double> &y, vector<double> &z, vector<vector<vector<double> > > &f, const string &filename) {
+    ofstream outFile(filename);
+    for (int jx = 0; jx < x.size(); jx++) {
+        for (int jy = 0; jy < y.size(); jy++) {
+            for (int jz = 0; jz < z.size(); jz++) {
+                outFile << x[jx] << "   " << y[jy] << "   " << z[jz] << "   " << f[jx][jy][jz] << endl;
+            }
+        }
+    }
+    outFile.close();
+}
+
+void writeToFile(vector<double> &x, vector<double> &y, vector<double> &z, vector<vector<vector<vector<double> > > > &f, const string &filename) {
+    ofstream outFile(filename);
+    for (int jx = 0; jx < x.size(); jx++) {
+        for (int jy = 0; jy < y.size(); jy++) {
+            for (int jz = 0; jz < z.size(); jz++) {
+                outFile << x[jx] << "   " << y[jy] << "   " << z[jz] << "   ";
+                for (int j = 0; j < f[jx][jy][jz].size(); j++) {
+                    outFile << f[jx][jy][jz][j];
+                    outFile << "   ";
+                }
+                outFile << endl;
+            }
+        }
+    }
+    outFile.close();
+}
+
+// read list
+vector<double> readdata(fs::path filename) {
+    vector<double> data;
+    int jrow = 0;
+    double A;
+    
+    ifstream infile;
+    infile.open(filename);
+    if (infile) {
+        while (infile >> A) {
+            data.push_back(A);
+        }
+    } else {
+        cout << "couldn't open " << filename << endl;
+    }
+    infile.close();
+    return data;
+}
+
+// read data
+vector<vector<double> > readdata(fs::path filename, int N) {
+    vector<vector<double> > data;
+    vector<double> row(N,0.0);
+    int jrow = 0;
+    double A;
+    
+    ifstream infile;
+    infile.open(filename);
+    if (infile) {
+        while (infile >> A) {
+            row[jrow] = A;
+            jrow++;
+            if (jrow == N) {
+                jrow = 0;
+                data.push_back(row);
+            }
+        }
+    } else {
+        cout << "couldn't open " << filename << endl;
+    }
+    infile.close();
+    return data;
+}
+
+// read data
+vector<vector<double> > readdataCSV(fs::path filename) {
+    vector<vector<double> > data;
+    string line;
+    int jrow = 0;
+    double A;
+    
+    ifstream infile;
+    infile.open(filename); // skip the first row (column names)
+        
+    if (infile) {
+        getline(infile, line);
+        
+        while (getline(infile, line)) {
+            stringstream ss(line);
+            string token;
+            vector<double> row;
+            
+            while (std::getline(ss, token, ',')) {
+                row.push_back(stod(token));
+            }
+            data.push_back(row);
+        }
+    } else {
+        cout << "couldn't open " << filename << endl;
+    }
+    infile.close();
+    return data;
+}
+
+/* ---------------------------------------------------------------------------------------------------------------------------------------------- */
+/*                                                         random numbers                                                                         */
+/* ---------------------------------------------------------------------------------------------------------------------------------------------- */
+
 // random real number in the range (x_1,x_2)
 double randomreal(double x1, double x2, rgen &mt) {
     long double r01 = mt()/(1.0*mt.max());
@@ -66,6 +251,10 @@ double logNPDF(double x, double mu, double sigma) {
     return (-pow((x-mu)/sigma,2.0) - log(2*PI) - 2.0*log(sigma))/2.0;
 }
 
+
+/* ---------------------------------------------------------------------------------------------------------------------------------------------- */
+/*                                                          interpolation                                                                         */
+/* ---------------------------------------------------------------------------------------------------------------------------------------------- */
 
 // linear interpolation
 // xy[all][0] must be strictly increasing or strictly decreasing
@@ -223,6 +412,11 @@ double interpolate2(double x0, double y0, vector<double> &x, vector<double> &y, 
     return tmp;
 }
 
+
+/* ---------------------------------------------------------------------------------------------------------------------------------------------- */
+/*                                                           statistics                                                                           */
+/* ---------------------------------------------------------------------------------------------------------------------------------------------- */
+
 // variance of a sample
 double variance(vector<double> &sample) {
     double mean = accumulate(sample.begin(), sample.end(), 0.0)/(1.0*sample.size());
@@ -246,7 +440,6 @@ vector<double> findMinMax(vector<vector<double> > &sample2, int j) {
     
     return findMinMax(sample);
 }
-
 
 // bin a sample
 vector<vector<double> > binSample(vector<double> &sample, int N) {
@@ -331,171 +524,107 @@ vector<double> sampleFromPDF(vector<vector<double> > &pdf, int N, rgen &mt) {
     return sampleFromCDF(cdf, N, mt);
 }
 
-void writeToFile(vector<double> &row, const string &filename) {
-    ofstream outFile(filename);
-    for (int j = 0; j < row.size(); j++) {
-        outFile << row[j];
-        if (j < row.size() - 1) {
-            outFile << endl;
-        }
+
+/* ---------------------------------------------------------------------------------------------------------------------------------------------- */
+/*                                                           MCMC sampler                                                                         */
+/* ---------------------------------------------------------------------------------------------------------------------------------------------- */
+
+// flat priors
+double prior(double x, vector<double> &bounds) {
+    double lower = bounds[0], upper = bounds[1];
+    if (lower == upper) {
+        return 1.0;
     }
-    outFile.close();
+    if (x < lower || x > upper) {
+        return 0.0;
+    }
+    return 1.0/(upper-lower);
 }
 
-void writeToFile(vector<vector<double> > &matrix, const string &filename) {
-    ofstream outFile(filename);
-    for (auto& row : matrix) {
-        for (int j = 0; j < row.size(); j++) {
-            outFile << row[j];
-            if (j < row.size() - 1) {
-                outFile << "   ";
-            }
-        }
-        outFile << endl;
-    }
-    outFile.close();
-}
-
-void writeToFile(vector<double> &x, vector<vector<vector<double> > > &cubic, const string &filename) {
-    ofstream outFile(filename);
-    vector<vector<double> > matrix;
-    for (int jx = 0; jx < x.size(); jx++) {
-        matrix = cubic[jx];
-        for (auto& row : matrix) {
-            outFile << x[jx] << "   ";
-            for (int j = 0; j < row.size(); j++) {
-                outFile << row[j];
-                if (j < row.size() - 1) {
-                    outFile << "   ";
-                }
-            }
-            outFile << endl;
-        }
-    }
-    outFile.close();
-}
-
-void writeToFile(vector<double> &x, vector<double> &y, vector<vector<double> > &f, const string &filename) {
-    ofstream outFile(filename);
-    for (int jx = 0; jx < x.size(); jx++) {
-        for (int jy = 0; jy < y.size(); jy++) {
-            outFile << x[jx] << "   " << y[jy] << "   " << f[jx][jy] << "   " << endl;
-        }
-    }
-    outFile.close();
-}
-
-void writeToFile(vector<double> &x, vector<double> &y, vector<vector<vector<double> > > &f, const string &filename) {
-    ofstream outFile(filename);
-    for (int jx = 0; jx < x.size(); jx++) {
-        for (int jy = 0; jy < y.size(); jy++) {
-            outFile << x[jx] << "   " << y[jy] << "   ";
-            for (int j = 0; j < f[jx][jy].size(); j++) {
-                outFile << f[jx][jy][j];
-                outFile << "   ";
-            }
-            outFile << endl;
-        }
-    }
-    outFile.close();
-}
-
-void writeToFile(vector<double> &x, vector<double> &y, vector<double> &z, vector<vector<vector<double> > > &f, const string &filename) {
-    ofstream outFile(filename);
-    for (int jx = 0; jx < x.size(); jx++) {
-        for (int jy = 0; jy < y.size(); jy++) {
-            for (int jz = 0; jz < z.size(); jz++) {
-                outFile << x[jx] << "   " << y[jy] << "   " << z[jz] << "   " << f[jx][jy][jz] << endl;
-            }
-        }
-    }
-    outFile.close();
-}
-
-void writeToFile(vector<double> &x, vector<double> &y, vector<double> &z, vector<vector<vector<vector<double> > > > &f, const string &filename) {
-    ofstream outFile(filename);
-    for (int jx = 0; jx < x.size(); jx++) {
-        for (int jy = 0; jy < y.size(); jy++) {
-            for (int jz = 0; jz < z.size(); jz++) {
-                outFile << x[jx] << "   " << y[jy] << "   " << z[jz] << "   ";
-                for (int j = 0; j < f[jx][jy][jz].size(); j++) {
-                    outFile << f[jx][jy][jz][j];
-                    outFile << "   ";
-                }
-                outFile << endl;
-            }
-        }
-    }
-    outFile.close();
-}
-
-// read list
-vector<double> readdata(fs::path filename) {
-    vector<double> data;
-    int jrow = 0;
-    double A;
+// sample N values from a PDF using Metropolis-Hastings MCMC sampler
+vector<vector<double> > MCMC_sampling(int N, int Nburnin, function<double(vector<double>&)> logpdf, vector<double> &initial, vector<double> &steps, vector<vector<double> > &priors, function<double(vector<double>&)> cut, rgen &mt, int print, int printL, fs::path filename) {
     
-    ifstream infile;
-    infile.open(filename);
-    if (infile) {
-        while (infile >> A) {
-            data.push_back(A);
-        }
-    } else {
-        cout << "couldn't open " << filename << endl;
+    ofstream outfile;
+    if (print > 0) {
+        outfile.open(filename);
     }
-    infile.close();
-    return data;
-}
-
-// read data
-vector<vector<double> > readdata(fs::path filename, int N) {
-    vector<vector<double> > data;
-    vector<double> row(N,0.0);
-    int jrow = 0;
-    double A;
     
-    ifstream infile;
-    infile.open(filename);
-    if (infile) {
-        while (infile >> A) {
-            row[jrow] = A;
-            jrow++;
-            if (jrow == N) {
-                jrow = 0;
-                data.push_back(row);
-            }
-        }
-    } else {
-        cout << "couldn't open " << filename << endl;
+    vector<vector<double> > samples(N);
+    int Npar = initial.size();
+    
+    // create normal distributions for each parameter based on its proposal width
+    vector<normal_distribution<>> proposal_distributions;
+    for (double step : steps) {
+        proposal_distributions.push_back(normal_distribution<>(0.0, step));
     }
-    infile.close();
-    return data;
-}
-
-// read data
-vector<vector<double> > readdataCSV(fs::path filename) {
-    vector<vector<double> > data;
-    string line;
-    int jrow = 0;
-    double A;
     
-    ifstream infile;
-    infile.open(filename);
-    if (infile) {
-        while (getline(infile, line)) {
-            stringstream ss(line);
-            string token;
-            vector<double> row;
+    vector<double> current = initial;
+    double logpcurrent = logpdf(current);
+    
+    vector<double> prop;
+    double logpprop, priorratio, paccept;
+    int nnew = 0;
+    for (int j = -Nburnin; j < N;) {
+        
+        // propose new point
+        prop = current;
+        for (int i = 0; i < Npar; i++) {
+            prop[i] += proposal_distributions[i](mt);
+        }
+        
+        // compute prior ratio
+        priorratio = 1.0;
+        for (int i = 0; i < Npar; i++) {
+            priorratio *= prior(prop[i], priors[i])/prior(current[i], priors[i]);
+        }
+        
+        // apply the cut
+        if (priorratio > 0.0) {
+            priorratio = cut(prop);
+        }
+        
+        if (priorratio > 0.0) {
+            logpprop = logpdf(prop);
+            paccept = randomreal(0.0,1.0,mt);
             
-            while (std::getline(ss, token, ',')) {
-                row.push_back(stod(token));
+            // accept or reject the proposed sample
+            if (log(paccept) < logpprop - logpcurrent - log(priorratio)) {
+                current = prop;
+                logpcurrent = logpprop;
+                if (j >= 0) {
+                    nnew++;
+                }
             }
-            data.push_back(row);
+            
+            // after burn-in, add the element to the chain
+            if (j >= 0) {
+                if (print > 0) {
+                    for (int jp = 0; jp < Npar; jp++) {
+                        outfile << current[jp] << "   ";
+                    }
+                    if (printL > 0) {
+                        outfile << logpcurrent;
+                    }
+                    outfile << endl;
+                }
+                samples[j] = current;
+                if (printL > 0) {
+                    samples[j].push_back(logpcurrent);
+                }
+            }
+            j++;
         }
-    } else {
-        cout << "couldn't open " << filename << endl;
+        
+        if (print > 0) {
+            cout << j << "   " << nnew << "   " << "\r" << flush;
+        }
     }
-    infile.close();
-    return data;
+    
+    if (print > 0) {
+        outfile.close();
+        cout << "acceptance ratio = " << nnew/(1.0*N) << endl;
+    }
+    
+    return samples;
 }
+

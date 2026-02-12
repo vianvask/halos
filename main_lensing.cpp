@@ -194,7 +194,7 @@ int main (int argc, char *argv[]) {
         if (catl == 0) {
             catalogue = readdata(C.outdir/"SNcatalogue.dat", 3);
             par = {0.33, 0.8, 0.7, 0.0};
-            priors = {{0.1, 0.6}, {0.4, 1.4}, {0.699, 0.701}, {-0.1, 0.1}};
+            priors = {{0.05, 0.55}, {0.1, 2.0}, {0.699, 0.701}, {-0.1, 0.1}};
         } else if (catl == 1) {
             catalogue = readdata(C.outdir/"catalogueSMBH.dat", 3);
         } else {

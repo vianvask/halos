@@ -305,104 +305,6 @@ double NhfCYL(cosmology &C, double zs, double kappathr) {
 
 
 /* ---------------------------------------------------------------------------------------------------------------------------------------------- */
-/*                                                           MCMC sampler                                                                         */
-/* ---------------------------------------------------------------------------------------------------------------------------------------------- */
-
-// flat priors
-double prior(double x, vector<double> &bounds) {
-    double lower = bounds[0], upper = bounds[1];
-    if (lower == upper) {
-        return 1.0;
-    }
-    if (x < lower || x > upper) {
-        return 0.0;
-    }
-    return 1.0/(upper-lower);
-}
-
-// sample N values from a PDF using Metropolis-Hastings MCMC sampler
-vector<vector<double> > MCMC_sampling(int N, int Nburnin, function<double(vector<double>&)> logpdf, vector<double> &initial, vector<double> &steps, vector<vector<double> > &priors, function<double(vector<double>&)> cut, rgen &mt, int print, fs::path filename) {
-    
-    ofstream outfile;
-    if (print > 0) {
-        outfile.open(filename);
-    }
-    
-    vector<vector<double> > samples(N);
-    int Npar = initial.size();
-    
-    // create normal distributions for each parameter based on its proposal width
-    vector<normal_distribution<>> proposal_distributions;
-    for (double step : steps) {
-        proposal_distributions.push_back(normal_distribution<>(0.0, step));
-    }
-    
-    vector<double> current = initial;
-    double logpcurrent = logpdf(current);
-    
-    vector<double> prop;
-    double logpprop, priorratio, paccept;
-    int nnew = 0;
-    for (int j = -Nburnin; j < N;) {
-        
-        // propose new point
-        prop = current;
-        for (int i = 0; i < Npar; i++) {
-            prop[i] += proposal_distributions[i](mt);
-        }
-        
-        // compute prior ratio
-        priorratio = 1.0;
-        for (int i = 0; i < Npar; i++) {
-            priorratio *= prior(prop[i], priors[i])/prior(current[i], priors[i]);
-        }
-        
-        // apply the cut
-        if (priorratio > 0.0) {
-            priorratio = cut(prop);
-        }
-        
-        if (priorratio > 0.0) {
-            logpprop = logpdf(prop);
-            paccept = randomreal(0.0,1.0,mt);
-            
-            // accept or reject the proposed sample
-            if (log(paccept) < logpprop - logpcurrent - log(priorratio)) {
-                current = prop;
-                logpcurrent = logpprop;
-                if (j >= 0) {
-                    nnew++;
-                }
-            }
-            
-            // after burn-in, add the element to the chain
-            if (j >= 0) {
-                if (print > 0) {
-                    for (int jp = 0; jp < Npar; jp++) {
-                        outfile << current[jp] << "   ";
-                    }
-                    outfile << endl;
-                }
-                samples[j] = current;
-            }
-            j++;
-        }
-        
-        if (print > 0) {
-            cout << j << "   " << nnew << "   " << "\r" << flush;
-        }
-    }
-    
-    if (print > 0) {
-        outfile.close();
-        cout << "acceptance ratio = " << nnew/(1.0*N) << endl;
-    }
-    
-    return samples;
-}
-
-
-/* ---------------------------------------------------------------------------------------------------------------------------------------------- */
 /*                                                    PDF of amplifications                                                                       */
 /* ---------------------------------------------------------------------------------------------------------------------------------------------- */
 
@@ -728,7 +630,7 @@ double lensing::loglikelihood(cosmology &C, double DLthr, vector<vector<double> 
 void lensing::Hubble_diagram_fit(cosmology &C, double DLthr, vector<vector<double> > &data, vector<double> &initial, vector<double> &steps , vector<vector<double> > &priors, int N, int Nburnin, int lens, int dm, rgen &mt, fs::path filename) {
     
     // loglikelihood
-    function<double(vector<double>&)> pdf = [this, &C, DLthr, &data, lens, dm, &mt](vector<double> &par) {
+    function<double(vector<double>&)> logpdf = [this, &C, DLthr, &data, lens, dm, &mt](vector<double> &par) {
         return loglikelihood(C, DLthr, data, par, lens, dm, mt);
     };
     
@@ -737,5 +639,5 @@ void lensing::Hubble_diagram_fit(cosmology &C, double DLthr, vector<vector<doubl
         return 1.0;
     };
     
-    MCMC_sampling(N, Nburnin, pdf, initial, steps, priors, cut, mt, 1, filename);
+    MCMC_sampling(N, Nburnin, logpdf, initial, steps, priors, cut, mt, 1, 0, filename);
 }

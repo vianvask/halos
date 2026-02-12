@@ -1,5 +1,10 @@
 #include "cosmology.h"
 
+
+/* ---------------------------------------------------------------------------------------------------------------------------------------------- */
+/*                                                      matter transfer function                                                                  */
+/* ---------------------------------------------------------------------------------------------------------------------------------------------- */
+
 // CDM matter transfer function (astro-ph/9709112)
 double cosmology::TM (double k) {
     double keq = 0.00326227*Hz(zeq)/(1.0+zeq);
@@ -48,6 +53,10 @@ double cosmology::TM (double k) {
     return OmegaB/OmegaM*TB(k) + OmegaC/OmegaM*TC(k);
 }
 
+
+/* ---------------------------------------------------------------------------------------------------------------------------------------------- */
+/*                                                   variance of matter fluctuation                                                               */
+/* ---------------------------------------------------------------------------------------------------------------------------------------------- */
 
 // variance of the CDM matter fluctuations
 vector<double> cosmology::sigmaC(double M, double deltaH) {
@@ -184,6 +193,10 @@ vector<vector<double> > cosmology::sigmalistf(double m22, double m3, double kc, 
     }
     return Ms;
 }
+
+/* ---------------------------------------------------------------------------------------------------------------------------------------------- */
+/*                                                   halo mass function and growth                                                                */
+/* ---------------------------------------------------------------------------------------------------------------------------------------------- */
 
 // first crossing probability with ellipsoidal collapse
 double cosmology::pFC(double delta, double S) {
@@ -332,6 +345,10 @@ vector<vector<double> > cosmology::FMFlistf() {
 }
 
 
+/* ---------------------------------------------------------------------------------------------------------------------------------------------- */
+/*                                                            star formation                                                                      */
+/* ---------------------------------------------------------------------------------------------------------------------------------------------- */
+
 /*
 double Q(double S, double St, double z) {
     double dz;
@@ -340,7 +357,7 @@ double Q(double S, double St, double z) {
 }
 */
 
-// star formation rate f_*(M) and its derivative df_*/dM
+// star formation rate f_*(M)
 double cosmology::fstar(double z, double M, double Mc, double Mt, double epsilon, double alpha, double beta) {
     double Mtz = Mt*pow((1.0+z)/10.0,-3.0/2.0);
     if (alpha>0.0 && beta>0.0) {
@@ -348,6 +365,8 @@ double cosmology::fstar(double z, double M, double Mc, double Mt, double epsilon
     }
     return epsilon*exp(-Mtz/M);
 }
+
+// (df_*/dM)/f_*
 double cosmology::Dfstarperfstar(double z, double M, double Mc, double Mt, double epsilon, double alpha, double beta) {
     double Mtz = Mt*pow((1.0+z)/10.0,-3.0/2.0);
     if (alpha>0.0 && beta>0.0) {
@@ -355,6 +374,12 @@ double cosmology::Dfstarperfstar(double z, double M, double Mc, double Mt, doubl
     }
     return Mtz/pow(M,2.0);
 }
+
+
+/* ---------------------------------------------------------------------------------------------------------------------------------------------- */
+/*                                                       NFW halo properties                                                                      */
+/* ---------------------------------------------------------------------------------------------------------------------------------------------- */
+
 
 // halo concentration parameter (1402.7073)
 double cosmology::cons14(double z0, double M) {
@@ -444,6 +469,10 @@ vector<vector<vector<double> > > cosmology::NFWlistf() {
 }
 
 
+/* ---------------------------------------------------------------------------------------------------------------------------------------------- */
+/*                                                                 halo bias                                                                      */
+/* ---------------------------------------------------------------------------------------------------------------------------------------------- */
+
 // Fourier transform of the NFW density profile
 double rhokNFW(double k, double rs, double rhos, double c) {
     double x = rs*k;
@@ -518,6 +547,38 @@ vector<vector<double> > cosmology::PQlistf(double z) {
 }
 
 
+// characteristic mass such that sigma(M_char) = delta_c(z)
+vector<vector<double> > cosmology::logMcharlistf() {
+    vector<vector<double> > logMcharlist(Nz);
+    
+    double z, deltaz, M, logMmin, logMmax;
+    for (int jz = 0; jz < Nz; jz++) {
+        z = zlist[jz];
+        deltaz = deltac(z);
+        
+        logMmin = -1.0;
+        logMmax = 15.0;
+        M = pow(10.0, (logMmax+logMmin)/2.0);
+        while (logMmax - logMmin > 0.01) {
+            if (sigmaC(M, deltaH8)[0] > deltaz) {
+                logMmin = (logMmax+logMmin)/2.0;
+            } else {
+                logMmax = (logMmax+logMmin)/2.0;
+            }
+            M = pow(10.0, (logMmax+logMmin)/2.0);
+        }
+        
+        logMcharlist[jz] = {z, log(M)};
+    }
+    return logMcharlist;
+}
+
+
+/* ---------------------------------------------------------------------------------------------------------------------------------------------- */
+/*                                              comoving distance and age of the Universe                                                         */
+/* ---------------------------------------------------------------------------------------------------------------------------------------------- */
+
+
 // comoving distance, {z,d_c}
 vector<vector<double> > cosmology::dclist() {
     int Nz2 = 100*Nz;
@@ -568,31 +629,4 @@ vector<vector<double> > cosmology::tlist() {
     }
     
     return tlist;
-}
-
-
-// characteristic mass such that sigma(M_char) = delta_c(z)
-vector<vector<double> > cosmology::logMcharlistf() {
-    vector<vector<double> > logMcharlist(Nz);
-    
-    double z, deltaz, M, logMmin, logMmax;
-    for (int jz = 0; jz < Nz; jz++) {
-        z = zlist[jz];
-        deltaz = deltac(z);
-        
-        logMmin = -1.0;
-        logMmax = 15.0;
-        M = pow(10.0, (logMmax+logMmin)/2.0);
-        while (logMmax - logMmin > 0.01) {
-            if (sigmaC(M, deltaH8)[0] > deltaz) {
-                logMmin = (logMmax+logMmin)/2.0;
-            } else {
-                logMmax = (logMmax+logMmin)/2.0;
-            }
-            M = pow(10.0, (logMmax+logMmin)/2.0);
-        }
-        
-        logMcharlist[jz] = {z, log(M)};
-    }
-    return logMcharlist;
 }
