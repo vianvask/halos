@@ -8,8 +8,10 @@ int main (int argc, char *argv[]) {
     cout << setprecision(6) << fixed;
     
     const int doUVfit = atoi(argv[1]); // 0: no, 1: yes
-    const int dm = atoi(argv[2]); // 0: cold DM, 1: fuzzy DM, 2: warm DM, 3: white noise, 4: magnetic fields
-    
+    const int pdm = atoi(argv[2]); // 0: linear priors, 1: log priors for the beyond LCDM parameter
+    const int dm = atoi(argv[3]); // 0: cold DM, 1: fuzzy DM, 2: warm DM, 3: white noise, 4: infl. magnetic fields, 5: PT magnetic fields
+    const double zcut = atof(argv[4]); // redshift cut on uvlf data: 15.0 removes the uncertain high-z data, 30.0 doesn't remove anything
+
     // cosmological parameters: PDG values
     cosmology C;
     C.OmegaM = 0.315;
@@ -23,7 +25,7 @@ int main (int argc, char *argv[]) {
     // halo masses
     C.Mmin = 1.0e6;
     C.Mmax = 1.0e17;
-    C.NM = 200;
+    C.NM = 240;
     
     // redshifts
     C.zmin = 0.01;
@@ -58,38 +60,63 @@ int main (int argc, char *argv[]) {
         return 0;
     }
     
+    // remove z > z_cut
+    C.Zlist.erase(remove_if(C.Zlist.begin(), C.Zlist.end(), [zcut](double x) { return x > zcut; }), C.Zlist.end() );
+    
     cout << "Computing UV luminosity functions..." << endl;
    
     // parameters: (logMt, Mc, epsilon, alpha, beta, gamma, zc, fkappa, ze, z0, sigmaUV, logm)
-    vector<double> bf = {7.2, 3.9e11, 0.061, 0.88, 0.40, 0.2, 10.7, 0.34, 12.0, 28.0, 0.0, -1.0};
+    vector<double> bf = {8.1, 4.0e11, 0.062, 0.87, 0.46, 0.22, 10.7, 0.37, 10.9, 29.5, 0.08, -1.3};
+    if (dm == 4) {
+        bf = {8.1, 4.0e11, 0.062, 0.87, 0.46, 0.22, 10.7, 0.37, 10.9, 29.5, 0.08, 1.0e-1};
+    }
+    if (dm == 5) {
+        bf = {8.1, 4.0e11, 0.062, 0.87, 0.46, 0.22, 10.7, 0.37, 10.9, 29.5, 0.08, 1.0e-2};
+    }
     
     if (doUVfit == 1) {
-        int Nsteps = 1000; // chain length without burn-in
-        int Nburnin = 100; // burn-in
-        int Nchains = 8; // number of chains
-        double xstep = 16.0; // step size = prior range/xstep
+        int Nsteps = 10000; // chain length without burn-in
+        int Nburnin = 1000; // burn-in
+        int Nchains = 4; // number of chains
+        double xstep = 20.0; // step size = prior range/xstep
         
         // parameters: (logMt, Mc, epsilon, alpha, beta, gamma, zc, fkappa, ze, z0, sigmaUV)
-        vector<vector<double> > priors = {{6.0,10.0}, {2.4e11, 5.2e11}, {0.0562, 0.0690}, {0.6, 1.1}, {0.2, 0.6}, {0.05, 0.6}, {9.8, 11.4}, {0.05, 0.7}, {7.0, 25.0}, {16.0, 36.0}, {0.0, 0.0}};
+        vector<vector<double> > priors = {{6.5 ,9.5}, {2.4e11, 5.2e11}, {0.0562, 0.0690}, {0.65, 1.25}, {0.2, 0.6}, {0.05, 0.6}, {9.8, 11.4}, {0.05, 0.7}, {7.0, 25.0}, {16.0, 36.0}, {0.08, 0.24}};
         
         if (dm == 1) {
-            priors.push_back({log10(C.m22list.front()), log10(C.m22list.back())});
+            if (pdm == 0) {
+                priors.push_back({C.m22list.front(), C.m22list.back()});
+            } else {
+                priors.push_back({log10(C.m22list.front()), log10(C.m22list.back())});
+            }
         }
         if (dm == 2) {
-            priors.push_back({log10(C.m3list.front()), log10(C.m3list.back())});
+            if (pdm == 0) {
+                priors.push_back({C.m3list.front(), C.m3list.back()});
+            } else {
+                priors.push_back({log10(C.m3list.front()), log10(C.m3list.back())});
+            }
         }
         if (dm == 3) {
-            priors.push_back({log10(C.kclist.front()), log10(C.kclist.back())});
+            if (pdm == 0) {
+                priors.push_back({C.kclist.front(), C.kclist.back()});
+            } else {
+                priors.push_back({log10(C.kclist.front()), log10(C.kclist.back())});
+            }
         }
-        if (dm == 4) {
-            priors.push_back({log10(C.Blist.front()), log10(C.Blist.back())});
+        if (dm == 4 || dm == 5) {
+            if (pdm == 0) {
+                priors.push_back({C.Blist.front(), C.Blist.back()});
+            } else {
+                priors.push_back({log10(C.Blist.front()), log10(C.Blist.back())});
+            }
         }
         
-        bf = UVLFfit(C, priors, Nsteps, Nburnin, Nchains, xstep, dm);
+        bf = UVLFfit(C, priors, Nsteps, Nburnin, Nchains, xstep, dm, pdm);
     }
     
     // output the UV luminosity function for the best fit
-    writeUVLF(C, bf[0], bf[1], bf[2], bf[3], bf[4], bf[5], bf[6], bf[7], bf[8], bf[9], bf[10], bf[11], dm);
+    writeUVLF(C, bf[0], bf[1], bf[2], bf[3], bf[4], bf[5], bf[6], bf[7], bf[8], bf[9], bf[10], bf[11], dm, pdm);
     
     time_req = clock() - time_req;
     cout << "Total evaluation time: " << ((double) time_req/CLOCKS_PER_SEC/60.0) << " min." << endl;

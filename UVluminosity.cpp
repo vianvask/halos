@@ -95,12 +95,18 @@ double enh(double z, double ze, double z0) {
 double MUV(cosmology &C, double z, double M, double dotM, double Mc, double Mt, double epsilon, double alpha, double beta, double gamma, double zc, double fkappa, double ze, double z0) {
     double alphaz = alpha*enh(z, ze, z0);
     double betaz = beta*enh(z, ze, z0);
-    return 51.63 - 1.08574*log(C.fstar(z,M,Mc,Mt,epsilon,alphaz,betaz)*max(1.0e-99,dotM)/kappaUV(z,gamma,zc,fkappa));
+    if (dotM < 0.000001) {
+        dotM = 0.0000001;
+    }
+    return 51.63 - 1.08574*log(C.fstar(z,M,Mc,Mt,epsilon,alphaz,betaz)*dotM/kappaUV(z,gamma,zc,fkappa));
 }
 
 // derivative of the UV magnitude, dM_UV/dM
 double DMUV(cosmology &C, double z, double M, double dotM, double DdotM, double Mc, double Mt, double epsilon, double alpha, double beta) {
-    return -1.08574*(DdotM/max(1.0e-99,dotM) + C.Dfstarperfstar(z,M,Mc,Mt,epsilon,alpha,beta));
+    if (dotM < 0.000001) {
+        dotM = 0.000001;
+    }
+    return -1.08574*(DdotM/dotM + C.Dfstarperfstar(z,M,Mc,Mt,epsilon,alpha,beta));
 }
 
 // dust extinction, MUV -> MUV - AUV (see 1406.1503 and Table 3 of 1306.2950)
@@ -155,8 +161,8 @@ vector<vector<vector<double> > > PhiUV(cosmology &C, double Mt, double Mc, doubl
             
             MUVj = MUV(C, z, Mj, dotMj, Mc, Mt, epsilon, alpha, beta, gamma, zc, fkappa, ze, z0);
             
-            // TODO: check, there seems to be a problem with implementation of sigma_UV
             // integral over halo masses to account for the distribution of emitted UV magnitudes
+            // note: doesn't work for small sigma_UV < 0.1 (depending on mass resolution)
             UVLFj = 0.0;
             if (sigmaUV > 0.0) {
                 for (int iM = jM; iM < C.NM-1; iM++) { // values larger than the mean
@@ -231,10 +237,13 @@ vector<vector<vector<double> > > PhiUV(cosmology &C, double Mt, double Mc, doubl
 
 
 // generalization of the PhiUV function to different DM models
-vector<vector<vector<double> > > PhiUV(cosmology &C, double logMt, double Mc, double epsilon, double alpha, double beta, double gamma, double zc, double fkappa, double ze, double z0, double sigmaUV, double logm, int dm) {
+vector<vector<vector<double> > > PhiUV(cosmology &C, double logMt, double Mc, double epsilon, double alpha, double beta, double gamma, double zc, double fkappa, double ze, double z0, double sigmaUV, double logm, int dm, int pdm) {
     
     double Mt = pow(10.0, logMt);
     double m = pow(10.0, logm);
+    if (pdm == 0) { // linear scale if pdm = 0, logscale if pdm = 1
+        m = logm;
+    }
     
     if (dm == 1) {
         int jm = lower_bound(C.m22list.begin(), C.m22list.end(), m)- C.m22list.begin();
@@ -257,7 +266,7 @@ vector<vector<vector<double> > > PhiUV(cosmology &C, double logMt, double Mc, do
         }
         C.HMFlist = C.EDMHMFlist[jm];
     }
-    if (dm == 4) {
+    if (dm == 4 || dm == 5) {
         int jm = lower_bound(C.Blist.begin(), C.Blist.end(), m)- C.Blist.begin();
         if (jm > 0 && C.Blist[jm]-m > m-C.Blist[jm-1]) {
             jm--;
@@ -270,9 +279,9 @@ vector<vector<vector<double> > > PhiUV(cosmology &C, double logMt, double Mc, do
 
 
 // write UV luminosity functions to a file for a benchmark case
-void writeUVLF(cosmology &C, double logMt, double Mc, double epsilon, double alpha, double beta, double gamma, double zc, double fkappa, double ze, double z0, double sigmaUV, double logm, int dm) {
+void writeUVLF(cosmology &C, double logMt, double Mc, double epsilon, double alpha, double beta, double gamma, double zc, double fkappa, double ze, double z0, double sigmaUV, double logm, int dm, int pdm) {
     
-    vector<vector<vector<double> > > PhiUVlist = PhiUV(C, logMt, Mc, epsilon, alpha, beta, gamma, zc, fkappa, ze, z0, sigmaUV, logm, dm);
+    vector<vector<vector<double> > > PhiUVlist = PhiUV(C, logMt, Mc, epsilon, alpha, beta, gamma, zc, fkappa, ze, z0, sigmaUV, logm, dm, pdm);
     
     string filename;
     if (dm == 0) {
@@ -288,7 +297,10 @@ void writeUVLF(cosmology &C, double logMt, double Mc, double epsilon, double alp
         filename = "UVluminosity_EDM.dat";
     }
     if (dm == 4) {
-        filename = "UVluminosity_B.dat";
+        filename = "UVluminosity_Binf.dat";
+    }
+    if (dm == 5) {
+        filename = "UVluminosity_Bpt.dat";
     }
     
     ofstream outfile;
@@ -351,10 +363,10 @@ double logNPDF2(double x, double mu, double sigmap, double sigmam) {
 }
 
 // loglikelihood function
-double loglikelihood(cosmology &C, vector<vector<double> > &data, vector<double> &params, int dm) {
+double loglikelihood(cosmology &C, vector<vector<double> > &data, vector<double> &params, int dm, int pdm) {
         
     // compute the UV luminosity function
-    vector<vector<vector<double> > > PhiUVlist = PhiUV(C, params[0], params[1], params[2], params[3], params[4], params[5], params[6], params[7], params[8], params[9], params[10], params[11], dm);
+    vector<vector<vector<double> > > PhiUVlist = PhiUV(C, params[0], params[1], params[2], params[3], params[4], params[5], params[6], params[7], params[8], params[9], params[10], params[11], dm, pdm);
     
     vector<vector<double> > PhiUVz;
     double z, MUV, meanPhi, sigmaPhip, sigmaPhim, Phi, logL = 0.0;
@@ -376,7 +388,7 @@ double loglikelihood(cosmology &C, vector<vector<double> > &data, vector<double>
 }
 
 // function to generate MCMC chains to fit the UV data
-vector<double> UVLFfit(cosmology &C, vector<vector<double> > &priors, int Nsteps, int Nburnin, int Nchains, double xstep, int dm) {
+vector<double> UVLFfit(cosmology &C, vector<vector<double> > &priors, int Nsteps, int Nburnin, int Nchains, double xstep, int dm, int pdm) {
     
     // random number generator
     rgen mt(time(NULL));
@@ -388,6 +400,16 @@ vector<double> UVLFfit(cosmology &C, vector<vector<double> > &priors, int Nsteps
         datadir[j] = C.outdir/datafiles[j];
     }
     vector<vector<double> > data = readUVdata(datadir);
+    
+    // remove rows where z > z_max
+    double zmax = C.Zlist.back();
+    data.erase(
+        remove_if(data.begin(), data.end(),
+            [zmax](const vector<double>& row) {
+                return !row.empty() && row[0] > zmax;
+            }),
+        data.end()
+    );
     
     int Npar = priors.size();
     
@@ -403,7 +425,7 @@ vector<double> UVLFfit(cosmology &C, vector<vector<double> > &priors, int Nsteps
     vector<vector<double> > chain;
     for (int j = 0; j < Nchains; j++) {
         cout << j << endl;
-        string filename = "UVLF_chains_" + to_string(dm) + "_c_" + to_string(j) + ".dat";
+        string filename = "UVLF_chains_" + to_string(dm) + "_" + to_string(pdm) + "_c_" + to_string(j) + "_zmax_" + to_string_prec(zmax,1) + ".dat";
         
         // generate initial point inside the prior ranges
         for (int jp = 0; jp <  initial.size(); jp++) {
@@ -411,8 +433,8 @@ vector<double> UVLFfit(cosmology &C, vector<vector<double> > &priors, int Nsteps
         }
         
         // loglikelihood
-        function<double(vector<double>&)> logpdf = [&C, &data, dm](vector<double> &par) {
-            return loglikelihood(C, data, par, dm);
+        function<double(vector<double>&)> logpdf = [&C, &data, dm, pdm](vector<double> &par) {
+            return loglikelihood(C, data, par, dm, pdm);
         };
         
         // no cut

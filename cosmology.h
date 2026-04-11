@@ -146,14 +146,14 @@ private:
     }
     
     vector<double> kBlist;
-    vector<vector<double> > DeltaBlist;
+    vector<vector<double> > logDeltaBlist;
 
     // magnetic field enhanced matter power spectrum
     double DeltakB(double k, double deltaH, double B) {
-        if (k/h*1000.0 > kBlist.front() && k/h*1000.0 < kBlist.back()) {
-            double kmin = kBlist.front()*h/1000.0;
-            double correction = Deltak(kmin, deltaH)/sqrt(pow(10.0, interpolate2(B, kmin/h*1000.0, Blist, kBlist, DeltaBlist)));
-            return correction*sqrt(pow(10.0, interpolate2(B, k/h*1000.0, Blist, kBlist, DeltaBlist)));
+        double kmin = kBlist.front()*h/1000.0;
+        double kmax = kBlist.back()*h/1000.0;
+        if (k > kmin && k < kmax) {
+            return sqrt(pow(10.0, 2.0*interpolate2(B, k/h*1000.0, Blist, kBlist, logDeltaBlist)) + pow(Deltak(k, deltaH),2.0));
         }
         return Deltak(k, deltaH);
     }
@@ -404,9 +404,12 @@ public:
             writeToFile(kclist, EDMsigmalist, outdir/"sigma_EDM.dat");
             writeToFile(kclist, zlist, Mlist, EDMHMFlist, outdir/"HMF_EDM.dat");
         }
-        if (dm == 4) {
+        if (dm == 4 || dm == 5) {
             // read Delta spectra for different B values and extract list of B and k values
-            vector<vector<double> > tmp  = readdata(outdir/"DeltaB/DeltaB.dat",3);
+            vector<vector<double> > tmp  = readdata(outdir/"DeltaBinf.dat",3);
+            if (dm == 5) {
+                tmp  = readdata(outdir/"DeltaBpt.dat",3);
+            }
             
             set<double> xs, ys;
             for (const auto &row : tmp) {
@@ -415,7 +418,7 @@ public:
             }
             Blist.assign(xs.begin(), xs.end());
             kBlist.assign(ys.begin(), ys.end());
-
+            
             xs.clear(); ys.clear();
             map<double,int> x_index, y_index;
             for (int i = 0; i < Blist.size(); ++i) {
@@ -436,7 +439,7 @@ public:
 
                 tmp2[jx][jy] = log10(z);
             }
-            DeltaBlist = tmp2;
+            logDeltaBlist = tmp2;
             tmp.clear(); tmp2.clear();
             
             for (double B : Blist) {
@@ -452,8 +455,14 @@ public:
                 BDMHMFlist.push_back(HMFlist);
             }
             
-            writeToFile(Blist, BDMsigmalist, outdir/"sigma_BDM.dat");
-            writeToFile(Blist, zlist, Mlist, BDMHMFlist, outdir/"HMF_BDM.dat");
+            if (dm == 4) {
+                writeToFile(Blist, BDMsigmalist, outdir/"sigma_Binf.dat");
+                writeToFile(Blist, zlist, Mlist, BDMHMFlist, outdir/"HMF_Binf.dat");
+            }
+            if (dm == 5) {
+                writeToFile(Blist, BDMsigmalist, outdir/"sigma_Bpt.dat");
+                writeToFile(Blist, zlist, Mlist, BDMHMFlist, outdir/"HMF_Bpt.dat");
+            }
         }
     }
     
@@ -485,11 +494,8 @@ public:
             HMFlist = HMFlistf();
             halobiaslist = halobiaslistf();
         }
-        if (dm == 4) { // TODO: look how this case is done above and adapt
-            deltaH8 = sigma8/sigmaB(M8, 1.0, x)[0];
-            sigmalist = sigmalistf(0.0, 0.0, 0.0, x);
-            HMFlist = HMFlistf();
-            halobiaslist = halobiaslistf();
+        if (dm == 4 || dm == 5) {
+            cout << "not implemented..." << endl;
         }
     }
     

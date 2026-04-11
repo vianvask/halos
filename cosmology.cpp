@@ -360,10 +360,12 @@ double Q(double S, double St, double z) {
 // star formation rate f_*(M)
 double cosmology::fstar(double z, double M, double Mc, double Mt, double epsilon, double alpha, double beta) {
     double Mtz = Mt*pow((1.0+z)/10.0,-3.0/2.0);
+    double x = Mtz/M;
+    double expcut = exp(-1.0/sqrt(pow(x,-2.0) + pow(50.0,-2.0))); // regulated version of e^(-Mtz/M)
     if (alpha>0.0 && beta>0.0) {
-        return epsilon*(alpha+beta)/(beta*pow(M/Mc,-alpha) + alpha*pow(M/Mc,beta))*exp(-Mtz/M);
+        return epsilon*(alpha+beta)/(beta*pow(M/Mc,-alpha) + alpha*pow(M/Mc,beta))*expcut;
     }
-    return epsilon*exp(-Mtz/M);
+    return epsilon*expcut;
 }
 
 // (df_*/dM)/f_*
