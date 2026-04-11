@@ -616,7 +616,15 @@ vector<vector<double> > MCMC_sampling(int N, int Nburnin, function<double(vector
         }
         
         if (print > 0) {
-            cout << j << "   " << nnew << "   " << "\r" << flush;
+            cout << j << "   " << nnew << "   " << logpcurrent << "   " << "\r" << flush;
+        }
+        
+        // for debugging
+        if (isnan(logpcurrent)) {
+            for (int i = 0; i < Npar; i++) {
+                cout << current[i] << "   ";
+            }
+            cout << endl;
         }
     }
     
