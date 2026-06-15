@@ -118,7 +118,7 @@ private:
         return sqrt(pow(306.535*k/H0,3.0+ns)*pow(deltaH*TM(k),2.0));
     }
     double Plin(double z, double k, double deltaH) {
-        return pow(Deltak(k, deltaH)*Dg(z), 2.0)/(pow(k,3.0)/(2.0*pow(PI,2.0)));
+        return (2.0*pow(PI,2.0))*pow(Deltak(k, deltaH)*Dg(z), 2.0)/(pow(k,3.0));
     }
     
     // FDM matter power spectrum
@@ -126,7 +126,7 @@ private:
         return sqrt(pow(306.535*k/H0,3.0+ns)*pow(deltaH*TMF(k,m22),2.0));
     }
     double PlinF(double z, double k, double deltaH, double m22) {
-        return pow(DeltakF(k, deltaH, m22)*Dg(z), 2.0)/(pow(k,3.0)/(2.0*pow(PI,2.0)));
+        return (2.0*pow(PI,2.0))*pow(DeltakF(k, deltaH, m22)*Dg(z), 2.0)/(pow(k,3.0));
     }
     
     // WDM matter power spectrum
@@ -134,7 +134,7 @@ private:
         return sqrt(pow(306.535*k/H0,3.0+ns)*pow(deltaH*TMW(k,m3),2.0));
     }
     double PlinW(double z, double k, double deltaH, double m3) {
-        return pow(DeltakW(k, deltaH, m3)*Dg(z), 2.0)/(pow(k,3.0)/(2.0*pow(PI,2.0)));
+        return (2.0*pow(PI,2.0))*pow(DeltakW(k, deltaH, m3)*Dg(z), 2.0)/(pow(k,3.0));
     }
     
     // white noise enhanced matter power spectrum
@@ -142,7 +142,7 @@ private:
         return Deltak(k, deltaH) + pow(k/kc,3.0)*Deltak(kc, deltaH);
     }
     double PlinE(double z, double k, double deltaH, double kc) {
-        return pow(DeltakE(k, deltaH, kc)*Dg(z), 2.0)/(pow(k,3.0)/(2.0*pow(PI,2.0)));
+        return (2.0*pow(PI,2.0))*pow(DeltakE(k, deltaH, kc)*Dg(z), 2.0)/(pow(k,3.0));
     }
     
     vector<double> kBlist;
@@ -315,18 +315,15 @@ public:
         
         writeToFile(logMcharlist, outdir/"logMcharlist.dat");
         
-        /*
-        vector<vector<double> > Deltalist(100, vector<double> (2, 0.0));
-        double dlnk = (log(1000.0)-log(0.001))/99.0;
+        vector<vector<double> > Pklist(500, vector<double> (2, 0.0));
+        double dlnk = (log(10.0)-log(0.0000001))/499.0;
         double ki;
-        for (int jk = 0; jk < Deltalist.size(); jk++) {
-            ki = exp(log(0.001) + jk*dlnk);
-            Deltalist[jk][0] = ki;
-            Deltalist[jk][1] = Deltak(h*ki/1000.0, deltaH8);
+        for (int jk = 0; jk < Pklist.size(); jk++) {
+            ki = exp(log(0.0000001) + jk*dlnk);
+            Pklist[jk][0] = ki;
+            Pklist[jk][1] = 2.0*pow(PI,2.0)*pow(Deltak(ki, deltaH8), 2.0)/(pow(ki,3.0));
         }
-        
-        writeToFile(Deltalist, "Deltak_CDM.dat");
-        */
+        writeToFile(Pklist, outdir/"Pk_CDM.dat");
     }
     
     // initialize for multiple beyond CDM parameter values and output the halo mass functions

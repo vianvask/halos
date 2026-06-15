@@ -1,6 +1,9 @@
 #include "cosmology.h"
 #include "lensing.h"
 
+// ./lensing 0 1 1 0.2
+// ./lensing 0 1 2 0.02
+
 // units: masses in solar masses, time in Myr, length in kpc
 
 // z distribution of NS binaries
@@ -49,7 +52,7 @@ int main (int argc, char *argv[]) {
     L.Nhalos = 100; // number of halos in each realization
     L.Nbins = 12; // P(lnmu) bin widht = sigma/Nbins
     
-    //L.Plnmuf(C, 5.0, mt, 1, 1, 1, 1);
+    //L.Plnmuf(C, 1.0, mt, 1, 1, 1, 1);
     
     double z, lnmu, DL0, DL, sigmaDL;
     vector<vector<double> > Plnmu;

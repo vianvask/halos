@@ -96,7 +96,7 @@ double MUV(cosmology &C, double z, double M, double dotM, double Mc, double Mt, 
     double alphaz = alpha*enh(z, ze, z0);
     double betaz = beta*enh(z, ze, z0);
     if (dotM < 0.000001) {
-        dotM = 0.0000001;
+        dotM = 0.000001;
     }
     return 51.63 - 1.08574*log(C.fstar(z,M,Mc,Mt,epsilon,alphaz,betaz)*dotM/kappaUV(z,gamma,zc,fkappa));
 }
@@ -224,6 +224,7 @@ vector<vector<vector<double> > > PhiUV(cosmology &C, double Mt, double Mc, doubl
             for (int jb = 0; jb < Plnmu.size(); jb++) {
                 PhiUVj += interpolaten(MUVj - AUVj + 1.086*Plnmu[jb][0], PhiUVlist)[3]*Plnmu[jb][1]*dlnmu;
             }
+            //PhiUVj = interpolaten(MUVj - AUVj, PhiUVlist)[3];
             
             PhiUVlensed[jZ][jM][0] = MUVj;
             PhiUVlensed[jZ][jM][1] = Mj;

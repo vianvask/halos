@@ -1,3 +1,12 @@
+
+/*
+ ./uvlf 1 0 4 15.0 &
+ ./uvlf 1 0 4 30.0 &
+ ./uvlf 1 0 5 15.0 &
+ ./uvlf 1 0 5 30.0
+ 
+ */
+
 #include "cosmology.h"
 #include "UVluminosity.h"
 
@@ -66,17 +75,19 @@ int main (int argc, char *argv[]) {
     cout << "Computing UV luminosity functions..." << endl;
    
     // parameters: (logMt, Mc, epsilon, alpha, beta, gamma, zc, fkappa, ze, z0, sigmaUV, logm)
-    vector<double> bf = {8.1, 4.0e11, 0.062, 0.87, 0.46, 0.22, 10.7, 0.37, 10.9, 29.5, 0.08, -1.3};
+    vector<double> bf = {8.0, 3.78e11, 0.062, 1.0, 0.4, 0.1, 10.5, 0.37, 11.5, 23.0, 0.08, -1.3};
+    
     if (dm == 4) {
-        bf = {8.1, 4.0e11, 0.062, 0.87, 0.46, 0.22, 10.7, 0.37, 10.9, 29.5, 0.08, 1.0e-1};
+        bf = {8.0, 3.78e11, 0.062, 1.0, 0.4, 0.1, 10.5, 0.37, 11.5, 23.0, 0.12, 0.5};
     }
+    
     if (dm == 5) {
-        bf = {8.1, 4.0e11, 0.062, 0.87, 0.46, 0.22, 10.7, 0.37, 10.9, 29.5, 0.08, 1.0e-2};
+        bf = {8.0, 3.78e11, 0.062, 1.0, 0.4, 0.1, 10.5, 0.37, 11.5, 23.0, 0.12, 0.003};
     }
     
     if (doUVfit == 1) {
-        int Nsteps = 10000; // chain length without burn-in
-        int Nburnin = 1000; // burn-in
+        int Nsteps = 40000; // chain length without burn-in
+        int Nburnin = 2000; // burn-in
         int Nchains = 4; // number of chains
         double xstep = 20.0; // step size = prior range/xstep
         
@@ -110,6 +121,10 @@ int main (int argc, char *argv[]) {
             } else {
                 priors.push_back({log10(C.Blist.front()), log10(C.Blist.back())});
             }
+            
+            // extend prior of alpha, beta and sigma
+            priors[3] = {0.65, 1.45};
+            priors[10] = {0.1, 0.24};
         }
         
         bf = UVLFfit(C, priors, Nsteps, Nburnin, Nchains, xstep, dm, pdm);
