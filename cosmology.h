@@ -115,7 +115,7 @@ private:
     
     // CDM matter power spectrum
     double Deltak(double k, double deltaH) {
-        return sqrt(pow(306.535*k/H0,3.0+ns)*pow(deltaH*TM(k),2.0));
+        return sqrt(pow(CLIGHT*k/H0,3.0+ns)*pow(deltaH*TM(k),2.0));
     }
     double Plin(double z, double k, double deltaH) {
         return (2.0*pow(PI,2.0))*pow(Deltak(k, deltaH)*Dg(z), 2.0)/(pow(k,3.0));
@@ -123,7 +123,7 @@ private:
     
     // FDM matter power spectrum
     double DeltakF(double k, double deltaH, double m22) {
-        return sqrt(pow(306.535*k/H0,3.0+ns)*pow(deltaH*TMF(k,m22),2.0));
+        return sqrt(pow(CLIGHT*k/H0,3.0+ns)*pow(deltaH*TMF(k,m22),2.0));
     }
     double PlinF(double z, double k, double deltaH, double m22) {
         return (2.0*pow(PI,2.0))*pow(DeltakF(k, deltaH, m22)*Dg(z), 2.0)/(pow(k,3.0));
@@ -131,7 +131,7 @@ private:
     
     // WDM matter power spectrum
     double DeltakW(double k, double deltaH, double m3) {
-        return sqrt(pow(306.535*k/H0,3.0+ns)*pow(deltaH*TMW(k,m3),2.0));
+        return sqrt(pow(CLIGHT*k/H0,3.0+ns)*pow(deltaH*TMW(k,m3),2.0));
     }
     double PlinW(double z, double k, double deltaH, double m3) {
         return (2.0*pow(PI,2.0))*pow(DeltakW(k, deltaH, m3)*Dg(z), 2.0)/(pow(k,3.0));

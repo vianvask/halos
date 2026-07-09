@@ -106,7 +106,7 @@ vector<vector<vector<double> > > deltaNhfNFW(cosmology &C, double zs, double kap
                 dlnM = log(M) - log(C.Mlist[jM-1]);
                 dndlnM = C.HMFlist[jz][jM][0];
                 rmax = rmaxfNFW(C, zs, zl, M, kappathr);
-                dNh[jz][jM][0] = 306.535*PI*pow((1.0+zl)*rmax,2.0)/C.Hz(zl)*dndlnM*dlnM*dz;
+                dNh[jz][jM][0] = CLIGHT*PI*pow((1.0+zl)*rmax,2.0)/C.Hz(zl)*dndlnM*dlnM*dz;
                 
                 Mb = 2.0*PI*pow(rmax,2.0)*(C.dc(zl)-C.dc(zl-dz))*C.rhoM0;
                 sigmab = interpolate(Mb, C.sigmalist);
@@ -134,7 +134,7 @@ double NhfNFW(cosmology &C, double zs, double kappathr) {
                 dlnM = log(M) - log(C.Mlist[jM-1]);
                 dndlnM = C.HMFlist[jz][jM][0];
                 rmax = rmaxfNFW(C, zs, zl, M, kappathr);
-                Nh += 306.535*PI*pow((1.0+zl)*rmax,2.0)/C.Hz(zl)*dndlnM*dlnM*dz;
+                Nh += CLIGHT*PI*pow((1.0+zl)*rmax,2.0)/C.Hz(zl)*dndlnM*dlnM*dz;
             }
         }
     }
@@ -172,7 +172,7 @@ double sigmakappaW(cosmology &C, double zs, double kappathr) {
                     kappar = kappagammaNFWeps(0.0, kappa0W, r/rsW, 0.0)[0];
                     // Campbell's theorem for Poisson-distributed halo counts: Var = int n kappa^2,
                     // with log-annulus area element d(pi r^2) = 2 pi r^2 dlnr
-                    kappa2 += 306.535*2.0*PI*pow((1.0+zl)*r,2.0)/C.Hz(zl)*dndlnM*pow(kappar,2.0)*dlnr*dlnM*dz;
+                    kappa2 += CLIGHT*2.0*PI*pow((1.0+zl)*r,2.0)/C.Hz(zl)*dndlnM*pow(kappar,2.0)*dlnr*dlnM*dz;
                     r = r*Edlnr;
                 }
             }
@@ -263,7 +263,7 @@ vector<vector<vector<double> > > deltaNhfCYL(cosmology &C, double zs, double kap
                 dlnM = log(M) - log(C.Mlist[jM-1]);
                 dndlnM = C.FMFlist[jz][jM];
                 rmax = rmaxfCYL(C, zs, zl, M, kappathr);
-                dNh[jz][jM][0] = 306.535*PI*pow((1.0+zl)*rmax,2.0)/C.Hz(zl)*dndlnM*dlnM*dz;
+                dNh[jz][jM][0] = CLIGHT*PI*pow((1.0+zl)*rmax,2.0)/C.Hz(zl)*dndlnM*dlnM*dz;
                 
                 Mb = 2.0*PI*pow(rmax,2.0)*(C.dc(zl)-C.dc(zl-dz))*C.rhoM0;
                 sigmab = interpolate(Mb, C.sigmalist);
@@ -291,7 +291,7 @@ double NhfCYL(cosmology &C, double zs, double kappathr) {
                 dlnM = log(M) - log(C.Mlist[jM-1]);
                 dndlnM = C.FMFlist[jz][jM];
                 rmax = rmaxfCYL(C, zs, zl, M, kappathr);
-                Nh += 306.535*PI*pow((1.0+zl)*rmax,2.0)/C.Hz(zl)*dndlnM*dlnM*dz;
+                Nh += CLIGHT*PI*pow((1.0+zl)*rmax,2.0)/C.Hz(zl)*dndlnM*dlnM*dz;
             }
         }
     }
