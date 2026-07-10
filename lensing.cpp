@@ -350,7 +350,7 @@ vector<vector<double> > lensing::Plnmuf(cosmology &C, double zs, rgen &mt, int f
     vector<vector<vector<double> > > dNF = deltaNhfCYL(C, zs, kappathrH);
     if (subhalo) {
         S.m_floor = subhalo_m_floor;
-        S.precompute(C, zs, subhalo_factor*kappathrH);
+        S.precompute(C, zs, subhalo_factor*kappathrH, kappathrH);
     }
     if (write > 0) {
         writeToFile(C.zlist, C.Mlist, dNH, C.outdir/"dNH.dat");
@@ -411,8 +411,7 @@ vector<vector<double> > lensing::Plnmuf(cosmology &C, double zs, rgen &mt, int f
 
                             if (subhalo) {
                                 double kappabefore = kappalist[j];
-                                double fs = S.resolvedFraction(C, jz, jM, M, r);
-                                double Msm = max(C.Mlist[0], (1.0 - fs)*M);
+                                double Msm = max(C.Mlist[0], (1.0 - S.fsb[jz][jM])*M);
                                 vector<double> NFWp = interpolate2(zl, Msm, C.zlist, C.Mlist, C.NFWlist);
                                 double rs = NFWp[0];
                                 double kappa0 = kappa0NFW(rs, NFWp[1], Sigmac);
@@ -422,6 +421,9 @@ vector<vector<double> > lensing::Plnmuf(cosmology &C, double zs, rgen &mt, int f
                                 gamma1list[j] += cos(phi)*kappagamma[1];
                                 gamma2list[j] += sin(phi)*kappagamma[1];
                                 S.addClumps(C, jz, jM, zl, M, Sigmac, r, phi, mt, kappalist[j], gamma1list[j], gamma2list[j]);
+                                double muW, sigmaW;
+                                S.wsubTerm(jz, jM, r, muW, sigmaW);
+                                kappalist[j] += muW + sigmaW*pG(mt);
                                 meankappa += kappalist[j] - kappabefore;
                             } else {
                                 kappagamma = kappagammaNFWeps(epsilon, kappa0H, r/rsH, phiH);
@@ -446,8 +448,7 @@ vector<vector<double> > lensing::Plnmuf(cosmology &C, double zs, rgen &mt, int f
 
                                 if (subhalo) {
                                     double kappabefore = kappalist[j];
-                                    double fs = S.resolvedFraction(C, jz, jM, M, r);
-                                    double Msm = max(C.Mlist[0], (1.0 - fs)*M);
+                                    double Msm = max(C.Mlist[0], (1.0 - S.fsb[jz][jM])*M);
                                     vector<double> NFWp = interpolate2(zl, Msm, C.zlist, C.Mlist, C.NFWlist);
                                     double rs = NFWp[0];
                                     double kappa0 = kappa0NFW(rs, NFWp[1], Sigmac);
@@ -457,6 +458,9 @@ vector<vector<double> > lensing::Plnmuf(cosmology &C, double zs, rgen &mt, int f
                                     gamma1list[j] += cos(phi)*kappagamma[1];
                                     gamma2list[j] += sin(phi)*kappagamma[1];
                                     S.addClumps(C, jz, jM, zl, M, Sigmac, r, phi, mt, kappalist[j], gamma1list[j], gamma2list[j]);
+                                    double muW, sigmaW;
+                                    S.wsubTerm(jz, jM, r, muW, sigmaW);
+                                    kappalist[j] += muW + sigmaW*pG(mt);
                                     meankappa += kappalist[j] - kappabefore;
                                 } else {
                                     kappagamma = kappagammaNFWeps(epsilon, kappa0H, r/rsH, phiH);
