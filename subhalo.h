@@ -3,7 +3,9 @@ class cosmology;
 class Subhalo {
     
 public:
-    double alpha = -0.82, beta = 50.0, omega = 4.0, psi_res = 1.0e-4, psi_max = 0.1;
+    // psi_max = 1 matches the range over which gden normalizes the SHMF; the
+    // exp(-beta psi^omega) cutoff supplies the suppression near psi -> 1
+    double alpha = -0.82, beta = 50.0, omega = 4.0, psi_res = 1.0e-4, psi_max = 1.0;
     double m_floor = 1.0e7;
     int Nu = 128, NyW = 48;
     

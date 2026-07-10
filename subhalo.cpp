@@ -61,7 +61,8 @@ void Subhalo::precompute(cosmology &C, double zs, double kappathr, double kappat
     }
     
     double s = (1.0 + alpha)/omega;
-    double af = 0.815*exp(-1.0)/pow(0.5, 0.707);
+    // Giocoli et al. 2007: a_f = 0.815 exp(-2 f^3)/f^0.707 with f = 1/2
+    double af = 0.815*exp(-0.25)/pow(0.5, 0.707);
     double wf = sqrt(2.0*log(af + 1.0));
     double gden = gsl_sf_gamma_inc(s, beta*pow(psi_res, omega)) - gsl_sf_gamma_inc(s, beta);
     
@@ -70,7 +71,7 @@ void Subhalo::precompute(cosmology &C, double zs, double kappathr, double kappat
         double dcz = C.deltac(z);
         for (int jM = 0; jM < C.NM; jM++) {
             double M = C.Mlist[jM];
-            if (M <= 10.0*C.Mmin) continue;
+            if (M <= C.Mmin) continue; // no clump above the grid floor fits
             
             double sigM = interpolate(M, C.sigmalist);
             double sigH = interpolate(0.5*M, C.sigmalist);
