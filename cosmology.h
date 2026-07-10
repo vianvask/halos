@@ -27,6 +27,10 @@ public:
     double h;
     double T0;
     double ns;
+    double As = -1.0;
+    double kpivot = 5.0e-5;
+    double sigma8_derived = 0.0;
+    double As_derived = 0.0;
     double OmegaR;
     double OmegaL;
     double OmegaC;
@@ -282,23 +286,35 @@ public:
     vector<vector<vector<double> > > BDMsigmalist;
     vector<vector<vector<vector<double> > > > BDMHMFlist;
     vector<vector<vector<double> > > BDMFMFlist;
-    
-    void initialize0() {
-        
-        // directory for output files
-        if (!fs::exists(outdir)) {
-            fs::create_directories(outdir);
-        }
-        
+
+    void initialize_normalization() {
         OmegaR = OmegaM/(1+zeq);
         OmegaL = 1.0 - OmegaM - OmegaR;
         OmegaC = OmegaM - OmegaB;
         fB = OmegaB/OmegaM;
-        
+
         H0 = 0.000102247*h;
         rhoc = 277.394*pow(h,2.0);
         rhoM0 = OmegaM*rhoc;
         M8 = 4.0*PI/3.0*pow(8000.0/h,3.0)*rhoM0;
+
+        if (As > 0.0) {
+            deltaH8 = 0.4*0.7869370293916*sqrt(As)*pow(CLIGHT*kpivot/H0,(1.0-ns)/2.0)/OmegaM;
+        } else {
+            deltaH8 = sigma8/sigmaC(M8, 1.0)[0];
+        }
+        sigma8_derived = deltaH8*sigmaC(M8, 1.0)[0];
+        As_derived = pow(deltaH8*OmegaM/(0.4*0.7869370293916),2.0)*pow(CLIGHT*kpivot/H0,ns-1.0);
+    }
+
+    void initialize0() {
+
+        // directory for output files
+        if (!fs::exists(outdir)) {
+            fs::create_directories(outdir);
+        }
+
+        initialize_normalization();
                 
         zlist = loglist(zmin,zmax,Nz);
         Mlist = loglist(Mmin,Mmax,NM);
@@ -307,7 +323,6 @@ public:
         zt = tlist();
         
         // NFW halo parameters, computed with CDM sigma
-        deltaH8 = sigma8/sigmaC(M8, 1.0)[0];
         sigmalist = sigmalistf(0.0, 0.0, 0.0, 0.0);
         logMcharlist = logMcharlistf();
         conslist = conslistf();
