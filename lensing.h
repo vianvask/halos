@@ -9,7 +9,12 @@ public:
     int Nbins; // P(lnmu) bins
     bool subhalo = false; // include subhalo substructure
     double subhalo_m_floor = 1.0e7; // minimum clump mass
-    double subhalo_factor = 1.0; // rescales the clump resolution threshold
+    // rescales the clump resolution threshold. Clumps below it are folded into the
+    // analytic unresolved term, which is exact in mean and variance but Gaussian, so
+    // the factor only controls how much of the clump third cumulant is Gaussianized:
+    // 0.16% at 1.0e-3, 0.73% at 1.0e-2. Either value is adequate; 1.0e-3 is the default
+    // because the threshold it scales grows with zs, so a fixed factor coarsens at high zs.
+    double subhalo_factor = 1.0e-3;
     
     // probability distribution of lnmu, {lnmu, dP/dlnmu}
     vector<vector<double> > Plnmuf(cosmology &C, double zs, rgen &mt, int fil, int bias, int ell, int write);
