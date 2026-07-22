@@ -1,5 +1,6 @@
 #include "cosmology.h"
 #include "lensing.h"
+#include <cstdlib>
 
 
 double Sigmacf(cosmology &C, double zs, double zl) {
@@ -106,7 +107,7 @@ vector<vector<vector<double> > > deltaNhfNFW(cosmology &C, double zs, double kap
                 dlnM = log(M) - log(C.Mlist[jM-1]);
                 dndlnM = C.HMFlist[jz][jM][0];
                 rmax = rmaxfNFW(C, zs, zl, M, kappathr);
-                dNh[jz][jM][0] = 306.535*PI*pow((1.0+zl)*rmax,2.0)/C.Hz(zl)*dndlnM*dlnM*dz;
+                dNh[jz][jM][0] = CLIGHT*PI*pow((1.0+zl)*rmax,2.0)/C.Hz(zl)*dndlnM*dlnM*dz;
                 
                 Mb = 2.0*PI*pow(rmax,2.0)*(C.dc(zl)-C.dc(zl-dz))*C.rhoM0;
                 sigmab = interpolate(Mb, C.sigmalist);
@@ -134,7 +135,7 @@ double NhfNFW(cosmology &C, double zs, double kappathr) {
                 dlnM = log(M) - log(C.Mlist[jM-1]);
                 dndlnM = C.HMFlist[jz][jM][0];
                 rmax = rmaxfNFW(C, zs, zl, M, kappathr);
-                Nh += 306.535*PI*pow((1.0+zl)*rmax,2.0)/C.Hz(zl)*dndlnM*dlnM*dz;
+                Nh += CLIGHT*PI*pow((1.0+zl)*rmax,2.0)/C.Hz(zl)*dndlnM*dlnM*dz;
             }
         }
     }
@@ -143,7 +144,7 @@ double NhfNFW(cosmology &C, double zs, double kappathr) {
 
 // variance of kappa from weak lenses
 double sigmakappaW(cosmology &C, double zs, double kappathr) {
-    double Nh = 0.0, kappa1 = 0.0, kappa2 = 0.0;
+    double kappa2 = 0.0;
     double zl, dz, M, dlnM, dndlnM, r, kappar;
     int Nr = 100;
     double dlnr = 0.01;
@@ -170,15 +171,15 @@ double sigmakappaW(cosmology &C, double zs, double kappathr) {
                 kappar = kappathr;
                 while (kappar > 0.001*kappathr) {
                     kappar = kappagammaNFWeps(0.0, kappa0W, r/rsW, 0.0)[0];
-                    Nh += 306.535*PI*pow((1.0+zl)*r,2.0)/C.Hz(zl)*dndlnM*dlnr*dlnM*dz;
-                    kappa1 += 306.535*PI*pow((1.0+zl)*r,2.0)/C.Hz(zl)*dndlnM*kappar*dlnr*dlnM*dz;
-                    kappa2 += 306.535*PI*pow((1.0+zl)*r,2.0)/C.Hz(zl)*dndlnM*pow(kappar,2.0)*dlnr*dlnM*dz;
+                    // Campbell's theorem for Poisson-distributed halo counts: Var = int n kappa^2,
+                    // with log-annulus area element d(pi r^2) = 2 pi r^2 dlnr
+                    kappa2 += CLIGHT*2.0*PI*pow((1.0+zl)*r,2.0)/C.Hz(zl)*dndlnM*pow(kappar,2.0)*dlnr*dlnM*dz;
                     r = r*Edlnr;
                 }
             }
         }
     }
-    return sqrt(kappa2 - pow(kappa1,2.0)/Nh);
+    return sqrt(kappa2);
 }
 
 
@@ -263,7 +264,7 @@ vector<vector<vector<double> > > deltaNhfCYL(cosmology &C, double zs, double kap
                 dlnM = log(M) - log(C.Mlist[jM-1]);
                 dndlnM = C.FMFlist[jz][jM];
                 rmax = rmaxfCYL(C, zs, zl, M, kappathr);
-                dNh[jz][jM][0] = 306.535*PI*pow((1.0+zl)*rmax,2.0)/C.Hz(zl)*dndlnM*dlnM*dz;
+                dNh[jz][jM][0] = CLIGHT*PI*pow((1.0+zl)*rmax,2.0)/C.Hz(zl)*dndlnM*dlnM*dz;
                 
                 Mb = 2.0*PI*pow(rmax,2.0)*(C.dc(zl)-C.dc(zl-dz))*C.rhoM0;
                 sigmab = interpolate(Mb, C.sigmalist);
@@ -291,7 +292,7 @@ double NhfCYL(cosmology &C, double zs, double kappathr) {
                 dlnM = log(M) - log(C.Mlist[jM-1]);
                 dndlnM = C.FMFlist[jz][jM];
                 rmax = rmaxfCYL(C, zs, zl, M, kappathr);
-                Nh += 306.535*PI*pow((1.0+zl)*rmax,2.0)/C.Hz(zl)*dndlnM*dlnM*dz;
+                Nh += CLIGHT*PI*pow((1.0+zl)*rmax,2.0)/C.Hz(zl)*dndlnM*dlnM*dz;
             }
         }
     }
@@ -348,6 +349,10 @@ vector<vector<double> > lensing::Plnmuf(cosmology &C, double zs, rgen &mt, int f
     
     vector<vector<vector<double> > > dNH = deltaNhfNFW(C, zs, kappathrH);
     vector<vector<vector<double> > > dNF = deltaNhfCYL(C, zs, kappathrH);
+    if (subhalo) {
+        S.m_floor = subhalo_m_floor;
+        S.precompute(C, zs, subhalo_factor*kappathrH, kappathrH);
+    }
     if (write > 0) {
         writeToFile(C.zlist, C.Mlist, dNH, C.outdir/"dNH.dat");
         writeToFile(C.zlist, C.Mlist, dNF, C.outdir/"dNF.dat");
@@ -405,13 +410,31 @@ vector<vector<double> > lensing::Plnmuf(cosmology &C, double zs, rgen &mt, int f
                             phi = randomreal(0.0,2*PI,mt); // polar angle of r vector
                             phiH = randomreal(0.0,2*PI,mt); // orientation of the halo ellipticity
 
-                            kappagamma = kappagammaNFWeps(epsilon, kappa0H, r/rsH, phiH);
-                            
-                            kappalist[j] += kappagamma[0];
-                            gamma1list[j] += cos(phi)*kappagamma[1];
-                            gamma2list[j] += sin(phi)*kappagamma[1];
-                            
-                            meankappa += kappagamma[0];
+                            if (subhalo) {
+                                double kappabefore = kappalist[j];
+                                double Msm = max(C.Mlist[0], (1.0 - S.fsb[jz][jM])*M);
+                                vector<double> NFWp = interpolate2(zl, Msm, C.zlist, C.Mlist, C.NFWlist);
+                                double rs = NFWp[0];
+                                double kappa0 = kappa0NFW(rs, NFWp[1], Sigmac);
+                                double eps = (ell > 0) ? epsilonNFW(C, zl, Msm) : 0.0;
+                                kappagamma = kappagammaNFWeps(eps, kappa0, r/rs, phiH);
+                                kappalist[j] += kappagamma[0];
+                                gamma1list[j] += cos(phi)*kappagamma[1];
+                                gamma2list[j] += sin(phi)*kappagamma[1];
+                                S.addClumps(C, jz, jM, zl, M, Sigmac, r, phi, mt, kappalist[j], gamma1list[j], gamma2list[j]);
+                                double muW, sigmaW;
+                                S.wsubTerm(jz, jM, r, muW, sigmaW);
+                                kappalist[j] += muW + sigmaW*pG(mt);
+                                meankappa += kappalist[j] - kappabefore;
+                            } else {
+                                kappagamma = kappagammaNFWeps(epsilon, kappa0H, r/rsH, phiH);
+                                
+                                kappalist[j] += kappagamma[0];
+                                gamma1list[j] += cos(phi)*kappagamma[1];
+                                gamma2list[j] += sin(phi)*kappagamma[1];
+                                
+                                meankappa += kappagamma[0];
+                            }
                             
                             NtotH++;
                         }
@@ -424,13 +447,31 @@ vector<vector<double> > lensing::Plnmuf(cosmology &C, double zs, rgen &mt, int f
                                 phi = randomreal(0.0,2*PI,mt); // polar angle of r vector
                                 phiH = randomreal(0.0,2*PI,mt); // orientation of the halo ellipticity
 
-                                kappagamma = kappagammaNFWeps(epsilon, kappa0H, r/rsH, phiH);
-                                
-                                kappalist[j] += kappagamma[0];
-                                gamma1list[j] += cos(phi)*kappagamma[1];
-                                gamma2list[j] += sin(phi)*kappagamma[1];
-                                
-                                meankappa += kappagamma[0];
+                                if (subhalo) {
+                                    double kappabefore = kappalist[j];
+                                    double Msm = max(C.Mlist[0], (1.0 - S.fsb[jz][jM])*M);
+                                    vector<double> NFWp = interpolate2(zl, Msm, C.zlist, C.Mlist, C.NFWlist);
+                                    double rs = NFWp[0];
+                                    double kappa0 = kappa0NFW(rs, NFWp[1], Sigmac);
+                                    double eps = (ell > 0) ? epsilonNFW(C, zl, Msm) : 0.0;
+                                    kappagamma = kappagammaNFWeps(eps, kappa0, r/rs, phiH);
+                                    kappalist[j] += kappagamma[0];
+                                    gamma1list[j] += cos(phi)*kappagamma[1];
+                                    gamma2list[j] += sin(phi)*kappagamma[1];
+                                    S.addClumps(C, jz, jM, zl, M, Sigmac, r, phi, mt, kappalist[j], gamma1list[j], gamma2list[j]);
+                                    double muW, sigmaW;
+                                    S.wsubTerm(jz, jM, r, muW, sigmaW);
+                                    kappalist[j] += muW + sigmaW*pG(mt);
+                                    meankappa += kappalist[j] - kappabefore;
+                                } else {
+                                    kappagamma = kappagammaNFWeps(epsilon, kappa0H, r/rsH, phiH);
+                                    
+                                    kappalist[j] += kappagamma[0];
+                                    gamma1list[j] += cos(phi)*kappagamma[1];
+                                    gamma2list[j] += sin(phi)*kappagamma[1];
+                                    
+                                    meankappa += kappagamma[0];
+                                }
                                 
                                 NtotH++;
                             }
@@ -553,6 +594,13 @@ vector<vector<double> > lensing::Plnmuf(cosmology &C, double zs, rgen &mt, int f
 // loglikelihood of the Hubble digram data
 double lensing::loglikelihood(cosmology &C, double DLthr, vector<vector<double> > &data, vector<double> &par, int lens, int dm, rgen &mt) {
     
+    // As > 0 normalizes P(k) from the primordial amplitude and leaves sigma8 unused, so
+    // par[1] would not enter the likelihood and the chain would return its prior
+    if (C.As > 0.0) {
+        cerr << "loglikelihood: As-mode fixes the amplitude; par[1] (sigma8) would be inert. Set C.As = -1 to fit sigma8." << endl;
+        exit(1);
+    }
+
     // initialize cosmology
     C.OmegaM = par[0];
     C.sigma8 = par[1];
