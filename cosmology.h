@@ -124,7 +124,7 @@ private:
     double Plin(double z, double k, double deltaH) {
         return (2.0*pow(PI,2.0))*pow(Deltak(k, deltaH)*Dg(z), 2.0)/(pow(k,3.0));
     }
-    
+
     // FDM matter power spectrum
     double DeltakF(double k, double deltaH, double m22) {
         return sqrt(pow(CLIGHT*k/H0,3.0+ns)*pow(deltaH*TMF(k,m22),2.0));
@@ -239,9 +239,21 @@ private:
     
 public:
     
+    // growth-free (z=0, Dg factored out) CDM linear power P0(k), used by the
+    // correlated 1D bias field (BiasField1D, lensing.cpp). Growth enters per cell
+    // via b(M,z_l) Dg(z_l), exactly as in the legacy Baumann (5.129) convention,
+    // so the field spectrum must NOT carry Dg. Equals Plin(0,k,deltaH8)/Dg(0)^2.
+    double Pk0(double k) {
+        return 2.0*pow(PI,2.0)*pow(Deltak(k, deltaH8),2.0)/pow(k,3.0);
+    }
+
     // halo bias b(M,z)
     double halobias(double z, double sigma);
-    
+
+    // filament bias b_fil(M,z): peak-background split of the filament
+    // first-crossing barrier pFCfil (flat barrier, p = 0, q = 0.7)
+    double filbias(double z, double sigma);
+
     // star formation rate
     double fstar(double z, double M, double Mc, double Mt, double epsilon, double alpha, double beta);
 

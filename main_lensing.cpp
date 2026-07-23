@@ -51,7 +51,16 @@ int main (int argc, char *argv[]) {
     L.Nreal = 4e5; // realizations
     L.Nhalos = 100; // number of halos in each realization
     L.Nbins = 12; // P(lnmu) bin widht = sigma/Nbins
-    
+
+    // Correlated 1D clustering-bias field (see lensing.h). Defaults reproduce the
+    // legacy iid bias bit-for-bit; uncomment for the paper production config:
+    //   L.bias_model  = 1;       // correlated 1D pencil-beam field
+    //   L.bias_window = 1;       // spherical top-hat
+    //   L.bias_Rperp  = 20000.0; // smoothing radius R_s = 20 Mpc (comoving kpc)
+    //   L.bias_weak   = true;    // conditional sub-threshold weak arm
+    //   L.fil_bias    = true;    // filaments ride filbias (PBS of pFCfil)
+
+
     //L.Plnmuf(C, 1.0, mt, 1, 1, 1, 1);
     
     double z, lnmu, DL0, DL, sigmaDL;

@@ -1,6 +1,9 @@
 #include "cosmology.h"
 #include "lensing.h"
 #include <cstdlib>
+#include <stdexcept>
+#include <algorithm>
+#include <gsl/gsl_sf_bessel.h>
 
 
 double Sigmacf(cosmology &C, double zs, double zl) {
@@ -304,6 +307,309 @@ double NhfCYL(cosmology &C, double zs, double kappathr) {
 /*                                                    PDF of amplifications                                                                       */
 /* ---------------------------------------------------------------------------------------------------------------------------------------------- */
 
+/* ---------------------------------------------------------------------------------------------------------------------------------------------- */
+/*                                       Correlated 1D environment field for the bias layer (bias_model = 1)                                       */
+/* ---------------------------------------------------------------------------------------------------------------------------------------------- */
+//
+// Replaces the legacy iid per-(jz,jM) log-normal count modulation with segment
+// averages of ONE Gaussian field delta_1D(chi) along the LOS (ported from the
+// emulator; design: docs/bias_field_design_note.md).
+//
+//   P_1D(kpar; Rperp) = (1/2pi) int dkperp kperp P0(sqrt(kpar^2+kperp^2))
+//                       * W(k Rperp)^2            (KP91 eq. 3.8; window on k_perp
+//   for the disk shape, on |k| for top-hat/Gaussian)
+//   modes k_n = 2 pi n / L, L = 1.05 chi(z_s), n = 1..N_max = L/Rperp (>= 4);
+//   per-mode field variance 2 P_1D(k_n)/L.
+//
+// The per-z-shell SEGMENT AVERAGES of the truncated mode sum form a Gaussian
+// vector with covariance
+//   Cov_ij = sum_n (2/L) P_1D(k_n) cos(k_n (c_i - c_j)) snc_i(k_n) snc_j(k_n),
+//   snc_i(k) = sin(k L_i / 2)/(k L_i / 2),
+// realized exactly by a Cholesky factor: dbar = chol * g, g ~ N(0,1)^n. P0(k) is
+// the GROWTH-FREE linear power (cosmology::Pk0); growth enters per cell via
+// b(M,z_l) Dg(z_l), exactly as in the legacy layer (Baumann 5.129 convention).
+
+// Per-cell sub-threshold Campbell moments for the weak arm (bias_weak):
+//   m[jz][jM] = int nbar kappa,  v[jz][jM] = int nbar kappa^2
+// over the sub-threshold annuli, with the SAME integrand, log-annulus measure,
+// stepping and floor as sigmakappaW so that sum_{jz,jM} v == sigmakappaW^2
+// (asserted at build time; the only difference is per-cell bookkeeping).
+static void weakMomentsNFW(cosmology &C, double zs, double kappathr, double eps_floor,
+                           vector<vector<double> > &m, vector<vector<double> > &v) {
+    m.assign(C.Nz, vector<double>(C.NM, 0.0));
+    v.assign(C.Nz, vector<double>(C.NM, 0.0));
+    double zl, dz, M, dlnM, dndlnM, r, kappar;
+    double dlnr = 0.01;
+    double Edlnr = exp(dlnr);
+    for (int jz = 1; jz < C.Nz; jz++) {
+        zl = C.zlist[jz];
+        dz = zl - C.zlist[jz-1];
+        if (zl < zs) {
+            for (int jM = 1; jM < C.NM; jM++) {
+                M = C.Mlist[jM];
+                dlnM = log(M) - log(C.Mlist[jM-1]);
+                dndlnM = C.HMFlist[jz][jM][0];
+
+                r = rmaxfNFW(C, zs, zl, M, kappathr);
+                if (r == 0.0) {
+                    r = 1.0e-6;
+                }
+
+                double SigmacW = Sigmacf(C, zs, zl);
+                vector<double> NFWpW = interpolate2(zl, M, C.zlist, C.Mlist, C.NFWlist);
+                double rsW = NFWpW[0];
+                double kappa0W = kappa0NFW(rsW, NFWpW[1], SigmacW);
+
+                kappar = kappathr;
+                while (kappar > eps_floor*kappathr) {
+                    kappar = kappagammaNFWeps(0.0, kappa0W, r/rsW, 0.0)[0];
+                    double pref = CLIGHT*2.0*PI*pow((1.0+zl)*r,2.0)/C.Hz(zl)*dndlnM*dlnr*dlnM*dz;
+                    m[jz][jM] += pref*kappar;
+                    v[jz][jM] += pref*pow(kappar,2.0);
+                    r = r*Edlnr;
+                }
+            }
+        }
+    }
+}
+
+// Smoothing window W~(x)^2 for the ISOTROPIC bias-field windows (bias_window
+// 1 = spherical top-hat, 2 = Gaussian), x = |k| R. Window 0 (transverse disk)
+// acts on k_perp alone and stays precomputed on the k_perp grid in build().
+static inline double biasWindow2(double x, int window) {
+    if (window == 2) {                                 // Gaussian, exp(-x^2/2)
+        double W = exp(-0.5*x*x);
+        return W*W;
+    }
+    // spherical top-hat, 3 (sin x - x cos x)/x^3; use the series below 1e-2 to
+    // avoid cancellation.
+    double W;
+    if (x < 1.0e-2) {
+        double x2 = x*x;
+        W = 1.0 - x2/10.0*(1.0 - x2/28.0);
+    } else {
+        W = 3.0*(sin(x) - x*cos(x))/(x*x*x);
+    }
+    return W*W;
+}
+
+struct BiasField1D {
+    int n = 0;                        // number of z-shells (jz = 1 .. n, zlist[jz] < zs)
+    double Rperp = 0.0, L = 0.0;
+    int window = 0;                   // cfg.bias_window (0 disk, 1 top-hat, 2 Gaussian)
+    long Nmax = 0;                    // mode count L/Rperp (>= 4)
+    std::vector<double> sig2;         // Cov_ii per shell (z=0 field, segment-averaged)
+    std::vector<double> chol;         // lower-triangular Cholesky of Cov, row-major n*n
+
+    // ---- weak (sub-threshold) arm tables, built only when bias_weak: per shell
+    // i, on a uniform delta grid over +-DGRID_SIG sigma_i, log tables of
+    // T_i(delta) = sum_M m_iM lambda_iM(delta) and V_i(delta) = sum_M v_iM
+    // lambda_iM(delta); S_i = T_i - msum_i. Outside the grid delta is clamped.
+    static constexpr int NGRID_W = 193;
+    static constexpr double DGRID_SIG = 6.0;
+    bool has_weak = false;
+    std::vector<double> msum;         // per shell: sum_M m_iM
+    std::vector<double> lnT, lnV;     // row-major n*NGRID_W
+
+    // shell index for a given jz (cells at jz have chi in [dc(z_{jz-1}), dc(z_jz)])
+    inline int shell(int jz) const { return (jz >= 1 && jz <= n) ? jz - 1 : -1; }
+
+    // weak-arm lookup: conditional mean shift S and Campbell variance V of
+    // shell i at field value delta (linear interp of the log tables)
+    inline void weakSV(int i, double delta, double &S, double &V) const {
+        double si = sqrt(sig2[i]);
+        double half = DGRID_SIG*si;
+        double x = std::min(std::max(delta, -half), half);
+        double t = (x + half)/(2.0*half)*(NGRID_W - 1);
+        int g = std::min(static_cast<int>(t), NGRID_W - 2);
+        double f = t - g;
+        const double *rT = &lnT[static_cast<size_t>(i)*NGRID_W];
+        const double *rV = &lnV[static_cast<size_t>(i)*NGRID_W];
+        S = exp((1.0 - f)*rT[g] + f*rT[g+1]) - msum[i];
+        V = exp((1.0 - f)*rV[g] + f*rV[g+1]);
+    }
+
+    // Build the weak-arm tables. skappaW = sigmakappaW(...) with the SAME
+    // kappathr/eps_floor — used for the sum_v == sigma_W^2 consistency gate.
+    void buildWeak(cosmology &C, double zs, double kappathr, double eps_floor,
+                   double skappaW) {
+        if (n == 0) return;
+        vector<vector<double> > mc, vc;
+        weakMomentsNFW(C, zs, kappathr, eps_floor, mc, vc);
+        double sv = 0.0;
+        for (int jz = 0; jz < C.Nz; jz++)
+            for (int jM = 0; jM < C.NM; jM++) sv += vc[jz][jM];
+        if (fabs(sv - skappaW*skappaW) > 1.0e-9*skappaW*skappaW) {
+            throw std::runtime_error("bias_weak: sum of per-cell v moments != sigma_W^2 "
+                                     "(weakMomentsNFW drifted from sigmakappaW)");
+        }
+        msum.assign(n, 0.0);
+        lnT.assign(static_cast<size_t>(n)*NGRID_W, 0.0);
+        lnV.assign(static_cast<size_t>(n)*NGRID_W, 0.0);
+        for (int i = 0; i < n; i++) {
+            int jz = i + 1;
+            double zl = C.zlist[jz];
+            double Dgz = C.Dg(zl);
+            double si = sqrt(sig2[i]);
+            for (int g = 0; g < NGRID_W; g++) {
+                double delta = (-DGRID_SIG + 2.0*DGRID_SIG*g/(NGRID_W - 1))*si;
+                double T = 0.0, V = 0.0;
+                for (int jM = 1; jM < C.NM; jM++) {
+                    double mm = mc[jz][jM];
+                    if (mm <= 0.0 && vc[jz][jM] <= 0.0) continue;
+                    double a = Dgz*C.halobias(zl, C.sigmalist[jM][1]);
+                    double lam = exp(a*delta - 0.5*a*a*sig2[i]);
+                    T += mm*lam;
+                    V += vc[jz][jM]*lam;
+                }
+                lnT[static_cast<size_t>(i)*NGRID_W + g] = log(std::max(T, 1.0e-300));
+                lnV[static_cast<size_t>(i)*NGRID_W + g] = log(std::max(V, 1.0e-300));
+            }
+            for (int jM = 1; jM < C.NM; jM++) msum[i] += mc[jz][jM];
+        }
+        has_weak = true;
+    }
+
+    void build(cosmology &C, double zs, double Rp, int win = 0) {
+        Rperp = Rp;
+        window = win;
+        // ---- shells
+        std::vector<double> clo, chi_;
+        for (int jz = 1; jz < C.Nz && C.zlist[jz] < zs; jz++) {
+            clo.push_back(C.dc(C.zlist[jz-1]));
+            chi_.push_back(C.dc(C.zlist[jz]));
+        }
+        n = static_cast<int>(clo.size());
+        if (n == 0) return;
+
+        L = 1.05*C.dc(zs);
+        Nmax = std::max(4L, static_cast<long>(std::floor(L/Rperp)));
+        if (Nmax > 5000000L) {
+            throw std::invalid_argument("bias_Rperp too small: N_max = L/Rperp > 5e6 modes");
+        }
+        const double kmin = 2.0*PI/L;
+        const double kmax = 2.0*PI*static_cast<double>(Nmax)/L;
+
+        // ---- P_1D table (log-log interpolated; window 0 = disk via GSL J1 on
+        // k_perp, precomputed here; windows 1/2 act on |k| and are evaluated
+        // inside the k_par loop below).
+        const int nkperp = 2048, nktab = 600;
+        const double Rw = std::max(Rperp, 10.0);          // window floor, as in the prototype
+        const double kperp_lo = 1.0e-9, kperp_hi = 60.0/Rw;
+        const double dlnkp = log(kperp_hi/kperp_lo)/(nkperp - 1);
+        std::vector<double> kperp(nkperp), W2(nkperp);
+        for (int i = 0; i < nkperp; i++) {
+            kperp[i] = kperp_lo*exp(dlnkp*i);
+            double x = kperp[i]*Rperp;
+            double Wd = (x < 1.0e-6) ? 1.0 : 2.0*gsl_sf_bessel_J1(x)/x;
+            W2[i] = Wd*Wd;
+        }
+        std::vector<double> lktab(nktab), lPtab(nktab);
+        const double lk0 = log(0.5*kmin), lk1 = log(kmax);
+        for (int t = 0; t < nktab; t++) {
+            double lk = lk0 + (lk1 - lk0)*t/(nktab - 1);
+            double kpar = exp(lk);
+            double s = 0.0, fprev = 0.0;
+            for (int i = 0; i < nkperp; i++) {
+                double kk = sqrt(kpar*kpar + kperp[i]*kperp[i]);
+                double w2 = (window == 0) ? W2[i] : biasWindow2(kk*Rperp, window);
+                double f = kperp[i]*kperp[i]*C.Pk0(kk)*w2;
+                if (i > 0) s += 0.5*(f + fprev)*dlnkp;
+                fprev = f;
+            }
+            lktab[t] = lk;
+            lPtab[t] = log(std::max(s/(2.0*PI), 1.0e-300));
+        }
+        auto P1D = [&](double k) {
+            double lk = log(k);
+            if (lk <= lktab.front()) return exp(lPtab.front());
+            if (lk >= lktab.back())  return exp(lPtab.back());
+            int t = static_cast<int>((lk - lktab.front())/(lktab[1] - lktab[0]));
+            t = std::min(t, nktab - 2);
+            double f = (lk - lktab[t])/(lktab[t+1] - lktab[t]);
+            return exp((1.0 - f)*lPtab[t] + f*lPtab[t+1]);
+        };
+
+        // ---- covariance: EXACT mode sum, k_q = 2 pi q / L, q = 1..Nmax.
+        // Phases at the shell EDGES advance by a fixed rotation per mode
+        // (uniform k grid); resynced every 4096 modes against drift.
+        std::vector<double> a(n), b(n), Lh(n);
+        for (int i = 0; i < n; i++) {
+            a[i]  = clo[i];
+            b[i]  = chi_[i];
+            Lh[i] = chi_[i] - clo[i];
+        }
+        std::vector<double> Cov(static_cast<size_t>(n)*n, 0.0);
+        std::vector<double> ca(n), sa(n), cb(n), sb(n);       // phases at edges
+        std::vector<double> ra_c(n), ra_s(n), rb_c(n), rb_s(n); // per-mode rotations
+        const double dk = 2.0*PI/L;
+        for (int i = 0; i < n; i++) {
+            ra_c[i] = cos(dk*a[i]); ra_s[i] = sin(dk*a[i]);
+            rb_c[i] = cos(dk*b[i]); rb_s[i] = sin(dk*b[i]);
+        }
+        std::vector<double> cq(n), sq(n);
+        for (long q = 1; q <= Nmax; q++) {
+            double kq = dk*static_cast<double>(q);
+            if (q == 1 || (q & 4095) == 0) {                  // init / resync
+                for (int i = 0; i < n; i++) {
+                    ca[i] = cos(kq*a[i]); sa[i] = sin(kq*a[i]);
+                    cb[i] = cos(kq*b[i]); sb[i] = sin(kq*b[i]);
+                }
+            } else {                                          // rotate by dk
+                for (int i = 0; i < n; i++) {
+                    double c0 = ca[i], s0 = sa[i];
+                    ca[i] = c0*ra_c[i] - s0*ra_s[i];
+                    sa[i] = s0*ra_c[i] + c0*ra_s[i];
+                    c0 = cb[i]; s0 = sb[i];
+                    cb[i] = c0*rb_c[i] - s0*rb_s[i];
+                    sb[i] = s0*rb_c[i] + c0*rb_s[i];
+                }
+            }
+            double rw = sqrt(2.0*P1D(kq)/L);                  // per-mode field std
+            for (int i = 0; i < n; i++) {
+                double inv = 1.0/(kq*Lh[i]);
+                cq[i] = rw*(sb[i] - sa[i])*inv;               // cos(k c) snc
+                sq[i] = rw*(ca[i] - cb[i])*inv;               // sin(k c) snc
+            }
+            for (int i = 0; i < n; i++) {
+                double *row = &Cov[static_cast<size_t>(i)*n];
+                double ci = cq[i], si = sq[i];
+                for (int jj = 0; jj <= i; jj++)
+                    row[jj] += ci*cq[jj] + si*sq[jj];
+            }
+        }
+        for (int i = 0; i < n; i++)
+            for (int jj = i + 1; jj < n; jj++)
+                Cov[static_cast<size_t>(i)*n + jj] = Cov[static_cast<size_t>(jj)*n + i];
+
+        sig2.assign(n, 0.0);
+        double trace = 0.0;
+        for (int i = 0; i < n; i++) {
+            sig2[i] = Cov[static_cast<size_t>(i)*n + i];
+            trace += sig2[i];
+        }
+
+        // ---- Cholesky (PSD by construction; tiny relative jitter for roundoff)
+        const double jitter = 1.0e-12*trace/n;
+        for (int i = 0; i < n; i++) Cov[static_cast<size_t>(i)*n + i] += jitter;
+        chol.assign(static_cast<size_t>(n)*n, 0.0);
+        for (int i = 0; i < n; i++) {
+            for (int jj = 0; jj <= i; jj++) {
+                double s = Cov[static_cast<size_t>(i)*n + jj];
+                for (int kk = 0; kk < jj; kk++)
+                    s -= chol[static_cast<size_t>(i)*n + kk]*chol[static_cast<size_t>(jj)*n + kk];
+                if (i == jj) {
+                    chol[static_cast<size_t>(i)*n + i] = sqrt(std::max(s, 0.0));
+                } else {
+                    double d = chol[static_cast<size_t>(jj)*n + jj];
+                    chol[static_cast<size_t>(i)*n + jj] = (d > 0.0) ? s/d : 0.0;
+                }
+            }
+        }
+    }
+};
+
+
 // find threshold kappa
 double findkappathr(int N, function<double(double)> Nf) {
     double kappa1 = 1.0e-12, kappa2 = 1.0;
@@ -322,7 +628,27 @@ double findkappathr(int N, function<double(double)> Nf) {
 
 // probability distribution of lnmu, {lnmu, dP/dlnmu}
 vector<vector<double> > lensing::Plnmuf(cosmology &C, double zs, rgen &mt, int fil, int bias, int ell, int write) {
-    
+
+    // ---- clustering-bias configuration guards (see lensing.h)
+    if (bias_model != 0 && bias_model != 1) {
+        throw std::invalid_argument("bias_model must be 0 (legacy iid cell bias) or 1 (correlated 1D field)");
+    }
+    if (bias_model == 1 && bias_Rperp <= 0.0) {
+        throw std::invalid_argument("bias_model = 1 requires bias_Rperp > 0 (comoving kpc)");
+    }
+    if (bias_window < 0 || bias_window > 2) {
+        throw std::invalid_argument("bias_window must be 0 (transverse disk), 1 (spherical top-hat) or 2 (Gaussian)");
+    }
+    if (bias_window != 0 && bias_model != 1) {
+        throw std::invalid_argument("bias_window != 0 requires bias_model = 1 (the window shapes the correlated field's power spectrum)");
+    }
+    if (bias_weak && bias_model != 1) {
+        throw std::invalid_argument("bias_weak requires bias_model = 1 (the correlated field supplies the conditioning); it is a no-op when bias = 0");
+    }
+    if (fil_bias && bias_model != 1) {
+        throw std::invalid_argument("fil_bias requires bias_model = 1 (the correlated field carries the filament modulation); it is a no-op in the legacy iid layer");
+    }
+
     // fix threshold kappa
     function<double(double)> NfNFW = [&C, zs](double kappa) {
         return NhfNFW(C, zs, kappa);
@@ -340,13 +666,19 @@ vector<vector<double> > lensing::Plnmuf(cosmology &C, double zs, rgen &mt, int f
         cout << "Error: negative standard deviation." << endl;
     }
     
+    // bias_weak (+ field + bias on): the weak background is drawn CONDITIONALLY on
+    // the field, which is only available after the field block below — the initial
+    // fill is skipped (0.0) here and done there instead. All other paths keep the
+    // legacy unconditional fill (bit-identical stream for bias_model = 0).
+    const bool weak_conditional = bias_weak && bias_model == 1 && bias != 0;
+
     vector<double> kappalist(Nreal, 0.0);
     vector<double> gamma1list(Nreal, 0.0);
     vector<double> gamma2list(Nreal, 0.0);
     for (int j = 0; j < Nreal; j++) {
-        kappalist[j] = PkappaW(mt);
+        kappalist[j] = weak_conditional ? 0.0 : PkappaW(mt);
     }
-    
+
     vector<vector<vector<double> > > dNH = deltaNhfNFW(C, zs, kappathrH);
     vector<vector<vector<double> > > dNF = deltaNhfCYL(C, zs, kappathrH);
     if (subhalo) {
@@ -360,6 +692,62 @@ vector<vector<double> > lensing::Plnmuf(cosmology &C, double zs, rgen &mt, int f
     
     array<double,2> kappagamma;
     normal_distribution<double> pG(0.0, 1.0);
+
+    // bias_model = 1: draw the correlated per-shell environment field for ALL
+    // realizations up front (the sampling loops below are cell-major, so shell jz
+    // needs every realization's field value when its cells are processed). This is
+    // the ONLY model-1 RNG consumption outside the shared path; model 0 draws
+    // nothing here and is bit-identical to the legacy stream. bias == 0 skips the
+    // build (lambda is forced to 1, so the field would be dead weight and its draws
+    // would needlessly shift the halo stream vs bias_model = 0).
+    // Memory: Nreal * n_shells floats.
+    BiasField1D bfield;
+    std::vector<float> bfvals;
+    if (bias_model == 1 && bias != 0) {
+        bfield.build(C, zs, bias_Rperp, bias_window);
+        if (bfield.n > 0) {
+            const int nsh = bfield.n;
+            bfvals.resize(static_cast<size_t>(Nreal)*nsh);
+            std::vector<double> g(nsh);
+            for (int j = 0; j < Nreal; j++) {
+                for (int i = 0; i < nsh; i++) g[i] = pG(mt);
+                for (int i = 0; i < nsh; i++) {
+                    double s = 0.0;
+                    const double *row = &bfield.chol[static_cast<size_t>(i)*nsh];
+                    for (int kk = 0; kk <= i; kk++) s += row[kk]*g[kk];
+                    bfvals[static_cast<size_t>(j)*nsh + i] = static_cast<float>(s);
+                }
+            }
+        }
+    }
+
+    // bias_weak: conditional weak background, drawn from the SAME realized field
+    // values as the count modulation (Cox split of Campbell's theorem). Consumes
+    // one normal per realization, at this fixed stream point. The eps floor 0.001
+    // matches sigmakappaW's hardcoded 0.001*kappathr, so the sum_v == sigma_W^2
+    // gate in buildWeak holds. Degenerate n == 0 (z_s below the first grid shell)
+    // falls back to the legacy unconditional draw.
+    if (weak_conditional) {
+        if (bfield.n > 0) {
+            bfield.buildWeak(C, zs, kappathrH, 0.001, skappaW);
+            const int nsh = bfield.n;
+            for (int j = 0; j < Nreal; j++) {
+                double sumS = 0.0, sumV = 0.0, Sw, Vw;
+                const float *fj = &bfvals[static_cast<size_t>(j)*nsh];
+                for (int i = 0; i < nsh; i++) {
+                    bfield.weakSV(i, static_cast<double>(fj[i]), Sw, Vw);
+                    sumS += Sw;
+                    sumV += Vw;
+                }
+                kappalist[j] = sumS + sqrt(std::max(sumV, 0.0))*pG(mt);
+            }
+        } else {
+            for (int j = 0; j < Nreal; j++) {
+                kappalist[j] = PkappaW(mt);
+            }
+        }
+    }
+
     poisson_distribution<int> PN;
     double zl, M, rmaxH, rmaxF, r, phi, phiH, phiF, epsilon = 0.0, barNH, barNF, sigma, deltab, lambda, meankappa = 0.0;
     int NH, NF;
@@ -393,16 +781,51 @@ vector<vector<double> > lensing::Plnmuf(cosmology &C, double zs, rgen &mt, int f
                     kappa0baseF = rsF * 14.4*C.rhoc*LF / Sigmac;
                 }
 
+                // bias_model = 1: this cell's shell index and field amplitudes.
+                // bDg = b(M,z_l) Dg(z_l) (growth-free field; the sigmab variance is
+                // carried by the field's own sig2), bcomp = 1/2 bDg^2 sig2 so that
+                // <lambda> = 1 exactly. bDgF/bcompF use the filament bias filbias
+                // (cfg fil_bias) so filaments ride b_fil instead of the halo bias;
+                // they stay 0 (=> lambdaF falls back to lambda) otherwise.
+                int bsh = -1;
+                double bDg = 0.0, bcomp = 0.0, bDgF = 0.0, bcompF = 0.0;
+                if (bias_model == 1) {
+                    bsh = bfield.shell(jz);
+                    if (bsh >= 0) {
+                        bDg = C.Dg(zl)*C.halobias(zl, C.sigmalist[jM][1]);
+                        bcomp = 0.5*bDg*bDg*bfield.sig2[bsh];
+                        if (fil_bias) {
+                            bDgF = C.Dg(zl)*C.filbias(zl, C.sigmalist[jM][1]);
+                            bcompF = 0.5*bDgF*bDgF*bfield.sig2[bsh];
+                        }
+                    }
+                }
+
                 for (int j = 0; j < Nreal; j++) {
-                    
-                    // bias
-                    deltab = sigma*pG(mt);
-                    lambda = exp(deltab - pow(sigma,2.0)/2.0); // log-normal
-                    
+
+                    // bias: correlated field (bias_model = 1) or legacy iid draw
+                    if (bias_model == 1) {
+                        lambda = (bsh >= 0)
+                            ? exp(bDg*bfvals[static_cast<size_t>(j)*bfield.n + bsh] - bcomp)
+                            : 1.0;
+                    } else {
+                        deltab = sigma*pG(mt);
+                        lambda = exp(deltab - pow(sigma,2.0)/2.0); // log-normal
+                    }
+
                     if (bias == 0) {
                         lambda = 1.0;
                     }
-                    
+
+                    // Filament count modulation. Same realized field, but the
+                    // filament amplitude uses filbias (fil_bias, bias_model = 1).
+                    // Defaults to the halo lambda, so fil_bias = 0 (and the whole
+                    // legacy layer) is bitwise unchanged; no new RNG draw.
+                    double lambdaF = lambda;
+                    if (fil_bias && bias != 0 && bias_model == 1 && bsh >= 0) {
+                        lambdaF = exp(bDgF*bfvals[static_cast<size_t>(j)*bfield.n + bsh] - bcompF);
+                    }
+
                     // generate halos
                     if (lambda*barNH < 0.2) { // if lambda is small, compare to a random number U(0,1) (faster)
                         if (lambda*barNH > randomreal(0.0, 1.0, mt)) {
@@ -480,8 +903,8 @@ vector<vector<double> > lensing::Plnmuf(cosmology &C, double zs, rgen &mt, int f
                     
                     if (fil > 0) {
                         // generate filaments
-                        if (lambda*barNF < 0.2) { // if lambda is small, compare to a random number U(0,1) (faster)
-                            if (lambda*barNF > randomreal(0.0, 1.0, mt)) {
+                        if (lambdaF*barNF < 0.2) { // if lambda is small, compare to a random number U(0,1) (faster)
+                            if (lambdaF*barNF > randomreal(0.0, 1.0, mt)) {
                                 r = sqrt(randomreal(0.0,1.0,mt))*rmaxF; // distance from the line-of-sight
                                 phi = randomreal(0.0,2*PI,mt); // polar angle of r vector
                                 phiF = randomreal(0.0,2*PI,mt); // orientation of the filament
@@ -497,7 +920,7 @@ vector<vector<double> > lensing::Plnmuf(cosmology &C, double zs, rgen &mt, int f
                                 NtotF++;
                             }
                         } else { // for larger lambda, generate number of halos from Poisson distribution (slower)
-                            PN = poisson_distribution<int>(lambda*barNF);
+                            PN = poisson_distribution<int>(lambdaF*barNF);
                             NF = PN(mt);
                             if (NF > 0) {
                                 for (int jF = 0; jF < NF; jF++) {
