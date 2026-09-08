@@ -29,7 +29,12 @@ public:
     double ns;
     double As = -1.0;
     double kpivot = 5.0e-5;
-    double sigma8_derived = 0.0;
+    // sigma8 anchor filter, ignored when As > 0. 1: real space top-hat at
+    // 8 Mpc/h, the conventional sigma8. 0: smooth-k Ws at M8 (legacy, reads
+    // 4.2% high in sigma). Anchors the amplitude only, not sigma_M(M).
+    bool sigma8_tophat = true;
+    double sigma8_derived = 0.0; // via the smooth-k Ws
+    double sigma8_tophat_derived = 0.0; // via the top-hat
     double As_derived = 0.0;
     double OmegaR;
     double OmegaL;
@@ -124,7 +129,7 @@ private:
     double Plin(double z, double k, double deltaH) {
         return (2.0*pow(PI,2.0))*pow(Deltak(k, deltaH)*Dg(z), 2.0)/(pow(k,3.0));
     }
-    
+
     // FDM matter power spectrum
     double DeltakF(double k, double deltaH, double m22) {
         return sqrt(pow(CLIGHT*k/H0,3.0+ns)*pow(deltaH*TMF(k,m22),2.0));
@@ -187,6 +192,7 @@ private:
     
     // variance of the matter fluctuations, m22: FDM mass in 10^-22 eV, m3: WDM mass in keV
     vector<double> sigmaC(double M, double deltaH);
+    vector<double> sigmaTH(double M, double deltaH);  // real-space top-hat; amplitude anchor only
     vector<double> sigmaF(double M, double deltaH, double m22);
     vector<double> sigmaW(double M, double deltaH, double m3);
     vector<double> sigmaE(double M, double deltaH, double kc);
@@ -239,9 +245,21 @@ private:
     
 public:
     
+    // growth-free (z=0, Dg factored out) CDM linear power P0(k), used by the
+    // correlated 1D bias field (BiasField1D, lensing.cpp). Growth enters per cell
+    // via b(M,z_l) Dg(z_l), exactly as in the legacy Baumann (5.129) convention,
+    // so the field spectrum must NOT carry Dg. Equals Plin(0,k,deltaH8)/Dg(0)^2.
+    double Pk0(double k) {
+        return 2.0*pow(PI,2.0)*pow(Deltak(k, deltaH8),2.0)/pow(k,3.0);
+    }
+
     // halo bias b(M,z)
     double halobias(double z, double sigma);
-    
+
+    // filament bias b_fil(M,z): peak-background split of the filament
+    // first-crossing barrier pFCfil (flat barrier, p = 0, q = 0.7)
+    double filbias(double z, double sigma);
+
     // star formation rate
     double fstar(double z, double M, double Mc, double Mt, double epsilon, double alpha, double beta);
 
@@ -298,12 +316,16 @@ public:
         rhoM0 = OmegaM*rhoc;
         M8 = 4.0*PI/3.0*pow(8000.0/h,3.0)*rhoM0;
 
+        // sigma8_tophat picks the filter that defines the anchor at M8
         if (As > 0.0) {
             deltaH8 = 0.4*0.7869370293916*sqrt(As)*pow(CLIGHT*kpivot/H0,(1.0-ns)/2.0)/OmegaM;
+        } else if (sigma8_tophat) {
+            deltaH8 = sigma8/sigmaTH(M8, 1.0)[0];
         } else {
             deltaH8 = sigma8/sigmaC(M8, 1.0)[0];
         }
         sigma8_derived = deltaH8*sigmaC(M8, 1.0)[0];
+        sigma8_tophat_derived = deltaH8*sigmaTH(M8, 1.0)[0];
         As_derived = pow(deltaH8*OmegaM/(0.4*0.7869370293916),2.0)*pow(CLIGHT*kpivot/H0,ns-1.0);
     }
 

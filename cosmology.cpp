@@ -79,6 +79,30 @@ vector<double> cosmology::sigmaC(double M, double deltaH) {
 }
 
 
+// variance of the CDM matter fluctuations with the real space top-hat filter,
+// same P(k) and k grid as sigmaC. Used only to anchor sigma8 (sigma8_tophat);
+// sigma_M(M) for the mass function keeps the smooth-k Ws, whose (p,q) fits need
+// a Markovian filter. The dsigma/dM slot is for signature parity with sigmaC.
+vector<double> cosmology::sigmaTH(double M, double deltaH) {
+    double RM = pow(3.0*M/(4.0*PI*rhoM0),1.0/3.0);
+    double DRM = RM/(3.0*M);
+
+    double kmax = 1000.0/RM;
+    double kmin = 1.0e-6*kmax;
+    double dlogk = (log(kmax)-log(kmin))/(1.0*(Nk-1));
+
+    double sigma2 = 0.0, dsigma2 = 0.0;
+    double k1, k2 = kmin;
+    for (int jk = 0; jk < Nk; jk++) {
+        k1 = k2;
+        k2 = exp(log(k2)+dlogk);
+        sigma2 += (k2-k1)*(pow(W(k1*RM)*Deltak(k1,deltaH),2.0)/k1 + pow(W(k2*RM)*Deltak(k2,deltaH),2.0)/k2)/2.0;
+        dsigma2 += (k2-k1)*(2.0*k2*DRM*DW(k2*RM)*W(k2*RM)*pow(Deltak(k2,deltaH),2.0)/k2 + 2.0*k1*DRM*DW(k1*RM)*W(k1*RM)*pow(Deltak(k1,deltaH),2.0)/k1)/2.0;
+    }
+    return {sqrt(sigma2), dsigma2/(2.0*sqrt(sigma2))};
+}
+
+
 // variance of the FDM matter fluctuations
 vector<double> cosmology::sigmaF(double M, double deltaH, double m22) {
     double RM = pow(3.0*M/(4.0*PI*rhoM0),1.0/3.0);
@@ -485,13 +509,31 @@ double rhokNFW(double k, double rs, double rhos, double c) {
 
 
 // halo bias, see Baumann (5.132)
+// (p,q) matches the halo first-crossing barrier pFC, so b is the peak-background
+// split of the code's own mass function, as filbias mirrors pFCfil at q = 0.7.
 double cosmology::halobias(double z, double sigma) {
 
     double p = 0.3;
-    double q = 0.75;
+    double q = 0.8;
     double qnu2 = q*pow(deltac(z)/sigma,2.0);
     
     return 1.0 + (qnu2-1.0)/deltac0 + 2.0*p/(deltac0*(1.0+pow(qnu2, p)));
+}
+
+// filament bias b_fil(M,z): peak-background split of the filament first-crossing
+// barrier pFCfil (flat barrier, p = 0, q = 0.7). The p = 0 limit drops the
+// 2p/[...] term of the Sheth-Mo-Tormen halo form, leaving the flat-barrier bias
+//   b_fil = 1 + (q nu^2 - 1)/deltac0,   nu = deltac(z)/sigma(M),  q = 0.7.
+// Filaments collapse from a lower, nearly scale-independent barrier, so they are
+// less strongly biased than halos of the same mass (b_fil < halobias for all M).
+// q here MUST track pFCfil's q so the bias is the PBS of the code's own filament
+// mass function.
+double cosmology::filbias(double z, double sigma) {
+
+    double q = 0.7;                        // matches pFCfil (cosmology.cpp::pFCfil)
+    double qnu2 = q*pow(deltac(z)/sigma,2.0);
+
+    return 1.0 + (qnu2-1.0)/deltac0;
 }
 
 // halo bias, {jz,jM} -> b

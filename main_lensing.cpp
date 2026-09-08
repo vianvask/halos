@@ -36,11 +36,16 @@ int main (int argc, char *argv[]) {
     C.Mmax = 1.0e17;
     C.NM = 100;
     
-    // redshifts
+    // redshifts. A source above zmax is silently clamped to the top node, so on
+    // the old (10.01, 100) grid every zs >= 10.01 returned the same PDF. This
+    // pair extends the grid rather than rescaling it: dlogz is the same double
+    // as for (10.01, 100), so the first 100 nodes are unchanged and three are
+    // appended at 10.73, 11.51 and 12.34. A round 12.01 at Nz = 100 would
+    // instead have made dlogz 2.6% coarser at every z
     C.zmin = 0.01;
-    C.zmax = 10.01;
-    C.Nz = 100;
-    
+    C.zmax = 12.341169644129371;
+    C.Nz = 103;
+
     // initialize benchmar CDM halo mass function
     C.outdir = "dataL";
     C.initialize(0);
@@ -51,7 +56,28 @@ int main (int argc, char *argv[]) {
     L.Nreal = 4e5; // realizations
     L.Nhalos = 100; // number of halos in each realization
     L.Nbins = 12; // P(lnmu) bin widht = sigma/Nbins
-    
+
+    // The defaults are the production config (see lensing.h): correlated 1D
+    // clustering bias field with a spherical top-hat window at R_s = 20 Mpc, the
+    // conditional weak arm, filament bias, subhalo substructure through the
+    // kappa thresholded brute model with the carve and the virial convention,
+    // and the robust anchor. sigma8 is anchored with the real space top-hat.
+    // Uncomment the whole block for the legacy physics; these settings are a
+    // coupled set, so flipping only some of them will throw:
+    //   L.subhalo        = false;
+    //   L.subhalo_model  = 3;
+    //   L.subhalo_virial = false;
+    //   L.subhalo_carve  = false;
+    //   L.subhalo_factor = 1.0e-3;
+    //   L.bias_model     = 0;
+    //   L.bias_window    = 0;
+    //   L.bias_Rperp     = 8441.0;
+    //   L.bias_weak      = false;
+    //   L.fil_bias       = false;
+    //   L.kappa_anchor   = 0;
+    //   C.sigma8_tophat  = false; // set before C.initialize
+
+
     //L.Plnmuf(C, 1.0, mt, 1, 1, 1, 1);
     
     double z, lnmu, DL0, DL, sigmaDL;
