@@ -29,7 +29,12 @@ public:
     double ns;
     double As = -1.0;
     double kpivot = 5.0e-5;
-    double sigma8_derived = 0.0;
+    // sigma8 anchor filter, ignored when As > 0. 1: real space top-hat at
+    // 8 Mpc/h, the conventional sigma8. 0: smooth-k Ws at M8 (legacy, reads
+    // 4.2% high in sigma). Anchors the amplitude only, not sigma_M(M).
+    bool sigma8_tophat = true;
+    double sigma8_derived = 0.0; // via the smooth-k Ws
+    double sigma8_tophat_derived = 0.0; // via the top-hat
     double As_derived = 0.0;
     double OmegaR;
     double OmegaL;
@@ -187,6 +192,7 @@ private:
     
     // variance of the matter fluctuations, m22: FDM mass in 10^-22 eV, m3: WDM mass in keV
     vector<double> sigmaC(double M, double deltaH);
+    vector<double> sigmaTH(double M, double deltaH);  // real-space top-hat; amplitude anchor only
     vector<double> sigmaF(double M, double deltaH, double m22);
     vector<double> sigmaW(double M, double deltaH, double m3);
     vector<double> sigmaE(double M, double deltaH, double kc);
@@ -310,12 +316,16 @@ public:
         rhoM0 = OmegaM*rhoc;
         M8 = 4.0*PI/3.0*pow(8000.0/h,3.0)*rhoM0;
 
+        // sigma8_tophat picks the filter that defines the anchor at M8
         if (As > 0.0) {
             deltaH8 = 0.4*0.7869370293916*sqrt(As)*pow(CLIGHT*kpivot/H0,(1.0-ns)/2.0)/OmegaM;
+        } else if (sigma8_tophat) {
+            deltaH8 = sigma8/sigmaTH(M8, 1.0)[0];
         } else {
             deltaH8 = sigma8/sigmaC(M8, 1.0)[0];
         }
         sigma8_derived = deltaH8*sigmaC(M8, 1.0)[0];
+        sigma8_tophat_derived = deltaH8*sigmaTH(M8, 1.0)[0];
         As_derived = pow(deltaH8*OmegaM/(0.4*0.7869370293916),2.0)*pow(CLIGHT*kpivot/H0,ns-1.0);
     }
 

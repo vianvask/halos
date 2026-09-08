@@ -649,6 +649,39 @@ vector<vector<double> > lensing::Plnmuf(cosmology &C, double zs, rgen &mt, int f
         throw std::invalid_argument("fil_bias requires bias_model = 1 (the correlated field carries the filament modulation); it is a no-op in the legacy iid layer");
     }
 
+    // ---- subhalo configuration guards (see lensing.h)
+    if (subhalo && subhalo_model != 1 && subhalo_model != 3
+        && subhalo_model != 4 && subhalo_model != 5) {
+        throw std::invalid_argument("subhalo_model must be 1 (reduced-host resolved-only), 3 (+ Gaussian unresolved term), 4 (brute) or 5 (kappa-thresholded brute)");
+    }
+    if (subhalo && subhalo_model == 3 && subhalo_brute) {
+        throw std::invalid_argument("subhalo_brute is incompatible with subhalo_model 3 (use model 1 + subhalo_brute + subhalo_carve for a brute reference)");
+    }
+    // model 1 reduces the host by the resolved fraction f_s,res(r), which here is
+    // only formed along the carve path. The fsb tables it would otherwise need
+    // are built for model 3 only, so without the carve the host would be left
+    // unreduced and the substructure mass counted twice
+    if (subhalo && subhalo_model == 1 && !subhalo_carve) {
+        throw std::invalid_argument("subhalo_model 1 requires subhalo_carve = true in this port (the non-carve host reduction by f_s,res(r) is not implemented here; use model 3 for the deterministic reduction)");
+    }
+    if (subhalo && subhalo_model == 4 && !subhalo_carve) {
+        throw std::invalid_argument("subhalo_model 4 requires subhalo_carve = true (the carve is intrinsic to the model)");
+    }
+    if (subhalo && subhalo_model == 5 && !subhalo_carve) {
+        throw std::invalid_argument("subhalo_model 5 requires subhalo_carve = true (the carve is intrinsic to the model)");
+    }
+    if (subhalo && subhalo_model == 5 && subhalo_brute) {
+        throw std::invalid_argument("subhalo_brute is meaningless for subhalo_model 5 (the model is brute by construction, thresholded on kappa)");
+    }
+    if (subhalo && subhalo_model == 5 && subhalo_kappathr <= 0.0
+        && subhalo_kappathr_factor <= 0.0) {
+        throw std::invalid_argument("subhalo_model 5 needs subhalo_kappathr > 0 or subhalo_kappathr_factor > 0");
+    }
+    if (subhalo && subhalo_virial
+        && !(subhalo_model == 4 || subhalo_model == 5)) {
+        throw std::invalid_argument("subhalo_virial requires subhalo_model 4 or 5 (models 1/3 reduce the host with M_200-referred incomplete-Gamma/Wsub tables)");
+    }
+
     // fix threshold kappa
     function<double(double)> NfNFW = [&C, zs](double kappa) {
         return NhfNFW(C, zs, kappa);
@@ -683,7 +716,20 @@ vector<vector<double> > lensing::Plnmuf(cosmology &C, double zs, rgen &mt, int f
     vector<vector<vector<double> > > dNF = deltaNhfCYL(C, zs, kappathrH);
     if (subhalo) {
         S.m_floor = subhalo_m_floor;
-        S.precompute(C, zs, subhalo_factor*kappathrH, kappathrH);
+        S.psi_min_fixed = psi_min_fixed;
+        S.virial = subhalo_virial; // set before precompute
+        // model 3 also builds the Wsub tables, which need the host threshold for
+        // the encounter disc radius. Model 5 reuses r_thr as the clump reach
+        // D(m), so there it must be built at kappathr_sub instead
+        double clump_kappathr = subhalo_factor*kappathrH;
+        if (subhalo_model == 5) {
+            clump_kappathr = (subhalo_kappathr > 0.0)
+                               ? subhalo_kappathr
+                               : subhalo_kappathr_factor*kappathrH;
+        }
+        S.precompute(C, zs, clump_kappathr,
+                     (subhalo_model == 3) ? kappathrH : 0.0,
+                     subhalo_model == 5);
     }
     if (write > 0) {
         writeToFile(C.zlist, C.Mlist, dNH, C.outdir/"dNH.dat");
@@ -752,6 +798,87 @@ vector<vector<double> > lensing::Plnmuf(cosmology &C, double zs, rgen &mt, int f
     double zl, M, rmaxH, rmaxF, r, phi, phiH, phiF, epsilon = 0.0, barNH, barNF, sigma, deltab, lambda, meankappa = 0.0;
     int NH, NF;
     int NtotH = 0, NtotF = 0;;
+
+    // whether the mass conserving carve path applies
+    const bool carve_path = subhalo && subhalo_carve &&
+        (subhalo_model == 3 || subhalo_model == 4 || subhalo_model == 5 ||
+         (subhalo_brute && subhalo_model == 1));
+
+    // one host encounter with substructure, shared by the two structurally
+    // identical branches of the loop below, the small lambda shortcut and the
+    // Poisson branch, so that they cannot diverge
+    auto subhaloEncounter = [&](int j, int jz, int jM, double zl_, double M_,
+                                double Sigmac_, double r_, double phi_, double phiH_) {
+        const double kappabefore = kappalist[j];
+        array<double,2> kg;
+        if (carve_path) {
+            // clumps first, accumulating their realized mass. For model 5 that
+            // is the retained mass and the rest stays in the smooth host, which
+            // is what makes the threshold mass conserving. The host build draws
+            // no random numbers, so this order leaves the stream unchanged
+            double Msum = 0.0;
+            if (subhalo_model == 5) {
+                S.addClumpsRestricted(C, jz, jM, M_, Sigmac_, r_, phi_, mt,
+                                      kappalist[j], gamma1list[j], gamma2list[j], &Msum);
+            } else {
+                S.addClumps(C, jz, jM, zl_, M_, Sigmac_, r_, phi_, mt,
+                            kappalist[j], gamma1list[j], gamma2list[j],
+                            subhalo_model, subhalo_brute, &Msum);
+            }
+
+            // mean unresolved mass at this ray, model 3 only
+            const double M_u = (subhalo_model == 3)
+                                 ? S.unresolvedMass(C, jz, jM, r_, M_) : 0.0;
+
+            // carved host at M - sum_i m_i - M_u, with a negative mass guard. In
+            // virial mode Msum is drawn against the M_vir budget while the host
+            // is parameterized by its M200 grid mass, so convert: the host then
+            // keeps the same fractional mass 1-f_s in both apertures, and the
+            // remainder is substructure in the r200 to r_vir shell, which was
+            // never part of the M200 budget
+            const double vr = S.virialRatio(jz, jM);
+            double Mhost = M_ - Msum/vr - M_u;
+            if (Mhost < C.Mmin) Mhost = C.Mmin;
+
+            vector<double> NFWp = interpolate2(zl_, Mhost, C.zlist, C.Mlist, C.NFWlist);
+            double rs = NFWp[0];
+            double kappa0 = kappa0NFW(rs, NFWp[1], Sigmac_);
+            double eps = (ell > 0) ? epsilonNFW(C, zl_, Mhost) : 0.0;
+            kg = kappagammaNFWeps(eps, kappa0, r_/rs, phiH_);
+            kappalist[j] += kg[0];
+            gamma1list[j] += cos(phi_)*kg[1];
+            gamma2list[j] += sin(phi_)*kg[1];
+
+            // unresolved clump term, model 3 only, at the same position in the
+            // random stream as on the non-carve path below
+            if (subhalo_model == 3) {
+                double muU, sU;
+                S.wsubTerm(jz, jM, r_, muU, sU);
+                kappalist[j] += muU + sU*pG(mt);
+            }
+        } else {
+            // deterministic reduction, the host at (1-f_s,b)M, reduced by the
+            // mean bound fraction rather than the realized clump mass
+            double Msm = max(C.Mlist[0], (1.0 - S.fsb[jz][jM])*M_);
+            vector<double> NFWp = interpolate2(zl_, Msm, C.zlist, C.Mlist, C.NFWlist);
+            double rs = NFWp[0];
+            double kappa0 = kappa0NFW(rs, NFWp[1], Sigmac_);
+            double eps = (ell > 0) ? epsilonNFW(C, zl_, Msm) : 0.0;
+            kg = kappagammaNFWeps(eps, kappa0, r_/rs, phiH_);
+            kappalist[j] += kg[0];
+            gamma1list[j] += cos(phi_)*kg[1];
+            gamma2list[j] += sin(phi_)*kg[1];
+            S.addClumps(C, jz, jM, zl_, M_, Sigmac_, r_, phi_, mt,
+                        kappalist[j], gamma1list[j], gamma2list[j],
+                        subhalo_model, subhalo_brute, nullptr);
+            if (subhalo_model == 3) {
+                double muW, sigmaW;
+                S.wsubTerm(jz, jM, r_, muW, sigmaW);
+                kappalist[j] += muW + sigmaW*pG(mt);
+            }
+        }
+        meankappa += kappalist[j] - kappabefore;
+    };
     for (int jz = 0; jz < C.Nz; jz++) {
         zl = C.zlist[jz];
         if (zl < zs) {
@@ -834,28 +961,14 @@ vector<vector<double> > lensing::Plnmuf(cosmology &C, double zs, rgen &mt, int f
                             phiH = randomreal(0.0,2*PI,mt); // orientation of the halo ellipticity
 
                             if (subhalo) {
-                                double kappabefore = kappalist[j];
-                                double Msm = max(C.Mlist[0], (1.0 - S.fsb[jz][jM])*M);
-                                vector<double> NFWp = interpolate2(zl, Msm, C.zlist, C.Mlist, C.NFWlist);
-                                double rs = NFWp[0];
-                                double kappa0 = kappa0NFW(rs, NFWp[1], Sigmac);
-                                double eps = (ell > 0) ? epsilonNFW(C, zl, Msm) : 0.0;
-                                kappagamma = kappagammaNFWeps(eps, kappa0, r/rs, phiH);
-                                kappalist[j] += kappagamma[0];
-                                gamma1list[j] += cos(phi)*kappagamma[1];
-                                gamma2list[j] += sin(phi)*kappagamma[1];
-                                S.addClumps(C, jz, jM, zl, M, Sigmac, r, phi, mt, kappalist[j], gamma1list[j], gamma2list[j]);
-                                double muW, sigmaW;
-                                S.wsubTerm(jz, jM, r, muW, sigmaW);
-                                kappalist[j] += muW + sigmaW*pG(mt);
-                                meankappa += kappalist[j] - kappabefore;
+                                subhaloEncounter(j, jz, jM, zl, M, Sigmac, r, phi, phiH);
                             } else {
                                 kappagamma = kappagammaNFWeps(epsilon, kappa0H, r/rsH, phiH);
-                                
+
                                 kappalist[j] += kappagamma[0];
                                 gamma1list[j] += cos(phi)*kappagamma[1];
                                 gamma2list[j] += sin(phi)*kappagamma[1];
-                                
+
                                 meankappa += kappagamma[0];
                             }
                             
@@ -871,21 +984,7 @@ vector<vector<double> > lensing::Plnmuf(cosmology &C, double zs, rgen &mt, int f
                                 phiH = randomreal(0.0,2*PI,mt); // orientation of the halo ellipticity
 
                                 if (subhalo) {
-                                    double kappabefore = kappalist[j];
-                                    double Msm = max(C.Mlist[0], (1.0 - S.fsb[jz][jM])*M);
-                                    vector<double> NFWp = interpolate2(zl, Msm, C.zlist, C.Mlist, C.NFWlist);
-                                    double rs = NFWp[0];
-                                    double kappa0 = kappa0NFW(rs, NFWp[1], Sigmac);
-                                    double eps = (ell > 0) ? epsilonNFW(C, zl, Msm) : 0.0;
-                                    kappagamma = kappagammaNFWeps(eps, kappa0, r/rs, phiH);
-                                    kappalist[j] += kappagamma[0];
-                                    gamma1list[j] += cos(phi)*kappagamma[1];
-                                    gamma2list[j] += sin(phi)*kappagamma[1];
-                                    S.addClumps(C, jz, jM, zl, M, Sigmac, r, phi, mt, kappalist[j], gamma1list[j], gamma2list[j]);
-                                    double muW, sigmaW;
-                                    S.wsubTerm(jz, jM, r, muW, sigmaW);
-                                    kappalist[j] += muW + sigmaW*pG(mt);
-                                    meankappa += kappalist[j] - kappabefore;
+                                    subhaloEncounter(j, jz, jM, zl, M, Sigmac, r, phi, phiH);
                                 } else {
                                     kappagamma = kappagammaNFWeps(epsilon, kappa0H, r/rsH, phiH);
                                     
@@ -946,8 +1045,27 @@ vector<vector<double> > lensing::Plnmuf(cosmology &C, double zs, rgen &mt, int f
             }
         }
     }
-    meankappa = meankappa/(1.0*Nreal);
-    
+    // anchor that enforces <kappa> = 0, see lensing.h. Modes 1 and 2 read the
+    // per-ray totals, which include the realized weak background, whereas the
+    // running sum does not, so they differ at order sigmaW/sqrt(Nreal)
+    if (kappa_anchor == 2) {
+        meankappa = kappa_anchor_value;
+    } else if (kappa_anchor == 1) {
+        // drop the rays above the cut so that no single one shifts the batch
+        double sum = 0.0;
+        long nk = 0;
+        for (int j = 0; j < Nreal; j++) {
+            if (kappalist[j] <= kappa_anchor_cut) { sum += kappalist[j]; nk++; }
+        }
+        if (nk > 0) {
+            meankappa = sum/(1.0*nk);
+        } else { // every ray above the cut, fall back to the running sum
+            meankappa = meankappa/(1.0*Nreal);
+        }
+    } else {
+        meankappa = meankappa/(1.0*Nreal);
+    }
+
     //cout << NtotH/(1.0*Nreal) << "   " << NtotF/(1.0*Nreal) << endl;
     
     // compute mu
