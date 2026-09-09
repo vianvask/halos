@@ -615,7 +615,7 @@ int Subhalo::addClumps(cosmology &C, int jz, int jM, double zl, double M, double
     int Nc = PNsub(mt);
     if (Nc <= 0) return 0;
     
-    vector<double> xcdf = invRad[jz][jM];
+    const vector<double> &xcdf = invRad[jz][jM];
     double r200 = r200h[jz][jM];
     double rcos = r*cos(phi), rsin = r*sin(phi);
     double invalpha = 1.0/alpha;

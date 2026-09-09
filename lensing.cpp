@@ -1134,13 +1134,6 @@ vector<vector<double> > lensing::Plnmuf(cosmology &C, double zs, rgen &mt, int f
 
 // loglikelihood of the Hubble digram data
 double lensing::loglikelihood(cosmology &C, double DLthr, vector<vector<double> > &data, vector<double> &par, int lens, int dm, rgen &mt) {
-    
-    // As > 0 normalizes P(k) from the primordial amplitude and leaves sigma8 unused, so
-    // par[1] would not enter the likelihood and the chain would return its prior
-    if (C.As > 0.0) {
-        cerr << "loglikelihood: As-mode fixes the amplitude; par[1] (sigma8) would be inert. Set C.As = -1 to fit sigma8." << endl;
-        exit(1);
-    }
 
     // initialize cosmology
     C.OmegaM = par[0];

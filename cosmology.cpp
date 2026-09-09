@@ -222,7 +222,7 @@ vector<vector<double> > cosmology::sigmalistf(double m22, double m3, double kc, 
 /*                                                   halo mass function and growth                                                                */
 /* ---------------------------------------------------------------------------------------------------------------------------------------------- */
 
-// first crossing probability with ellipsoidal collapse
+// first crossing probability with ellipsoidal collapse (2504.20043)
 double cosmology::pFC(double delta, double S) {
     double p = 0.3;
     double q = 0.8;
@@ -279,7 +279,7 @@ vector<vector<vector<double> > > cosmology::HMFlistf() {
     return dndlnM;
 }
 
-// transition rate S->S0
+// transition rate S->S0 (2504.20043)
 double cosmology::pTR(double delta, double Ddeltaell, double S, double S0) {
     double p = 0.3;
     double q = 0.8;
@@ -427,8 +427,8 @@ double cosmology::cons16(double z0, double sigma) {
     double beta = 0.307*pow(1+z,0.540);
     double gamma1 = 0.628*pow(1+z,-0.047);
     double gamma2 = 0.317*pow(1+z,-0.893);
-    double nu0 = 4.135 - 0.564*(1+z) - 0.210*pow(1+z,2.0) + 0.0557*pow(1+z,3.0) - 0.00348*pow(1+z,4.0);
-    
+    double nu0 = (4.135 - 0.564*(1+z) - 0.210*pow(1+z,2.0) + 0.0557*pow(1+z,3.0) - 0.00348*pow(1+z,4.0))/Dg(z);
+
     double nu = deltac(z)/sigma;
     
     return c0*pow(nu/nu0,-gamma1)*pow(1+pow(nu/nu0,1.0/beta),-beta*(gamma2-gamma1));
@@ -481,13 +481,6 @@ vector<vector<vector<double> > > cosmology::NFWlistf() {
             rs =  r200/c;
             rhos = 200*rhoz*pow(c,3.0)*(1+c)/(3.0*((1+c)*log(1+c) - c));
             
-            /*
-            Dc = zMc[1];
-            Dr200 = 3.0/(4.0*PI*200*rhoz)*pow(3.0*M/(4.0*PI*200*rhoz),-2.0/3.0);
-            Drs =  Dr200/c - r200*Dc/pow(c,2.0);
-            Drhos = Dc*pow(c,2.0)*(-c*(3+4*c) + 3*pow(1+c,2.0)*log(1+c))/(3.0*pow(c-(1+c)*log(1+c),2.0));
-            */
-            
             NFWparams[jz][jM][0] = rs;
             NFWparams[jz][jM][1] = rhos;
             NFWparams[jz][jM][2] = c;
@@ -509,28 +502,19 @@ double rhokNFW(double k, double rs, double rhos, double c) {
 
 
 // halo bias, see Baumann (5.132)
-// (p,q) matches the halo first-crossing barrier pFC, so b is the peak-background
-// split of the code's own mass function, as filbias mirrors pFCfil at q = 0.7.
 double cosmology::halobias(double z, double sigma) {
 
     double p = 0.3;
-    double q = 0.8;
+    double q = 0.8; // matches pFC
     double qnu2 = q*pow(deltac(z)/sigma,2.0);
     
     return 1.0 + (qnu2-1.0)/deltac0 + 2.0*p/(deltac0*(1.0+pow(qnu2, p)));
 }
 
-// filament bias b_fil(M,z): peak-background split of the filament first-crossing
-// barrier pFCfil (flat barrier, p = 0, q = 0.7). The p = 0 limit drops the
-// 2p/[...] term of the Sheth-Mo-Tormen halo form, leaving the flat-barrier bias
-//   b_fil = 1 + (q nu^2 - 1)/deltac0,   nu = deltac(z)/sigma(M),  q = 0.7.
-// Filaments collapse from a lower, nearly scale-independent barrier, so they are
-// less strongly biased than halos of the same mass (b_fil < halobias for all M).
-// q here MUST track pFCfil's q so the bias is the PBS of the code's own filament
-// mass function.
+// filament bias
 double cosmology::filbias(double z, double sigma) {
 
-    double q = 0.7;                        // matches pFCfil (cosmology.cpp::pFCfil)
+    double q = 0.7; // matches pFCfil
     double qnu2 = q*pow(deltac(z)/sigma,2.0);
 
     return 1.0 + (qnu2-1.0)/deltac0;

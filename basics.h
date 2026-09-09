@@ -11,6 +11,7 @@
 #include <filesystem>
 #include <gsl/gsl_sf_expint.h>
 
+// units: masses in solar masses, time in Myr, length in kpc
 
 using namespace std;
 namespace fs = filesystem;
@@ -18,8 +19,7 @@ namespace fs = filesystem;
 typedef mt19937_64 rgen;
 
 const double PI = 3.141592653589793238463;
-// Speed of light in internal units (kpc/Gyr); gives c/H(z) = CLIGHT/Hz(z) kpc comoving.
-const double CLIGHT = 306.535;
+const double CLIGHT = 306.535; // speed of light in internal units (kpc/Myr)
 
 string to_string_prec(const double a, const int n);
 bool fileExists(const string& filename);

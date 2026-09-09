@@ -18,33 +18,28 @@ public:
     int Nkc = 0;
     double kcmin, kcmax;
     
-    // cosmological parameters
+    // input cosmological parameters
     double OmegaM;
     double OmegaB;
-    double fB;
     double zeq;
     double sigma8;
     double h;
     double T0;
     double ns;
-    double As = -1.0;
-    double kpivot = 5.0e-5;
-    // sigma8 anchor filter, ignored when As > 0. 1: real space top-hat at
-    // 8 Mpc/h, the conventional sigma8. 0: smooth-k Ws at M8 (legacy, reads
-    // 4.2% high in sigma). Anchors the amplitude only, not sigma_M(M).
-    bool sigma8_tophat = true;
-    double sigma8_derived = 0.0; // via the smooth-k Ws
-    double sigma8_tophat_derived = 0.0; // via the top-hat
-    double As_derived = 0.0;
+    
+    // derived cosmological parameters
     double OmegaR;
     double OmegaL;
     double OmegaC;
+    double fB;
+    double As;
     double H0;
     double rhoc;
     double rhoM0;
     
-    double M8;
     double deltaH8;
+    
+    double kpivot = 5.0e-5;
     
     // z dependencies
     double Az(double z) {
@@ -64,8 +59,12 @@ public:
     }
     
     // growth function
+    double DgNN(double z) {
+        return 5.0/2.0*OmegaMz(z)/(pow(OmegaMz(z),4.0/7.0) - OmegaLz(z) + (1+OmegaMz(z)/2.0)*(1+OmegaLz(z)/70.0))/(1+z);
+    }
     double Dg(double z) {
-        return 5.0/2.0*OmegaMz(z)/(pow(OmegaMz(z),4.0/7.0) - OmegaLz(z) + (1+OmegaMz(z)/2.0)*(1+OmegaLz(z)/70.0))/(1+z)/0.7869370293916;
+        double Dg0 = DgNN(0.0);
+        return DgNN(z)/Dg0;
     }
     
     // spherical collapse threshold
@@ -148,7 +147,7 @@ private:
     
     // white noise enhanced matter power spectrum
     double DeltakE(double k, double deltaH, double kc) {
-        return Deltak(k, deltaH) + pow(k/kc,3.0)*Deltak(kc, deltaH);
+        return sqrt(pow(Deltak(k, deltaH),2.0) + pow(k/kc,3.0)*pow(Deltak(kc, deltaH),2.0));
     }
     double PlinE(double z, double k, double deltaH, double kc) {
         return (2.0*pow(PI,2.0))*pow(DeltakE(k, deltaH, kc)*Dg(z), 2.0)/(pow(k,3.0));
@@ -217,7 +216,6 @@ private:
     // transition rate S->S0
     double pTR(double delta, double Ddeltaell, double S, double S0);
 
-    
     // first crossing probability for filaments
     double pFCfil(double delta, double S);
 
@@ -305,7 +303,13 @@ public:
     vector<vector<vector<vector<double> > > > BDMHMFlist;
     vector<vector<vector<double> > > BDMFMFlist;
 
-    void initialize_normalization() {
+    void initialize0() {
+
+        // directory for output files
+        if (!fs::exists(outdir)) {
+            fs::create_directories(outdir);
+        }
+
         OmegaR = OmegaM/(1+zeq);
         OmegaL = 1.0 - OmegaM - OmegaR;
         OmegaC = OmegaM - OmegaB;
@@ -314,29 +318,11 @@ public:
         H0 = 0.000102247*h;
         rhoc = 277.394*pow(h,2.0);
         rhoM0 = OmegaM*rhoc;
-        M8 = 4.0*PI/3.0*pow(8000.0/h,3.0)*rhoM0;
-
-        // sigma8_tophat picks the filter that defines the anchor at M8
-        if (As > 0.0) {
-            deltaH8 = 0.4*0.7869370293916*sqrt(As)*pow(CLIGHT*kpivot/H0,(1.0-ns)/2.0)/OmegaM;
-        } else if (sigma8_tophat) {
-            deltaH8 = sigma8/sigmaTH(M8, 1.0)[0];
-        } else {
-            deltaH8 = sigma8/sigmaC(M8, 1.0)[0];
-        }
-        sigma8_derived = deltaH8*sigmaC(M8, 1.0)[0];
-        sigma8_tophat_derived = deltaH8*sigmaTH(M8, 1.0)[0];
-        As_derived = pow(deltaH8*OmegaM/(0.4*0.7869370293916),2.0)*pow(CLIGHT*kpivot/H0,ns-1.0);
-    }
-
-    void initialize0() {
-
-        // directory for output files
-        if (!fs::exists(outdir)) {
-            fs::create_directories(outdir);
-        }
-
-        initialize_normalization();
+        
+        // fix sigma_8 using top-hat window, same for all models and compute A_s
+        double M8 = 4.0*PI/3.0*pow(8000.0/h,3.0)*rhoM0;
+        deltaH8 = sigma8/sigmaTH(M8, 1.0)[0];
+        As = pow(deltaH8*OmegaM/(2.0/5.0*DgNN(0.0)),2.0)*pow(CLIGHT*kpivot/H0,ns-1.0);
                 
         zlist = loglist(zmin,zmax,Nz);
         Mlist = loglist(Mmin,Mmax,NM);
@@ -386,9 +372,6 @@ public:
             m22list = loglist(m22min,m22max,Nm22);
             
             for (double m22 : m22list) {
-                // fix deltaH to match the input sigma8
-                deltaH8 = sigma8/sigmaF(M8, 1.0, m22)[0];
-                            
                 // halo mass function and halo growth rate
                 sigmalist = sigmalistf(m22, 0.0, 0.0, 0.0);
                 HMFlist = HMFlistf();
@@ -404,9 +387,6 @@ public:
             m3list = loglist(m3min,m3max,Nm3);
             
             for (double m3 : m3list) {
-                // fix deltaH to match the input sigma8
-                deltaH8 = sigma8/sigmaW(M8, 1.0, m3)[0];
-                            
                 // halo mass function and halo growth rate
                 sigmalist = sigmalistf(0.0, m3, 0.0, 0.0);
                 HMFlist = HMFlistf();
@@ -423,9 +403,6 @@ public:
             kclist = loglist(kcmin,kcmax,Nkc);
             
             for (double kc : kclist) {
-                // fix deltaH to match the input sigma8
-                deltaH8 = sigma8/sigmaE(M8, 1.0, kc)[0];
-                            
                 // halo mass function and halo growth rate
                 sigmalist = sigmalistf(0.0, 0.0, kc, 0.0);
                 HMFlist = HMFlistf();
@@ -477,9 +454,6 @@ public:
             tmp.clear(); tmp2.clear();
             
             for (double B : Blist) {
-                // fix deltaH to match the input sigma8
-                deltaH8 = sigma8/sigmaC(M8, 1.0)[0];
-                                
                 // halo mass function and halo growth rate
                 sigmalist = sigmalistf(0.0, 0.0, 0.0, B);
                 HMFlist = HMFlistf();
@@ -511,19 +485,16 @@ public:
             halobiaslist = halobiaslistf();
         }
         if (dm == 1) {
-            deltaH8 = sigma8/sigmaF(M8, 1.0, x)[0];
             sigmalist = sigmalistf(x, 0.0, 0.0, 0.0);
             HMFlist = HMFlistf();
             halobiaslist = halobiaslistf();
         }
         if (dm == 2) {
-            deltaH8 = sigma8/sigmaW(M8, 1.0, x)[0];
             sigmalist = sigmalistf(0.0, x, 0.0, 0.0);
             HMFlist = HMFlistf();
             halobiaslist = halobiaslistf();
         }
         if (dm == 3) {
-            deltaH8 = sigma8/sigmaE(M8, 1.0, x)[0];
             sigmalist = sigmalistf(0.0, 0.0, x, 0.0);
             HMFlist = HMFlistf();
             halobiaslist = halobiaslistf();
@@ -547,7 +518,7 @@ public:
     // derivative of the comoving volume
     double DVc(double z) {
         double dc = interpolate(z, zdc);
-        return 4.0*PI*pow(dc,2.0)/Hz(z);
+        return 4.0*PI*pow(dc,2.0)*CLIGHT/Hz(z);
     }
     
     // luminosity distance
