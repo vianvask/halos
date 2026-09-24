@@ -16,7 +16,7 @@ Requires a C++17 compiler and [GSL](https://www.gnu.org/software/gsl/).
 ## Lensing model settings
 
 The defaults in `lensing.h` are the extended model of
-[arXiv:XXXX.XXXXX](https://arxiv.org/abs/XXXX.XXXXX),[add later] which adds subhalo
+[arXiv:2609.21806](https://arxiv.org/abs/2609.21806), which adds subhalo
 substructure, the correlated clustering field with its conditional weak arm,
 filament bias, and the real-space top-hat σ8 anchor to the model of
 [arXiv:2601.06023](https://arxiv.org/abs/2601.06023). These form a coupled set,
